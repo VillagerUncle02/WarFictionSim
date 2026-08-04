@@ -1,50 +1,122 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!-- Sync Impact Report
+- Version change: 1.0.0 → 2.0.0
+- Modified principles:
+  - 8. LLM 指挥官为核心（重定义：回合等待 AI → 实时异步决策）
+  - 7. 确定性裁决（扩展：任务完成判定归确定性代码）
+  - 9. AI 边界（扩展：AI 不参与任务完成判定）
+- Added sections: N/A
+- Removed sections: N/A
+- Follow-up TODOs: 无
+-->
 
-## Core Principles
+# WarFictionSim（战争幻想模拟器）Constitution
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+## Core Principles（核心原则）
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### 1. 代码质量（不可妥协）
+- 所有合并到 main 的代码必须通过全部自动化测试，并至少获得一名代码审查者的批准。
+- 禁止合并无法运行、含死代码或明显缺陷的变更。
+- 理由：main 是唯一可信的发布基线，质量门禁前置是防止缺陷扩散到玩家与后续开发的最有效手段。
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### 2. 测试保障（不可妥协）
+- 每个新功能或缺陷修复必须附带对应的自动化测试。
+- 测试未通过前不得合并任何变更。
+- 确定性算法部分必须有单元测试覆盖。
+- 理由：自动化测试是回归保护与重构安全性的基础；确定性算法无测试则无法证明可复现性。
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### 3. GitHub 开发管理（不可妥协）
+- 所有代码通过 GitHub 仓库管理；main 分支受保护，禁止直接推送。
+- 每个功能或任务必须从 main 创建独立分支，命名如 `feature/功能名` 或 `task/任务号`。
+- 开发完成后通过 Pull Request 合并回 main；每个 PR 需至少一名代码审查者批准。
+- 分支合并后由创建者删除。
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### 4. 提交规范
+- 提交信息使用 Conventional Commits 格式（feat/fix/docs/refactor 等）。
+- 每个 PR 必须对应 spec-kit 的任务或 issue，并说明变更原因。
+- 理由：结构化提交与可追溯的 PR 是生成变更日志与定位问题的基础。
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### 5. 注释与文档（不可妥协）
+- 公开接口和复杂逻辑必须有注释，注释说明"为什么"而不是"是什么"。
+- 每个源文件必须有文件级总览注释，说明其功能。
+- 项目必须维护说明文件结构和功能的文档，便于协作、扩展和维护。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### 6. 敏感信息
+- 禁止向仓库提交 API 密钥、令牌等敏感信息。
+- CI 所需密钥必须通过 GitHub Secrets 注入。
+- 理由：敏感信息一旦进入 git 历史即难以彻底清除，必须从源头禁止。
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### 7. 确定性裁决（不可妥协）
+- 战斗胜负、伤亡、地形效果等所有数值结算必须由确定性算法完成。
+- 所有随机数来自统一 RNG，并由固定随机种子控制；相同输入必须产生相同结果。
+- AI 大模型不得参与数值判定。
+- 任务状态与完成判定（如控制区域、清剿、驱逐等）同样由确定性代码负责，AI 不参与任务完成判定。
+- 理由：可复现性是自动化测试、复盘与公平性的前提。
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### 8. LLM 指挥官为核心（不可妥协）
+- AI 指挥官是本游戏的核心玩法。
+- 模拟不阻塞等待 AI：单位按已有命令持续行动，AI 决策异步到达并通过校验后生效。
+- AI 决策由关键事件触发，并有频率上限，保证调用成本可控。
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+### 9. AI 边界（不可妥协）
+- AI 只能生成命令供引擎执行，不得直接修改游戏状态。
+- AI 输出必须通过规则和格式校验。
+- 非法或超时输出按约定策略拒绝或降级，且必须有非 AI 兜底方案。
+- AI 只下达指令并接收任务结果，不参与任务完成判定。
+- 理由：AI 的可变性必须被限制在"建议层"，引擎保持权威与确定性。
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### 10. 可复现性
+- 每个 AI 决策点必须记录完整的状态快照、发给 AI 的输入与 AI 返回内容，作为调试和复盘依据。
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+### 11. AI 资产版本化
+- AI 模型版本、提示词和采样参数必须随仓库版本管理。
+- 变更必须通过 PR 审查和回归验证。
+
+### 12. 数据驱动（不可妥协）
+- 部队、地形、设施及一切可自定义内容必须以数据或配置定义，禁止硬编码。
+- 加载时必须校验，非法数据必须报错而非崩溃。
+
+### 13. 存档兼容（不可妥协）
+- 游戏状态必须可完整序列化与恢复。
+- 存档必须携带格式版本号。
+- 破坏性变更必须有迁移逻辑或明确提示。
+
+### 14. 语言边界与分层调用（不可妥协）
+- C++ 负责确定性模拟核心，C# 负责界面与工具，C 仅限底层库。
+- 跨语言边界只传递纯数据，不共享可变状态。
+- UI 和表现层不得直接修改模拟状态，一切状态变更必须通过模拟层的命令接口。
+
+### 15. 无头可测（不可妥协）
+- 模拟核心必须独立于 UI 和渲染，可无头（命令行）运行完整回合，以支持自动化测试。
+
+### 16. 统一时间模型
+- 模拟逻辑由离散回合和可配置的游戏时钟驱动，禁止读取现实时钟参与结算。
+- 现实时间的加速或同步只允许发生在表现层。
+
+### 17. 错误处理
+- 禁止静默吞错。
+- 错误必须被记录或向玩家提示。
+- 模拟状态损坏时必须可定位。
+
+### 18. 依赖与可复现构建
+- 三种语言的依赖版本必须锁定。
+- 构建必须可复现：同一提交必须产生相同产物。
+- CI 必须覆盖所有语言的构建、测试与格式检查。
+
+## Additional Constraints（额外约束）
+
+- CI/CD 使用 GitHub Actions，覆盖三语言构建、单元测试、格式检查和 Windows 打包。
+- 正式发布走带版本号的 GitHub Release。
+
+## Development Workflow（开发流程）
+
+- 遵循 spec-kit 工作流，功能必须按 spec → plan → tasks 顺序推进。
+- CI 全部通过且代码审查通过后才能合并。
+- 每次代码审查必须检查对本宪法的合规性。
+
+## Governance（治理）
+
+- 本宪法优先于其他项目约定。
+- 修改宪法必须说明理由、记录变更并递增版本号。
+- 初始版本 1.0.0，批准日期 2026-08-02；当前版本 2.0.0，最近修订 2026-08-04。
+
+**Version**: 2.0.0 | **Ratified**: 2026-08-02 | **Last Amended**: 2026-08-04
