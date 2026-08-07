@@ -1,0 +1,332 @@
+# Agent Assignments
+# Feature: 战争幻想模拟器 —— 核心玩法、指挥体系与战斗系统
+# Generated: 2026-08-07 20:14:13
+# Command: /speckit.agent-assign.assign
+
+agents_scanned:
+  - name: "Backend Architect"
+    source: "project"
+    description: "Senior backend architect specializing in scalable system design, database architecture, API development, and cloud infrastructure. Builds robust, secure, performant server-side applications and microservices"
+  - name: "Code Reviewer"
+    source: "project"
+    description: "Expert code reviewer who provides constructive, actionable feedback focused on correctness, maintainability, security, and performance — not style preferences."
+  - name: "Desktop App Engineer"
+    source: "project"
+    description: "Expert desktop application engineer for Electron and Tauri — secure IPC and process isolation, code signing and notarization, auto-update pipelines, native OS integration, and resource-footprint discipline."
+  - name: "DevOps Automator"
+    source: "project"
+    description: "Expert DevOps engineer specializing in infrastructure automation, CI/CD pipeline development, and cloud operations"
+  - name: "Frontend Developer"
+    source: "project"
+    description: "Expert frontend developer specializing in modern web technologies, React/Vue/Angular frameworks, UI implementation, and performance optimization"
+  - name: "Git Workflow Master"
+    source: "project"
+    description: "Expert in Git workflows, branching strategies, and version control best practices including conventional commits, rebasing, worktrees, and CI-friendly branch management."
+  - name: "Minimal Change Engineer"
+    source: "project"
+    description: "Engineering specialist focused on minimum-viable diffs — fixes only what was asked, refuses scope creep, prefers three similar lines over a premature abstraction. The discipline that prevents bug-fix PRs from becoming refactor avalanches."
+  - name: "Multi-Agent Systems Architect"
+    source: "project"
+    description: "Systems architect specializing in the design, coordination, and governance of multi-agent AI pipelines — covering topology selection, context management, inter-agent trust, failure recovery, human-in-the-loop gating, and observability for production-grade agent systems."
+  - name: "Prompt Engineer"
+    source: "project"
+    description: "Specialist in crafting, testing, and systematically optimizing prompts for LLMs — turning vague instructions into reliable, production-grade AI behaviors."
+  - name: "Software Architect"
+    source: "project"
+    description: "Expert software architect specializing in system design, domain-driven design, architectural patterns, and technical decision-making for scalable, maintainable systems."
+  - name: "Technical Writer"
+    source: "project"
+    description: "Expert technical writer specializing in developer documentation, API references, README files, and tutorials. Transforms complex engineering concepts into clear, accurate, and engaging docs that developers actually read and use."
+  - name: "UI Designer"
+    source: "project"
+    description: "Expert UI designer specializing in visual design systems, component libraries, and pixel-perfect interface creation. Creates beautiful, consistent, accessible user interfaces that enhance UX and reflect brand identity"
+
+assignments:
+  T001:
+    agent: "Software Architect"
+    reason: "项目骨架与整体目录结构设计"
+  T002:
+    agent: "DevOps Automator"
+    reason: "vcpkg 清单与依赖版本锁定"
+  T003:
+    agent: "DevOps Automator"
+    reason: "CMake 构建配置与编译标志"
+  T004:
+    agent: "Desktop App Engineer"
+    reason: "C#/.NET WPF 解决方案与测试工程初始化"
+  T005:
+    agent: "DevOps Automator"
+    reason: "GitHub Actions CI 流水线"
+  T006:
+    agent: "DevOps Automator"
+    reason: "格式化与静态检查配置"
+  T007:
+    agent: "Backend Architect"
+    reason: "data/ 与 contracts/ 数据契约骨架与 Schema 约定"
+  T008:
+    agent: "Backend Architect"
+    reason: "C11 确定性数学库实现"
+  T009:
+    agent: "Backend Architect"
+    reason: "PCG32 确定性 RNG 实现"
+  T010:
+    agent: "Backend Architect"
+    reason: "离散 tick 与游戏时钟模型"
+  T011:
+    agent: "Backend Architect"
+    reason: "事件/命令确定性队列"
+  T012:
+    agent: "Software Architect"
+    reason: "C ABI 跨层边界设计"
+  T013:
+    agent: "Backend Architect"
+    reason: "场景/数据加载与校验框架"
+  T014:
+    agent: "Backend Architect"
+    reason: "命令 Schema 与双重校验管道"
+  T015:
+    agent: "Backend Architect"
+    reason: "事件日志基础设施"
+  T016:
+    agent: "Backend Architect"
+    reason: "状态快照与状态哈希"
+  T017:
+    agent: "Backend Architect"
+    reason: "存档序列化框架"
+  T018:
+    agent: "Software Architect"
+    reason: "确定性分区并行框架设计"
+  T019:
+    agent: "Backend Architect"
+    reason: "无头 CLI 实现"
+  T020:
+    agent: "Multi-Agent Systems Architect"
+    reason: "AI 后端抽象与决策注入通道（AI 管线边界治理）"
+  T021:
+    agent: "Backend Architect"
+    reason: "无 AI 脚本后端实现"
+  T022:
+    agent: "Backend Architect"
+    reason: "黄金确定性测试框架"
+  T023:
+    agent: "Backend Architect"
+    reason: "命令链路集成测试编写"
+  T024:
+    agent: "Backend Architect"
+    reason: "战斗结算黄金测试编写"
+  T025:
+    agent: "Backend Architect"
+    reason: "指挥节点/编制/最小可指挥单位模型"
+  T026:
+    agent: "Backend Architect"
+    reason: "士兵/班组/载具/武器/弹药模型"
+  T027:
+    agent: "Backend Architect"
+    reason: "地形/设施/工事/环境模型"
+  T028:
+    agent: "Backend Architect"
+    reason: "任务模型与任务类型注册表"
+  T029:
+    agent: "Backend Architect"
+    reason: "命令下达与通讯延迟链路"
+  T030:
+    agent: "Backend Architect"
+    reason: "机动系统实现"
+  T031:
+    agent: "Backend Architect"
+    reason: "战斗结算系统实现"
+  T032:
+    agent: "Backend Architect"
+    reason: "失联机制实现"
+  T033:
+    agent: "Backend Architect"
+    reason: "迷雾/情报识别系统"
+  T034:
+    agent: "Backend Architect"
+    reason: "任务判定与事件上报"
+  T035:
+    agent: "Backend Architect"
+    reason: "侦察类任务判定机制"
+  T036:
+    agent: "Backend Architect"
+    reason: "基础胜负判定"
+  T037:
+    agent: "Backend Architect"
+    reason: "基础数据文件编写"
+  T038:
+    agent: "Backend Architect"
+    reason: "连排级新手教程场景数据"
+  T039:
+    agent: "Desktop App Engineer"
+    reason: "主菜单与规模选择 UI（WPF）"
+  T040:
+    agent: "Desktop App Engineer"
+    reason: "2D 兵牌地图视图（WPF 渲染）"
+  T041:
+    agent: "Desktop App Engineer"
+    reason: "命令面板与三级校验提示（WPF）"
+  T042:
+    agent: "Desktop App Engineer"
+    reason: "暂停/加速与事件日志面板（WPF）"
+  T043:
+    agent: "Desktop App Engineer"
+    reason: "UI↔核心互操作封装（P/Invoke）"
+  T044:
+    agent: "Backend Architect"
+    reason: "连排级闭环端到端验证"
+  T045:
+    agent: "Backend Architect"
+    reason: "支援请求链路集成测试"
+  T046:
+    agent: "Backend Architect"
+    reason: "战术分队归建测试"
+  T047:
+    agent: "Backend Architect"
+    reason: "支援请求/配属模型与状态机"
+  T048:
+    agent: "Backend Architect"
+    reason: "战术分队模型"
+  T049:
+    agent: "Backend Architect"
+    reason: "资源池与有限分数计算"
+  T050:
+    agent: "Backend Architect"
+    reason: "配属链仲裁与归建"
+  T051:
+    agent: "Backend Architect"
+    reason: "四种交互类型约束"
+  T052:
+    agent: "Backend Architect"
+    reason: "派系模板基础数据"
+  T053:
+    agent: "Desktop App Engineer"
+    reason: "支援请求 UI（WPF）"
+  T054:
+    agent: "Backend Architect"
+    reason: "指挥链闭环集成验证"
+  T055:
+    agent: "Backend Architect"
+    reason: "情报权限验收测试"
+  T056:
+    agent: "Backend Architect"
+    reason: "后勤闭环测试"
+  T057:
+    agent: "Backend Architect"
+    reason: "营级指挥节点与编制校验"
+  T058:
+    agent: "Backend Architect"
+    reason: "层级化情报同步"
+  T059:
+    agent: "Backend Architect"
+    reason: "摘要上报与信息权限裁剪"
+  T060:
+    agent: "Backend Architect"
+    reason: "通信状态模型"
+  T061:
+    agent: "Backend Architect"
+    reason: "火力任务系统"
+  T062:
+    agent: "Backend Architect"
+    reason: "后勤规划/执行链路"
+  T063:
+    agent: "Multi-Agent Systems Architect"
+    reason: "参谋 AI 态势汇总与方案建议（多 agent 治理）"
+  T064:
+    agent: "Backend Architect"
+    reason: "平民/居民与设施联动"
+  T065:
+    agent: "Backend Architect"
+    reason: "营级对抗剧本数据"
+  T066:
+    agent: "Desktop App Engineer"
+    reason: "营级指挥 UI（WPF）"
+  T067:
+    agent: "Backend Architect"
+    reason: "营级闭环集成验证"
+  T068:
+    agent: "Backend Architect"
+    reason: "分数配置模型与三级超限"
+  T069:
+    agent: "Backend Architect"
+    reason: "数据校验 CLI 工具"
+  T070:
+    agent: "Desktop App Engineer"
+    reason: "步兵班编辑器（WPF）"
+  T071:
+    agent: "Desktop App Engineer"
+    reason: "载具编辑器（WPF）"
+  T072:
+    agent: "Desktop App Engineer"
+    reason: "派系模板扩展与微调面板（WPF）"
+  T073:
+    agent: "Backend Architect"
+    reason: "编辑器与模拟集成"
+  T074:
+    agent: "Backend Architect"
+    reason: "自定义闭环集成验证"
+  T075:
+    agent: "Software Architect"
+    reason: "旅级最高战术指挥层复用抽象"
+  T076:
+    agent: "Backend Architect"
+    reason: "旅级摘要同步与配属/后勤复用通道"
+  T077:
+    agent: "Multi-Agent Systems Architect"
+    reason: "旅级 AI 指挥官（多 agent 管线扩展）"
+  T078:
+    agent: "Backend Architect"
+    reason: "旅级合成测试场景与后置登记"
+  T079:
+    agent: "Backend Architect"
+    reason: "旅级链路集成验证"
+  T080:
+    agent: "Backend Architect"
+    reason: "云端 AI 后端（REST 客户端）"
+  T081:
+    agent: "Multi-Agent Systems Architect"
+    reason: "AI 事件触发引擎（事件驱动与频率治理）"
+  T082:
+    agent: "Prompt Engineer"
+    reason: "AI 决策输入裁剪与摘要生成"
+  T083:
+    agent: "Backend Architect"
+    reason: "周期/紧急简报系统实现"
+  T084:
+    agent: "Multi-Agent Systems Architect"
+    reason: "熔断/降级/自动切回（故障恢复治理）"
+  T085:
+    agent: "Backend Architect"
+    reason: "AI 决策日志实现"
+  T086:
+    agent: "Prompt Engineer"
+    reason: "版本化 AI 提示词与模型参数资产"
+  T087:
+    agent: "Desktop App Engineer"
+    reason: "AI 后端切换 UI（WPF）"
+  T088:
+    agent: "Backend Architect"
+    reason: "AI 兜底与触发集成验证"
+  T089:
+    agent: "Backend Architect"
+    reason: "存档槽管理实现"
+  T090:
+    agent: "Desktop App Engineer"
+    reason: "结算页（WPF）"
+  T091:
+    agent: "UI Designer"
+    reason: "可访问性设计（全键盘/高对比/色弱/字号）"
+  T092:
+    agent: "Technical Writer"
+    reason: "操作手册与面板提示同源维护"
+  T093:
+    agent: "Backend Architect"
+    reason: "性能预算验证（tick/内存/日志预算）"
+  T094:
+    agent: "DevOps Automator"
+    reason: "复现构建验收（产物 SHA-256 一致）"
+  T095:
+    agent: "Backend Architect"
+    reason: "quickstart 全量验收（SC-001~SC-012）"
+  T096:
+    agent: "Technical Writer"
+    reason: "文档、代码清理与安全加固"

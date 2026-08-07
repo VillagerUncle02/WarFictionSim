@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & Test (Windows)
+    # 固定镜像而非 windows-latest：latest 会滚动升级导致构建环境漂移，
+    # 破坏"同一提交产生相同产物"（宪法第 18 条）。如需新镜像可显式升级到 windows-2025。
+    runs-on: windows-2022
+    steps:
+      - name: Print runner image version（可复现性审计）
+        run: |
+          Write-Host "ImageOS: $env:ImageOS"
+          Write-Host "ImageVersion: $env:ImageVersion"
+        shell: pwsh
+
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK (10.0 LTS)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'   # 锁大版本；如需要更强稳定可改为精确 build 号
+
+      - name: Configure CMake (vcpkg manifest 锁版本)
+        run: cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+        shell: pwsh
+
+      - name: Build C++ core & C11 math lib (Release)
+        run: cmake --build build --config Release --parallel
+        shell: pwsh
+
+      - name: Run C++ unit + golden tests (CTest)
+        run: ctest --test-dir build -C Release --output-on-failure
+        shell: pwsh
+
+      - name: Build C# UI & tools
+        run: dotnet build ui/ -c Release
+        shell: pwsh
+
+      - name: Run C# tests (xUnit)
+        run: dotnet test ui/ -c Release --no-build
+        shell: pwsh
+
+      # 云端 AI 不进 CI：测试一律用无 AI 脚本模式（确定性），
+      # 云端后端集成由本地/手动验证，避免密钥与不确定性进入流水线。
+      - name: Headless golden determinism (1 vs 4 threads)
+        run: |
+          $h1 = & build\Release\sim_headless.exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --threads 1 --hash
+          $h4 = & build\Release\sim_headless.exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --threads 4 --hash
+          if ($h1 -ne $h4) { throw "Thread determinism broken: $h1 != $h4" }
+          Write-Host "Thread determinism OK: $h1"
+        shell: pwsh
+
+      - name: Headless integration (script AI full run + save roundtrip)
+        run: |
+          & build\Release\sim_headless.exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --ai-backend script --out full.jsonl
+          & build\Release\sim_headless.exe save --scenario data/scenarios/scn-battalion-v1.json --seed 42 --out save.wfs
+          & build\Release\sim_headless.exe load-save --path save.wfs --verify-hash
+        shell: pwsh
+
+      - name: Format checks
+        run: |
+          clang-format --dry-run --Werror sim/ core_c/
+          dotnet format ui/ --verify-no-changes
+        shell: pwsh
+
+      - name: Data schema validation
+        run: dotnet run --project tools/src/DataValidator -- data/ --all
+        shell: pwsh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wfs-windows-ci
+          path: |
+            build/Release/
+            ui/bin/Release/
+          if-no-files-found: error

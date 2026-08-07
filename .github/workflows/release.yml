@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release (Windows)
+    runs-on: windows-2022   # 固定镜像，与 ci.yml 保持一致（宪法第 18 条）
+    steps:
+      - name: Print runner image version（可复现性审计）
+        run: |
+          Write-Host "ImageOS: $env:ImageOS"
+          Write-Host "ImageVersion: $env:ImageVersion"
+        shell: pwsh
+
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK (10.0 LTS)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Configure & build Release
+        run: |
+          cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+          cmake --build build --config Release --parallel
+          dotnet publish ui/ -c Release -o publish/
+        shell: pwsh
+
+      - name: Package Windows build
+        run: Compress-Archive -Path build\Release\*, publish\* -DestinationPath wfs-windows.zip -Force
+        shell: pwsh
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create ${{ github.ref_name }} wfs-windows.zip --title "WarFictionSim ${{ github.ref_name }}" --generate-notes
+        shell: pwsh

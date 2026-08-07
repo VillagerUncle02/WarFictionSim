@@ -1,0 +1,50 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 18 * * *'   # UTC 18:00 = 北京时间次日 02:00
+  workflow_dispatch:
+
+jobs:
+  reproducible-build:
+    name: Reproducible Build & Performance Budget
+    runs-on: windows-2022   # 固定镜像（宪法第 18 条）
+    steps:
+      - name: Print runner image version（可复现性审计）
+        run: |
+          Write-Host "ImageOS: $env:ImageOS"
+          Write-Host "ImageVersion: $env:ImageVersion"
+        shell: pwsh
+
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK (10.0 LTS)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 注意：此门禁只有在确定性构建标志就绪后才会通过
+      # （T003 /T094：禁时间戳、PDB 可复现 /Brepro、依赖锁定）。
+      - name: Build A (identical flags)
+        run: |
+          cmake -B build-a -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+          cmake --build build-a --config Release --parallel
+        shell: pwsh
+
+      - name: Build B (identical flags)
+        run: |
+          cmake -B build-b -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+          cmake --build build-b --config Release --parallel
+        shell: pwsh
+
+      - name: Compare artifact hashes
+        run: |
+          $ha = (Get-ChildItem build-a\Release\* -File | Get-FileHash | Sort-Object Path | ForEach-Object { $_.Path + '=' + $_.Hash })
+          $hb = (Get-ChildItem build-b\Release\* -File | Get-FileHash | Sort-Object Path | ForEach-Object { $_.Path + '=' + $_.Hash })
+          if (($ha -join "`n") -ne ($hb -join "`n")) { throw "Reproducible build failed: artifacts differ between two identical builds" }
+          Write-Host "Reproducible build OK"
+        shell: pwsh
+
+      - name: Performance budget (tick <= 5ms, memory < 512MB)
+        run: build-a\Release\bench.exe --tick-budget 5 --mem-budget 512
+        shell: pwsh
