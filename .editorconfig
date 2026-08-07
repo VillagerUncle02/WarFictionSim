@@ -1,0 +1,26 @@
+# WarFictionSim 编辑器/格式化统一配置（配合 CI Lint 与 dotnet format）
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{c,cc,cpp,cxx,h,hpp}]
+indent_style = space
+indent_size = 4
+
+[*.{cs}]
+indent_style = space
+indent_size = 4
+
+[*.{ps1,psm1}]
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

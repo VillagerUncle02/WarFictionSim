@@ -2,7 +2,37 @@ name: CI
 
 on:
   push:
+    paths:
+      - 'sim/**'
+      - 'core_c/**'
+      - 'ui/**'
+      - 'tools/**'
+      - 'tests/**'
+      - 'data/**'
+      - 'contracts/**'
+      - 'CMakeLists.txt'
+      - 'vcpkg.json'
+      - '*.sln'
+      - 'Directory.Build.*'
+      - '.github/workflows/ci.yml'
+      - '.clang-format'
+      - '.editorconfig'
   pull_request:
+    paths:
+      - 'sim/**'
+      - 'core_c/**'
+      - 'ui/**'
+      - 'tools/**'
+      - 'tests/**'
+      - 'data/**'
+      - 'contracts/**'
+      - 'CMakeLists.txt'
+      - 'vcpkg.json'
+      - '*.sln'
+      - 'Directory.Build.*'
+      - '.github/workflows/ci.yml'
+      - '.clang-format'
+      - '.editorconfig'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -28,8 +58,20 @@ jobs:
         with:
           dotnet-version: '10.0.x'   # 锁大版本；如需要更强稳定可改为精确 build 号
 
+      # vcpkg 工具本身随最新版浮动，依赖版本由 vcpkg.json baseline 锁定（宪法第 18 条）；
+      # 如需更强可复现性，后续将此处改为固定 vcpkg commit。
+      - name: Setup vcpkg (manifest 锁版本)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:/vcpkg/scripts/buildsystems/vcpkg.cmake')) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg C:/vcpkg
+            & C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+            if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap 失败" }
+          }
+          Write-Host "vcpkg ready: C:/vcpkg"
+
       - name: Configure CMake (vcpkg manifest 锁版本)
-        run: cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+        run: cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
         shell: pwsh
 
       - name: Build C++ core & C11 math lib (Release)
@@ -65,10 +107,35 @@ jobs:
           & build\Release\sim_headless.exe load-save --path save.wfs --verify-hash
         shell: pwsh
 
-      - name: Format checks
+      - name: Lint & style checks（宪法代码风格）
         run: |
+          # C++：clang-format 强制风格（.clang-format 为唯一风格来源）
           clang-format --dry-run --Werror sim/ core_c/
-          dotnet format ui/ --verify-no-changes
+          # C++：clang-tidy 静态分析（bugprone/performance/readability/clang-analyzer）
+          if (Get-Command clang-tidy -ErrorAction SilentlyContinue) {
+            $cppFiles = @(Get-ChildItem sim\src,core_c\src -Recurse -Include *.cpp,*.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
+            if ($cppFiles.Count -gt 0) {
+              clang-tidy -p build $cppFiles --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --quiet
+              if ($LASTEXITCODE -ne 0) { throw "clang-tidy 发现代码问题" }
+            } else {
+              Write-Host "暂无 C++ 源码，跳过 clang-tidy"
+            }
+          } else {
+            Write-Host "clang-tidy 不可用，跳过（保留 clang-format 强制风格）"
+          }
+          # C#：dotnet format 强制风格 + .NET 分析器
+          if (Test-Path ui) {
+            dotnet format style ui/ --verify-no-changes
+            if ($LASTEXITCODE -ne 0) { throw "dotnet format style (ui) 失败" }
+            dotnet format analyzers ui/ --verify-no-changes
+            if ($LASTEXITCODE -ne 0) { throw "dotnet format analyzers (ui) 失败" }
+          }
+          if (Test-Path tools) {
+            dotnet format style tools/ --verify-no-changes
+            if ($LASTEXITCODE -ne 0) { throw "dotnet format style (tools) 失败" }
+            dotnet format analyzers tools/ --verify-no-changes
+            if ($LASTEXITCODE -ne 0) { throw "dotnet format analyzers (tools) 失败" }
+          }
         shell: pwsh
 
       - name: Data schema validation

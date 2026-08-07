@@ -25,6 +25,16 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Setup vcpkg (manifest 锁版本)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:/vcpkg/scripts/buildsystems/vcpkg.cmake')) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg C:/vcpkg
+            & C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+            if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap 失败" }
+          }
+          Write-Host "vcpkg ready: C:/vcpkg"
+
       - name: Configure & build Release
         run: |
           cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake

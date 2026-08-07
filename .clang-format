@@ -1,0 +1,13 @@
+# WarFictionSim C++ 代码风格（宪法：规范代码风格，CI 以 clang-format --dry-run --Werror 强制）
+# 基线：Google 风格 + 项目定制（C++20、4 空格缩进、120 列、左指针）
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++20
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+PointerAlignment: Left
+DerivePointerAlignment: false
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+AllowShortFunctionsOnASingleLine: Inline
