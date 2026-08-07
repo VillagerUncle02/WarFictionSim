@@ -330,3 +330,24 @@ assignments:
   T096:
     agent: "Technical Writer"
     reason: "文档、代码清理与安全加固"
+  T097:
+    agent: "Backend Architect"
+    reason: "AI 上级命令确认交互（确认/暂停/替代方案流程在 sim 命令状态机）"
+  T098:
+    agent: "Backend Architect"
+    reason: "AI 上级命令确认链路测试编写"
+  T099:
+    agent: "Backend Architect"
+    reason: "雷场与工兵专业行动（确定性系统实现）"
+  T100:
+    agent: "Backend Architect"
+    reason: "战场抢修（确定性系统实现）"
+  T101:
+    agent: "Backend Architect"
+    reason: "油料与给养补给（后勤系统扩展）"
+  T102:
+    agent: "Backend Architect"
+    reason: "构筑工事系统（确定性系统实现）"
+  T103:
+    agent: "Backend Architect"
+    reason: "中途切换扮演节点机制（原子切换/AI 接管在 sim 核心）"
