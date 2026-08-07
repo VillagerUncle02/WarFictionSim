@@ -24,6 +24,7 @@
 .claude/     Claude 代理配置
 .codex/      Codex 代理配置
 .specify/    Spec-kit 工作流（模板、宪法、脚本、扩展）
+docs/        设计参考与归档（DeepSeek 资料、spec 输入、设计存档）
 ```
 
 ## 开发工作流

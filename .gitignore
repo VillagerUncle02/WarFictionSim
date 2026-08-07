@@ -1,5 +1,7 @@
-# Spec-kit 扩展缓存
+# Spec-kit 缓存
 .specify/extensions/.cache/
+.specify/presets/.cache/
+.specify/workflows/.cache/
 
 # 构建产物
 bin/
