@@ -1,13 +1,13 @@
 ---
 name: "speckit-implement-loop"
-description: "运行自动化实现循环：开分支 → 按已确认的 agent 分配执行任务 → 门禁 → AI 审查/修复循环 → 提交 → 推送并开 PR。分配确认、PR 审批与合并保持人工。"
+description: "运行自动化实现循环：开分支 → 按已确认的 agent 分配执行任务 → 门禁 → AI 审查/修复循环 → 提交 → 推送触发 GitHub Actions CI → 获取 CI 反馈并修复至无异常 → 开 PR。分配确认、PR 审批与合并保持人工。"
 ---
 
 # Implement Loop（实现循环自动化）
 
 ## 范围
 
-自动化以下环节：创建/检出功能分支 → 按 `agent-assignments.yml` 逐阶段执行任务 → 门禁 → AI 审查/修复循环 → Conventional Commits → 推送并创建 PR。
+自动化以下环节：创建/检出功能分支 → 按 `agent-assignments.yml` 逐阶段执行任务 → 门禁 → AI 审查/修复循环 → Conventional Commits → 推送触发 GitHub Actions CI → CI 反馈/修复循环（直至无异常）→ 创建 PR。
 
 **不在本技能范围**：任务生成（`/speckit.tasks`）、issue 创建（`/speckit.taskstoissues`）、agent 分配与确认（`/speckit-agent-assign-assign`）、PR 审批与合并——以上由用户人工完成。假设 `tasks.md` 与 `agent-assignments.yml` 已存在且经用户确认。
 
@@ -20,6 +20,8 @@ description: "运行自动化实现循环：开分支 → 按已确认的 agent 
 3. 确认工作区干净（`git status`）；存在未提交改动 → 停下询问用户处理方式；
 4. `git fetch origin main`；
 5. 加载上下文：`plan.md`、`data-model.md`、`contracts/`、`research.md`、`quickstart.md`、`.specify/memory/constitution.md`。
+6. 确认 gh 已认证（keyring）；所有 gh/git 网络命令需在沙箱外（escalated）执行；
+7. 确认 `.github/workflows/ci.yml` 的 `on.push` 覆盖功能分支（仓库已配置为任意分支 push 触发，勿改回 main-only，否则 PR 前 CI 循环无法启动）。
 
 ## 分支
 
@@ -43,6 +45,7 @@ description: "运行自动化实现循环：开分支 → 按已确认的 agent 
 - **固定**：每个阶段结束跑全量 `scripts/gates.ps1`；PR 创建前跑全量 `scripts/gates.ps1`；
 - **按需**：AI 判断该跑了就跑（改动涉及测试、跨语言边界、高风险代码、审查修复后）→ `scripts/gates.ps1 -Quick`；
 - 门禁失败必须修复后再继续；无法修复时停下用中文汇报。
+- **远程门禁**：本地 gates 是前置；PR 前最终门禁是 GitHub Actions CI（见下方"推送与 CI 反馈循环"），本地全绿不代表 CI 通过。
 
 ## AI 审查 ↔ 修复循环（每个逻辑组）
 
@@ -99,10 +102,46 @@ description: "运行自动化实现循环：开分支 → 按已确认的 agent 
 - `notes/` 审计记录随对应逻辑组一起提交；
 - 提交信息可使用中文或英文，但必须结构清晰。
 
-## 推送与开 PR
+## 推送与 CI 反馈循环（PR 之前）
+
+**目的**：PR 之前先推送分支触发 GitHub Actions CI，结合 CI 反馈与 AI 审查修复问题，直到 CI 无异常再开 PR（用户要求：PR 前必须拿到 CI 反馈）。
+
+1. 推送当前分支（沙箱外执行，需 keyring 认证）：
 
 ```text
 git push -u origin <branch>
+```
+
+2. 等待并获取 CI 反馈：
+
+```text
+powershell -File scripts/wait-ci.ps1 -Branch <branch> [-TimeoutSeconds 1800]
+```
+
+   - 脚本轮询该分支最新 CI run 直至完成（成功 exit 0；失败 exit 1；超时/未触发 exit 2）；
+   - 成功（success）→ 进入"开 PR"；
+   - 失败/取消 → 输出失败 job 与失败步骤日志（`gh run view <id> --log-failed`），进入修复循环；
+   - 超时/未触发 → 检查 ci.yml 的 push 触发条件与仓库 Actions 状态；必要时 `gh workflow run ci.yml --ref <branch>` 手动触发，仍异常则停下用中文汇报。
+
+3. 修复循环（CI 反馈 + AI 审查结合）：
+
+   - 主循环 agent 先核实 CI 失败是否由本次改动引起（对照改动范围与失败步骤，区分真实 bug 与环境问题）；
+   - 把 CI 失败信息 + Code Reviewer 的 findings 一起交给对应实现 agent（同一角色）修复；
+   - 实现 agent 修复 → 本地 `scripts/gates.ps1 -Quick` → 提交（Conventional Commits）→ `git push origin <branch>` → 回到第 2 步；
+   - 循环直到 CI 全部通过且 AI 审查无 🔴/🟡。
+
+4. 收敛与轮次提醒（与 AI 审查循环同一规则）：
+
+   - 连续 2 轮 CI 失败未下降或同类问题重复 → 审计记录标注"CI 收敛异常提醒"，建议人工介入；
+   - 超过 3 轮 → 审计记录标注"CI 轮次过多提醒"，继续直到通过。
+
+5. 审计记录：每轮 CI 结果写入 `notes/reviews/<branch>-ci.md`（时间、run id、结论、失败步骤、修复 commit 列表），随逻辑组提交入库。
+
+## 开 PR（CI 通过后）
+
+- **前提**：本地 gates 通过 且 CI 反馈无异常；
+
+```text
 powershell -File scripts/open-pr.ps1 -Title "<feat: 说明>" -Issue "<issue 编号>"
 ```
 
@@ -123,7 +162,8 @@ powershell -File scripts/open-pr.ps1 -Title "<feat: 说明>" -Issue "<issue 编�
 - PR：<url>
 - 完成任务：Txxx–Tyyy（N 条，[X] 已标记）
 - 门禁：通过（构建/测试/格式）
+- CI：通过（N 轮，失败 M 次已修复）或"未触发"说明
 - AI 审查：N 轮，🔴/🟡 问题 M 个（已修复 / 待确认）
-- 审计记录：notes/reviews/<branch>-r*.md
+- 审计记录：notes/reviews/<branch>-r*.md、<branch>-ci.md
 - 下一步：等待人工 Approve + Merge
 ```
