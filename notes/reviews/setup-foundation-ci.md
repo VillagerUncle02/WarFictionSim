@@ -19,3 +19,8 @@
   preinstalled vcpkg 不含 baseline 提交，`git show` 失败（job 全程仅 24s 佐证克隆未发生）。
 - 修复：预装存在时强制 `git fetch --depth 1 origin <baseline>` + `checkout --force` 对齐 baseline；
   不存在时才全新克隆；vcpkg.exe 缺失时才 bootstrap。
+
+## 第 4 轮（run #31237992886，2026-08-08）
+- 结论：failure（步骤：Build C# UI & tools）——vcpkg 修复生效（CMake/C++/CTest 已通过）
+- 失败原因：UnitTest1.cs 缺少 `using Xunit;`，`[Fact]` 无法解析（CS0246）。
+- 修复：补充 `using Xunit;`。
