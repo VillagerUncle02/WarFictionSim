@@ -17,7 +17,12 @@ if ($Quick) {
 if (Test-Path "CMakeLists.txt") {
     if (-not $Quick) {
         Write-Host "[1/5] CMake 配置（vcpkg manifest）"
-        cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON
+        $vcpkgTc = "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        if (Test-Path $vcpkgTc) {
+            cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_TOOLCHAIN_FILE=$vcpkgTc
+        } else {
+            cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        }
         if ($LASTEXITCODE -ne 0) { throw "CMake 配置失败" }
     }
 
@@ -32,15 +37,18 @@ if (Test-Path "CMakeLists.txt") {
     Write-Host "[1-3/5] 跳过 C++（无 CMakeLists.txt）"
 }
 
-# C#（ui/tools）—— 存在 ui 目录时才执行
-if (Test-Path "ui") {
+# C#（ui/tools）—— 存在解决方案且本机装有 .NET 10 SDK 时才执行（CI 会自动安装）
+$sdk10 = (dotnet --list-sdks 2>$null | Select-String '^10\.')
+if ((Test-Path "WarFictionSim.sln") -and $sdk10) {
     Write-Host "[4/5] dotnet 构建 + 测试"
-    dotnet build ui/ -c $Config
+    dotnet build WarFictionSim.sln -c $Config
     if ($LASTEXITCODE -ne 0) { throw "dotnet 构建失败" }
-    dotnet test ui/ -c $Config --no-build
+    dotnet test WarFictionSim.sln -c $Config --no-build
     if ($LASTEXITCODE -ne 0) { throw "dotnet 测试失败" }
+} elseif (Test-Path "WarFictionSim.sln") {
+    Write-Host "[4/5] 跳过 C#（本机未安装 .NET 10 SDK；CI 会安装）"
 } else {
-    Write-Host "[4/5] 跳过 C#（无 ui/）"
+    Write-Host "[4/5] 跳过 C#（无解决方案）"
 }
 
 if (-not $Quick) {
@@ -54,9 +62,11 @@ if (-not $Quick) {
             Write-Host "无 C++ 源码，跳过 clang-format"
         }
     }
-    if (Test-Path "ui") {
-        dotnet format ui/ --verify-no-changes
+    if ((Test-Path "WarFictionSim.sln") -and $sdk10) {
+        dotnet format WarFictionSim.sln --verify-no-changes
         if ($LASTEXITCODE -ne 0) { throw "dotnet format 失败" }
+    } elseif (Test-Path "WarFictionSim.sln") {
+        Write-Host "跳过 dotnet format（本机未安装 .NET 10 SDK）"
     }
 } else {
     Write-Host "[5/5] 跳过格式（快速模式）"
