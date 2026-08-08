@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)][string]$Title,
     [string]$Issue = "",
     [string]$Base = "main"

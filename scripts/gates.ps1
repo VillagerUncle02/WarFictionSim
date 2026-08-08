@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Config = "Release",
     [switch]$Quick
 )
@@ -45,8 +45,19 @@ if (Test-Path "ui") {
 
 if (-not $Quick) {
     Write-Host "[5/5] 格式检查"
-    if (Test-Path "sim") { clang-format --dry-run --Werror (Get-ChildItem sim,core_c -Recurse -Include *.cpp,*.h,*.c | ForEach-Object FullName) }
-    if (Test-Path "ui") { dotnet format ui/ --verify-no-changes }
+    if (Test-Path "sim") {
+        $cppFiles = @(Get-ChildItem sim,core_c -Recurse -Include *.cpp,*.h,*.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
+        if ($cppFiles.Count -gt 0) {
+            clang-format --dry-run --Werror $cppFiles
+            if ($LASTEXITCODE -ne 0) { throw "clang-format 格式检查失败" }
+        } else {
+            Write-Host "无 C++ 源码，跳过 clang-format"
+        }
+    }
+    if (Test-Path "ui") {
+        dotnet format ui/ --verify-no-changes
+        if ($LASTEXITCODE -ne 0) { throw "dotnet format 失败" }
+    }
 } else {
     Write-Host "[5/5] 跳过格式（快速模式）"
 }

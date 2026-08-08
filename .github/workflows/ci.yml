@@ -109,13 +109,19 @@ jobs:
 
       - name: Lint & style checks（宪法代码风格）
         run: |
-          # C++：clang-format 强制风格（.clang-format 为唯一风格来源）
-          clang-format --dry-run --Werror sim/ core_c/
+          # C++：先收集源码列表；为空时跳过（避免 clang-format 无参数从 stdin 挂起）
+          $cppAll = @(Get-ChildItem sim,core_c -Recurse -Include *.cpp,*.h,*.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
+          if ($cppAll.Count -gt 0) {
+            # clang-format 强制风格（.clang-format 为唯一风格来源）
+            clang-format --dry-run --Werror $cppAll
+            if ($LASTEXITCODE -ne 0) { throw "clang-format 发现格式问题" }
+          } else {
+            Write-Host "暂无 C++ 源码，跳过 clang-format"
+          }
           # C++：clang-tidy 静态分析（bugprone/performance/readability/clang-analyzer）
           if (Get-Command clang-tidy -ErrorAction SilentlyContinue) {
-            $cppFiles = @(Get-ChildItem sim\src,core_c\src -Recurse -Include *.cpp,*.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
-            if ($cppFiles.Count -gt 0) {
-              clang-tidy -p build $cppFiles --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --quiet
+            if ($cppAll.Count -gt 0) {
+              clang-tidy -p build $cppAll --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --quiet
               if ($LASTEXITCODE -ne 0) { throw "clang-tidy 发现代码问题" }
             } else {
               Write-Host "暂无 C++ 源码，跳过 clang-tidy"
