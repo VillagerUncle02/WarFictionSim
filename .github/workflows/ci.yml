@@ -58,13 +58,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'   # 锁大版本；如需要更强稳定可改为精确 build 号
 
-      # vcpkg 工具本身随最新版浮动，依赖版本由 vcpkg.json baseline 锁定（宪法第 18 条）；
-      # 如需更强可复现性，后续将此处改为固定 vcpkg commit。
+      # 固定 vcpkg 到 vcpkg.json builtin-baseline 对应提交（宪法第 18 条）：
+      # 部分克隆（blob:none）避免浅克隆导致 baseline 提交缺失。
       - name: Setup vcpkg (manifest 锁版本)
         shell: pwsh
         run: |
           if (-not (Test-Path 'C:/vcpkg/scripts/buildsystems/vcpkg.cmake')) {
-            git clone --depth 1 https://github.com/microsoft/vcpkg C:/vcpkg
+            git clone --filter=blob:none --no-checkout https://github.com/microsoft/vcpkg C:/vcpkg
+            git -C C:/vcpkg checkout c4d9956c0c10a4742840a5e7d93efa2e0015c865
             & C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
             if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap 失败" }
           }
