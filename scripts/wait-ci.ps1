@@ -15,6 +15,13 @@ Set-Location $root
 if (-not $Branch) { $Branch = git branch --show-current }
 if (-not $Branch) { Write-Host "ERROR: 无法确定当前分支，请用 -Branch 指定"; exit 2 }
 
+# 从 git remote 推导 owner/repo（Start-Job 子进程不在仓库目录，gh 需显式 --repo）
+$script:ghRepo = ""
+$remoteUrl = git remote get-url origin 2>$null
+if ($remoteUrl -match 'github\.com[/:]([^/]+)/([^/]+?)(\.git)?$') {
+    $script:ghRepo = "$($Matches[1])/$($Matches[2])"
+}
+
 $script:ghExitCode = 0
 $script:ghTimeoutCount = 0
 
@@ -68,7 +75,7 @@ if ($script:ghExitCode -ne 0 -or $script:ghTimeoutCount -gt 0) {
 # 1) 等待与"当前分支 + 当前 HEAD"匹配的 CI run 出现（推送后 Actions 需数秒创建）
 $headSha = (git rev-parse HEAD).Trim()
 while ((Get-Date) -lt $appearDeadline) {
-    $runsJson = Invoke-Gh "run list --branch $Branch --limit 20 --json databaseId,status,conclusion,workflowName,headSha"
+    $runsJson = Invoke-Gh "run list --repo $script:ghRepo --branch $Branch --limit 20 --json databaseId,status,conclusion,workflowName,headSha"
     if ($null -eq $runsJson) {
         if ($script:ghTimeoutCount -ge 3) {
             Write-Host "ERROR: gh 连续超时 3 次，退出。"
@@ -101,7 +108,7 @@ Write-Host "找到 CI run #$runId，等待完成……"
 
 # 2) 等待 run 完成（每次 gh 调用带硬超时）
 while ((Get-Date) -lt $deadline) {
-    $runJson = Invoke-Gh "run view $runId --json status,conclusion,displayTitle,url"
+    $runJson = Invoke-Gh "run view --repo $script:ghRepo $runId --json status,conclusion,displayTitle,url"
     if ($null -eq $runJson) {
         if ($script:ghTimeoutCount -ge 3) {
             Write-Host "ERROR: gh 连续超时 3 次，退出。"
@@ -133,9 +140,9 @@ if ($run.conclusion -eq "success") {
 
 # 3) 失败：列出失败 job/step 与失败日志（同样带硬超时）
 Write-Host "== CI 失败，失败详情 =="
-$viewOut = Invoke-Gh "run view $runId"
+$viewOut = Invoke-Gh "run view --repo $script:ghRepo $runId"
 if ($null -ne $viewOut) { $viewOut | Out-String | Write-Host }
 Write-Host "---- 失败步骤日志（--log-failed）----"
-$logOut = Invoke-Gh "run view $runId --log-failed"
+$logOut = Invoke-Gh "run view --repo $script:ghRepo $runId --log-failed"
 if ($null -ne $logOut) { $logOut | Out-String | Write-Host }
 exit 1
