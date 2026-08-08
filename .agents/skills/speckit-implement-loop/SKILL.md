@@ -123,6 +123,7 @@ powershell -File scripts/wait-ci.ps1 -Branch <branch> [-TimeoutSeconds 1800]
    - 失败/取消 → 输出失败 job 与失败步骤日志（`gh run view <id> --log-failed`），进入修复循环；
    - 超时/未触发 → 检查 ci.yml 的 push 触发条件与仓库 Actions 状态；必要时 `gh workflow run ci.yml --ref <branch>` 手动触发，仍异常则停下用中文汇报。
    - wait-ci 故障排查行为：gh 未认证/网络失败会立即报错退出（exit 3，不再静默空转）；120 秒内未出现与当前提交匹配的 run（例如纯文档改动被 ci.yml 的 paths 过滤跳过）会输出原因并 exit 2；需要更长等待时用 `-RunAppearWaitSeconds` / `-TimeoutSeconds` 调大。
+   - wait-ci 硬超时保证：每个 gh 调用由内部 job 包装，单次最多 `-GhCallTimeoutSeconds`（默认 30s）；连续 3 次超时立即 exit 3；整体由 `-TimeoutSeconds`（默认 900s）兜底。**外部调用 shell 的 timeout_ms 必须 ≥ `-TimeoutSeconds + 60s`**，避免 shell 层先杀进程造成"看起来卡住"。
 
 3. 修复循环（CI 反馈 + AI 审查结合）：
 
