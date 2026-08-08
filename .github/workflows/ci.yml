@@ -203,7 +203,8 @@ jobs:
           }
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
+        if: hashFiles('build/Release/**', 'ui/bin/Release/**') != ''
+        uses: actions/upload-artifact@v7
         with:
           name: wfs-windows-ci
           path: |
