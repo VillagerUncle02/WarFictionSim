@@ -25,12 +25,15 @@ if ($remoteUrl -match 'github\.com[/:]([^/]+)/([^/]+?)(\.git)?$') {
 $script:ghExitCode = 0
 $script:ghTimeoutCount = 0
 
-# gh 调用统一走 Start-Job 硬超时：即使网络卡死，单次调用最多 GhCallTimeoutSeconds 秒，
-# 绝不让脚本无限等待（用户要求：所有指令必须有超时退出）。
+# gh 调用统一走 Start-Job 硬超时：即使网络卡死，单次调用最多 GhCallTimeoutSeconds 秒。
+# 注意：job 进程内必须先设置 UTF-8 输出编码，否则 gh 返回的中文（如提交信息）会被
+# Windows PowerShell 5.1 按 GBK 解码成坏字节，破坏 JSON 解析（曾导致轮询一直读不到完成态）。
 function Invoke-Gh {
     param([string]$ArgsText)
     $job = Start-Job -ScriptBlock {
         param($a)
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $OutputEncoding = [System.Text.Encoding]::UTF8
         $o = & gh @($a -split ' ') 2>&1
         Write-Output ("__GH_EXIT__=" + $LASTEXITCODE)
         if ($null -ne $o) { Write-Output $o }
@@ -54,6 +57,14 @@ function Invoke-Gh {
         $script:ghExitCode = 1
     }
     return $out
+}
+
+# 从输出中提取 JSON 行（对象以 { 开头、数组以 [ 开头；忽略可能的警告/杂讯行）
+function Get-JsonObject {
+    param($Lines)
+    $jsonLine = $Lines | Where-Object { $_.Trim().StartsWith('{') -or $_.Trim().StartsWith('[') } | Select-Object -First 1
+    if (-not $jsonLine) { return $null }
+    try { return ($jsonLine | ConvertFrom-Json) } catch { return $null }
 }
 
 Write-Host "== 等待 CI：分支 $Branch @ $((git rev-parse HEAD).Trim().Substring(0,7)) =="
@@ -88,7 +99,8 @@ while ((Get-Date) -lt $appearDeadline) {
         Write-Host "ERROR: gh run list 失败（网络/权限）。请确认在沙箱外执行且 gh 已登录。"
         exit 3
     }
-    try { $runs = $runsJson -join "`n" | ConvertFrom-Json } catch { $runs = @() }
+    $runs = Get-JsonObject $runsJson
+    if (-not $runs) { $runs = @() }
     $run = $runs | Where-Object { $_.workflowName -eq "CI" -and $_.headSha -eq $headSha } | Select-Object -First 1
     if ($run) { $runId = $run.databaseId; break }
     Start-Sleep -Seconds $PollSeconds
@@ -106,9 +118,9 @@ if (-not $runId) {
 
 Write-Host "找到 CI run #$runId，等待完成……"
 
-# 2) 等待 run 完成（每次 gh 调用带硬超时）
+# 2) 等待 run 完成（轮询只请求 ASCII 字段 status/conclusion，避免中文编码破坏 JSON）
 while ((Get-Date) -lt $deadline) {
-    $runJson = Invoke-Gh "run view --repo $script:ghRepo $runId --json status,conclusion,displayTitle,url"
+    $runJson = Invoke-Gh "run view --repo $script:ghRepo $runId --json status,conclusion"
     if ($null -eq $runJson) {
         if ($script:ghTimeoutCount -ge 3) {
             Write-Host "ERROR: gh 连续超时 3 次，退出。"
@@ -121,17 +133,22 @@ while ((Get-Date) -lt $deadline) {
         Write-Host "ERROR: gh run view 失败（网络/权限）。"
         exit 3
     }
-    try { $run = $runJson -join "`n" | ConvertFrom-Json } catch { $run = $null }
-    if ($run.status -eq "completed") { break }
+    $run = Get-JsonObject $runJson
+    if ($null -ne $run -and $run.status -eq "completed") { break }
     Start-Sleep -Seconds $PollSeconds
 }
-if (-not $run -or $run.status -ne "completed") {
+if ($null -eq $run -or $run.status -ne "completed") {
     Write-Host "ERROR: 等待 CI run #$runId 超时（状态：$($run.status)）。可用 -TimeoutSeconds 调大后重试。"
     exit 2
 }
 
-Write-Host "CI 结论：$($run.conclusion) | $($run.displayTitle)"
-Write-Host "run 链接：$($run.url)"
+# 完成后取展示信息（中文 title 经 UTF-8 编码修复后应可正常解析；失败则降级只显示 run id）
+$meta = Get-JsonObject (Invoke-Gh "run view --repo $script:ghRepo $runId --json displayTitle,url")
+$displayTitle = if ($meta) { $meta.displayTitle } else { "run #$runId" }
+$runUrl = if ($meta) { $meta.url } else { "https://github.com/$script:ghRepo/actions/runs/$runId" }
+
+Write-Host "CI 结论：$($run.conclusion) | $displayTitle"
+Write-Host "run 链接：$runUrl"
 
 if ($run.conclusion -eq "success") {
     Write-Host "== CI 通过 =="
