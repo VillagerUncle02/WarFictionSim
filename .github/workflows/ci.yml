@@ -59,7 +59,7 @@ jobs:
           dotnet-version: '10.0.x'   # 锁大版本；如需要更强稳定可改为精确 build 号
 
       # 固定 vcpkg 到 vcpkg.json builtin-baseline 对应提交（宪法第 18 条）：
-      # 部分克隆（blob:none）避免浅克隆导致 baseline 提交缺失。
+      # 预装版本或全新克隆都强制检出到 baseline 提交，保证可复现。
       - name: Setup vcpkg (manifest 锁版本)
         shell: pwsh
         run: |
