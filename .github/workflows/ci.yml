@@ -63,17 +63,26 @@ jobs:
       - name: Setup vcpkg (manifest 锁版本)
         shell: pwsh
         run: |
-          if (-not (Test-Path 'C:/vcpkg/scripts/buildsystems/vcpkg.cmake')) {
-            # 完整克隆 + 检出 baseline：部分克隆的按需取 blob 在 runner 上不可靠，
-            # 会导致 git show <baseline>:versions/baseline.json 失败。
-            git clone https://github.com/microsoft/vcpkg C:/vcpkg
+          # runner 镜像可能预装 C:/vcpkg（旧提交），必须强制对齐到 vcpkg.json 的
+          # builtin-baseline 提交；不存在时才全新克隆（宪法第 18 条）。
+          $vcpkgDir = 'C:/vcpkg'
+          if (-not (Test-Path "$vcpkgDir/.git")) {
+            git clone https://github.com/microsoft/vcpkg $vcpkgDir
             if ($LASTEXITCODE -ne 0) { throw "vcpkg clone 失败" }
-            git -C C:/vcpkg checkout c4d9956c0c10a4742840a5e7d93efa2e0015c865
-            if ($LASTEXITCODE -ne 0) { throw "vcpkg checkout baseline 失败" }
-            & C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          } else {
+            git -C $vcpkgDir fetch --depth 1 origin c4d9956c0c10a4742840a5e7d93efa2e0015c865
+            if ($LASTEXITCODE -ne 0) {
+              git -C $vcpkgDir fetch origin master
+              if ($LASTEXITCODE -ne 0) { throw "vcpkg fetch baseline 失败" }
+            }
+          }
+          git -C $vcpkgDir checkout c4d9956c0c10a4742840a5e7d93efa2e0015c865 --force
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg checkout baseline 失败" }
+          if (-not (Test-Path "$vcpkgDir/vcpkg.exe")) {
+            & $vcpkgDir/bootstrap-vcpkg.bat -disableMetrics
             if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap 失败" }
           }
-          Write-Host "vcpkg ready: C:/vcpkg"
+          Write-Host "vcpkg ready: $vcpkgDir @ c4d9956"
 
       - name: Configure CMake (vcpkg manifest 锁版本)
         shell: pwsh

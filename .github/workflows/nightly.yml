@@ -26,15 +26,24 @@ jobs:
       - name: Setup vcpkg (manifest 锁版本)
         shell: pwsh
         run: |
-          if (-not (Test-Path 'C:/vcpkg/scripts/buildsystems/vcpkg.cmake')) {
-            git clone https://github.com/microsoft/vcpkg C:/vcpkg
+          $vcpkgDir = 'C:/vcpkg'
+          if (-not (Test-Path "$vcpkgDir/.git")) {
+            git clone https://github.com/microsoft/vcpkg $vcpkgDir
             if ($LASTEXITCODE -ne 0) { throw "vcpkg clone 失败" }
-            git -C C:/vcpkg checkout c4d9956c0c10a4742840a5e7d93efa2e0015c865
-            if ($LASTEXITCODE -ne 0) { throw "vcpkg checkout baseline 失败" }
-            & C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          } else {
+            git -C $vcpkgDir fetch --depth 1 origin c4d9956c0c10a4742840a5e7d93efa2e0015c865
+            if ($LASTEXITCODE -ne 0) {
+              git -C $vcpkgDir fetch origin master
+              if ($LASTEXITCODE -ne 0) { throw "vcpkg fetch baseline 失败" }
+            }
+          }
+          git -C $vcpkgDir checkout c4d9956c0c10a4742840a5e7d93efa2e0015c865 --force
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg checkout baseline 失败" }
+          if (-not (Test-Path "$vcpkgDir/vcpkg.exe")) {
+            & $vcpkgDir/bootstrap-vcpkg.bat -disableMetrics
             if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap 失败" }
           }
-          Write-Host "vcpkg ready: C:/vcpkg"
+          Write-Host "vcpkg ready: $vcpkgDir @ c4d9956"
 
       # 注意：此门禁只有在确定性构建标志就绪后才会通过
       # （T003 /T094：禁时间戳、PDB 可复现 /Brepro、依赖锁定）。
