@@ -27,8 +27,10 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path 'C:/vcpkg/scripts/buildsystems/vcpkg.cmake')) {
-            git clone --filter=blob:none --no-checkout https://github.com/microsoft/vcpkg C:/vcpkg
+            git clone https://github.com/microsoft/vcpkg C:/vcpkg
+            if ($LASTEXITCODE -ne 0) { throw "vcpkg clone 失败" }
             git -C C:/vcpkg checkout c4d9956c0c10a4742840a5e7d93efa2e0015c865
+            if ($LASTEXITCODE -ne 0) { throw "vcpkg checkout baseline 失败" }
             & C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
             if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap 失败" }
           }
