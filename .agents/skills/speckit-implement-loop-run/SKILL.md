@@ -57,6 +57,8 @@ $ARGUMENTS
 
 将上述值作为本命令全部后续步骤的唯一事实来源；不要硬编码任何路径。所有路径在引用前用 `Test-Path` 确认存在。
 
+**自动探测字段**（未在配置/环境变量中显式设置时）：`TEST_FIRST` 从项目宪法（`.specify/memory/constitution.md`）的"测试保障/测试优先/TDD/先写测试"等表述探测；`BRANCH_BASE` 从 `origin/HEAD` 探测（失败回退 `main`）；`CI_WORKFLOW_FILE` / `CI_WORKFLOW_NAME` 从 `.github/workflows/` 探测（优先 `ci.yml`，名称读 `name:` 字段）；`REVIEWER` / `DEVOPS_AGENT` / `DEVOPS_OPINION` 从 `.claude/agents/`（项目级优先）按关键词探测，未命中则使用内置默认角色名（作者项目准则，若当前平台没有该角色则按下文降级规则处理）。**不要假设目标项目与作者项目使用相同的宪法、角色或流程。**
+
 ## 第 1 步：前置检查
 
 1. `FEATURE_DIR` 存在且包含 `tasks.md`（缺失 → 停下，提示先运行 `speckit.tasks`）；
@@ -108,8 +110,8 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 - 读取 `ASSIGNMENTS_PATH` 中该任务的 agent（不存在分配文件 → 全部按 `default` 并在第一次时提示用户"未找到 agent 分配，全部由当前上下文直接实现"）；
 - **命名 agent**（分配文件中的角色名，如 Code Reviewer、Backend Architect、Desktop App Engineer、DevOps Automator、Multi-Agent Systems Architect、Prompt Engineer、Technical Writer、UI Designer、Software Architect 等）：以该角色 spawn 执行，**配置语言提示词**必须包含：任务 ID、完整描述、相关契约/数据模型引用、精确文件路径、依赖上下文（前一任务产物）；
 - **`default`**：在当前上下文内直接实现；
-- **`DEVOPS_AGENT` 类任务**（CI/流水线/构建/依赖锁定等）：统一交给 `DEVOPS_AGENT` 角色 subagent 执行，不并入主流程环节；
-- **测试先行**（`TEST_FIRST=true`，默认）：测试任务先写并确认 FAIL（RED），再实现（若项目宪法要求测试保障）；
+- **`DEVOPS_AGENT` 类任务**（CI/流水线/构建/依赖锁定等）：若 `DEVOPS_AGENT` 非空且该角色在当前平台可 spawn，统一交给该角色 subagent 执行；角色不存在或 spawn 失败时，按普通分配/`default` 执行，并在汇报中提示"DevOps 角色不可用，已降级"；
+- **测试先行**：`TEST_FIRST` 由配置或自动探测决定（探测项目宪法中"测试保障/测试优先/TDD/先写测试"等表述）。为 `true` 时：测试任务先写并确认 FAIL（RED），再实现；为 `false` 时按任务描述顺序执行。**不要假设任何项目宪法条款**；
 - 同文件任务串行；不同文件且标 `[P]` 的可并行（`PARALLEL=true`）；
 - 完成后在 `tasks.md` 将该任务标记为 `[X]`，用配置语言汇报进度；
 - 任务失败 → 该阶段暂停，收集错误上下文后用中文汇报，不静默跳过。
@@ -147,6 +149,8 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 - **审查 agent**：只发现问题、给建议，不修改代码；
 - **实现 agent**：只修复自己实现的问题，不扩大改动范围；
 - **主循环 agent（orchestrator）**：核实 findings、调度回传、跑门禁、写审计记录，不代写修复。
+
+若 `<REVIEWER>` 角色在当前平台不存在或 spawn 失败：由主循环 agent 在当前上下文执行审查（降级模式），在审计记录中标注"降级审查（无专职 REVIEWER 角色）"，并提示用户配置 `review.code_reviewer`。
 
 附加规则：
 

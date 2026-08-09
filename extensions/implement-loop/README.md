@@ -47,12 +47,26 @@ specify extension list
 | `language` | `zh-CN` | 交互/审计/PR 说明语言 |
 | `feature.directory` | 自动 | 留空读取 `.specify/feature.json`，否则扫描 `specs/*/tasks.md` |
 | `execution.assignments_file` | `agent-assignments.yml` | agent 分配文件；不存在则全部按 `default` 执行并提示 |
-| `branch.prefix` / `branch.base` / `branch.chained` | `feature/` / `main` / `true` | 分支命名、基线、链式策略 |
-| `ci.workflow_file` / `ci.workflow_name` | `ci.yml` / `CI` | 等待 CI 时匹配的 workflow |
+| `execution.test_first` | 自动 | 探测宪法中"测试保障/测试优先/TDD/先写测试"等表述；未命中为 `false`，不假设其他项目的宪法 |
+| `execution.devops_agent` | `DevOps Automator`* | DevOps 类任务角色；自动探测 `.claude/agents`，未命中用默认值 |
+| `branch.prefix` / `branch.base` / `branch.chained` | `feature/` / 自动 / `true` | 分支前缀；基线从 `origin/HEAD` 探测（失败回退 `main`）；链式策略 |
+| `ci.workflow_file` / `ci.workflow_name` | 自动 / 自动 | 优先 `ci.yml` 其次唯一 workflow；名称读 `name:` 字段，回退 `CI` |
 | `gates.script` | 自动 | 优先项目 `scripts/gates.ps1`，否则扩展自带通用门禁 |
 | `notes.reviews_dir` | `notes/reviews` | 审计记录目录 |
-| `review.code_reviewer` | `Code Reviewer` | AI 审查角色（agent 名） |
-| `github.require_issues` | `true` | 前置检查任务 ID ↔ issue 映射 |
+| `review.code_reviewer` | `Code Reviewer`* | AI 审查角色；自动探测 `.claude/agents`，未命中用默认值 |
+| `review.devops_opinion` | `DevOps Automator`* | CI 类 PR 交叉意见角色；默认跟随 `execution.devops_agent` |
+| `github.require_issues` | `true`* | 前置检查任务 ID ↔ issue 映射（作者项目准则：任务先转 issue） |
+
+\* 表示该默认值取自作者项目（WarFictionSim）的准则/角色名。换项目时请按实际情况在配置中显式覆盖；无法 spawn 默认角色时，扩展会降级执行并在审计记录中标注。
+
+### 跨项目自动探测
+
+以下值在未显式配置时自动探测，避免把作者项目的宪法/流程当作隐性前提：
+
+- `execution.test_first`：读 `.specify/memory/constitution.md`，命中"测试保障/测试优先/测试先行/先写测试/TDD/test-first"等表述 → `true`，否则 `false`；
+- `branch.base`：`git symbolic-ref refs/remotes/origin/HEAD`（无网络），失败回退 `main`；
+- `ci.workflow_file` / `ci.workflow_name`：扫描 `.github/workflows/`，优先 `ci.yml`，其次唯一 workflow；名称读 `name:` 字段；
+- `review.code_reviewer` / `execution.devops_agent` / `review.devops_opinion`：扫描 `.claude/agents/`（项目级优先，其次用户级）frontmatter 的名称/描述关键词；未命中时使用内置默认角色名。
 
 ## 工作流（`run` 主命令）
 

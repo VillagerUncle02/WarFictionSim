@@ -5,7 +5,8 @@
 #   pwsh load-config.ps1 [-Feature <dir>] [-Json]
 #
 # 配置优先级（低 -> 高）：
-#   内置默认值 < .specify/extensions/implement-loop/implement-loop-config.yml
+#   内置默认值 < 自动探测（宪法/仓库/agents，仅未显式配置时） <
+#   .specify/extensions/implement-loop/implement-loop-config.yml
 #   < implement-loop-config.local.yml < 环境变量 SPECKIT_IMPLEMENT_LOOP_*
 #   < -Feature 命令行参数
 
@@ -90,13 +91,17 @@ function Read-FlatYaml {
 }
 
 $configDir = Join-Path $repoRoot (".specify\extensions\$extId")
+$explicitKeys = @{}
 foreach ($file in @(
         (Join-Path $configDir "implement-loop-config.yml"),
         (Join-Path $configDir "implement-loop-config.local.yml"))) {
     if (Test-Path -LiteralPath $file -PathType Leaf) {
         $parsed = Read-FlatYaml $file
         foreach ($k in $parsed.Keys) {
-            if ($cfg.ContainsKey($k)) { $cfg[$k] = $parsed[$k] }
+            if ($cfg.ContainsKey($k)) {
+                $cfg[$k] = $parsed[$k]
+                $explicitKeys[$k] = $true
+            }
         }
     }
 }
@@ -111,6 +116,120 @@ foreach ($k in @($cfg.Keys)) {
         elseif ($envVal -ieq "false") { $cfg[$k] = $false }
         elseif ($envVal -match '^-?\d+$') { $cfg[$k] = [int]$envVal }
         else { $cfg[$k] = $envVal }
+        $explicitKeys[$k] = $true
+    }
+}
+
+# ---------- 3.5 自动探测（仅针对未显式配置的键） ----------
+# 目的：换项目不把本项目（WarFictionSim）的宪法/流程/角色当作隐性前提。
+# 能探测的自动探测；探测不到的保留内置默认值（内置默认值来自作者项目的准则，
+# 可在项目配置中覆盖，见 config 模板注释）。
+
+# 3.5.1 test_first：从项目宪法探测测试纪律（测试保障/测试优先/TDD 等表述）
+if (-not $explicitKeys.ContainsKey("execution.test_first")) {
+    $cfg["execution.test_first"] = $false
+    $constitutionPath = Join-Path $repoRoot ".specify\memory\constitution.md"
+    if (Test-Path -LiteralPath $constitutionPath -PathType Leaf) {
+        $constitutionText = Get-Content -LiteralPath $constitutionPath -Raw
+        if ($constitutionText -match "测试保障|测试优先|测试先行|先写测试|TDD|test[-_ ]?first|test first") {
+            $cfg["execution.test_first"] = $true
+        }
+    }
+}
+
+# 3.5.2 branch.base：从 origin/HEAD 探测默认分支（无需网络），失败回退 main
+if (-not $explicitKeys.ContainsKey("branch.base")) {
+    $headRef = git -C $repoRoot symbolic-ref refs/remotes/origin/HEAD 2>$null
+    if ($LASTEXITCODE -eq 0 -and $headRef -match 'refs/heads/(.+)$') {
+        $cfg["branch.base"] = $Matches[1]
+    } else {
+        $cfg["branch.base"] = "main"
+    }
+}
+
+# 3.5.3 ci.workflow_file：.github/workflows 下优先 ci.yml，其次唯一 workflow
+if (-not $explicitKeys.ContainsKey("ci.workflow_file")) {
+    $wfDir = Join-Path $repoRoot ".github\workflows"
+    $wfFiles = @()
+    if (Test-Path -LiteralPath $wfDir -PathType Container) {
+        $wfFiles = @(Get-ChildItem -LiteralPath $wfDir -Filter *.yml -File -ErrorAction SilentlyContinue) +
+            @(Get-ChildItem -LiteralPath $wfDir -Filter *.yaml -File -ErrorAction SilentlyContinue)
+    }
+    if (Test-Path -LiteralPath (Join-Path $wfDir "ci.yml") -PathType Leaf) {
+        $cfg["ci.workflow_file"] = "ci.yml"
+    } elseif ($wfFiles.Count -eq 1) {
+        $cfg["ci.workflow_file"] = $wfFiles[0].Name
+    } else {
+        $cfg["ci.workflow_file"] = ""
+    }
+}
+
+# 3.5.4 ci.workflow_name：读取 workflow 文件的 name: 字段，失败回退 "CI"
+if (-not $explicitKeys.ContainsKey("ci.workflow_name")) {
+    $cfg["ci.workflow_name"] = "CI"
+    $wfFile = $cfg["ci.workflow_file"]
+    if ($wfFile) {
+        $wfPath = Join-Path $repoRoot (".github\workflows\$wfFile")
+        if (Test-Path -LiteralPath $wfPath -PathType Leaf) {
+            $nameLine = Select-String -LiteralPath $wfPath -Pattern '^name:\s*(.+)$' | Select-Object -First 1
+            if ($nameLine) {
+                $nameVal = $nameLine.Matches[0].Groups[1].Value.Trim().Trim('"').Trim("'")
+                if ($nameVal) { $cfg["ci.workflow_name"] = $nameVal }
+            }
+        }
+    }
+}
+
+# 3.5.5 角色探测：扫描 .claude/agents（项目级优先，其次用户级），
+# 按名称/描述关键词匹配审查与 DevOps 角色；未命中保留内置默认值
+# （默认值取自作者项目的准则：Code Reviewer / DevOps Automator）。
+function Get-AgentDefinitionFiles {
+    param([string]$RepoRoot)
+    $result = @()
+    $projectAgents = Join-Path $RepoRoot ".claude\agents"
+    $userAgents = Join-Path $HOME ".claude\agents"
+    if (Test-Path -LiteralPath $projectAgents -PathType Container) {
+        $result += @(Get-ChildItem -LiteralPath $projectAgents -Filter *.md -File -ErrorAction SilentlyContinue |
+            ForEach-Object { @{ Path = $_.FullName; Level = "project" } })
+    }
+    if (Test-Path -LiteralPath $userAgents -PathType Container) {
+        $result += @(Get-ChildItem -LiteralPath $userAgents -Filter *.md -File -ErrorAction SilentlyContinue |
+            ForEach-Object { @{ Path = $_.FullName; Level = "user" } })
+    }
+    return $result
+}
+
+function Find-AgentByKeyword {
+    # 注意：AgentFiles 必须是对象数组（哈希表 Path/Level），不能声明为 [string[]]
+    param([object[]]$AgentFiles, [string[]]$Patterns)
+    foreach ($agent in $AgentFiles) {
+        $raw = Get-Content -LiteralPath $agent.Path -Raw -ErrorAction SilentlyContinue
+        if (-not $raw) { continue }
+        $name = ""
+        $desc = ""
+        if ($raw -match '(?m)^name:\s*(.+)$') { $name = $Matches[1].Trim().Trim('"').Trim("'") }
+        if ($raw -match '(?m)^description:\s*(.+)$') { $desc = $Matches[1].Trim() }
+        $haystack = ($name + " " + $desc).ToLower()
+        foreach ($p in $Patterns) {
+            if ($haystack.Contains($p.ToLower())) { return $name }
+        }
+    }
+    return ""
+}
+
+$agentFiles = Get-AgentDefinitionFiles $repoRoot
+if (-not $explicitKeys.ContainsKey("review.code_reviewer")) {
+    $detectedReviewer = Find-AgentByKeyword $agentFiles @("code review", "code-review", "reviewer", "审查")
+    if ($detectedReviewer) { $cfg["review.code_reviewer"] = $detectedReviewer }
+}
+if (-not $explicitKeys.ContainsKey("execution.devops_agent") -or
+    -not $explicitKeys.ContainsKey("review.devops_opinion")) {
+    $detectedDevops = Find-AgentByKeyword $agentFiles @("devops", "automation", "ci/cd", "流水线", "deployment")
+    if (-not $explicitKeys.ContainsKey("execution.devops_agent") -and $detectedDevops) {
+        $cfg["execution.devops_agent"] = $detectedDevops
+    }
+    if (-not $explicitKeys.ContainsKey("review.devops_opinion") -and $detectedDevops) {
+        $cfg["review.devops_opinion"] = $detectedDevops
     }
 }
 

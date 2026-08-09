@@ -8,6 +8,10 @@
 # 格式说明：本扩展使用扁平的 dotted-key YAML 子集（键名含 "." 表示层级），
 # 每行一个 `key: value`，支持引号字符串、true/false、数字、逗号分隔列表。
 # 所有键均有默认值，模板仅列出常用项。
+#
+# 自动探测说明：以下键留空/未列出时，扩展会尝试从项目自动探测
+# （宪法/仓库/agents）；探测不到的保留"作者项目准则"默认值
+# （标注 * 的键）。换项目时若默认角色不适用，请在本文件显式配置。
 
 # 交互、审计记录、PR 说明使用的语言：zh-CN（默认）| en
 language: "zh-CN"
@@ -17,17 +21,25 @@ language: "zh-CN"
 feature.directory: ""
 
 execution.assignments_file: "agent-assignments.yml"
-execution.test_first: true
+# 留空自动探测：项目宪法含"测试保障/测试优先/TDD/先写测试"等表述时为 true，
+# 否则为 false。不假设其他项目的宪法要求。
+# execution.test_first: true
 execution.parallel: true
-# CI/流水线/构建/依赖锁定类任务统一交给该角色 subagent
+# CI/流水线/构建/依赖锁定类任务统一交给该角色 subagent。
+# 留空自动探测 .claude/agents（devops/automation/ci-cd 等关键词）；
+# 未命中时默认 "DevOps Automator"（* 作者项目准则），按实际环境覆盖。
 execution.devops_agent: "DevOps Automator"
 
 branch.prefix: "feature/"
-branch.base: "main"
+# 留空自动探测 origin/HEAD 的默认分支，失败回退 main
+# branch.base: "main"
 branch.chained: true
 
-ci.workflow_file: "ci.yml"
-ci.workflow_name: "CI"
+# 留空自动探测：优先 ci.yml，其次 .github/workflows 下唯一 workflow；
+# 多个且无 ci.yml 时需显式配置
+# ci.workflow_file: "ci.yml"
+# 留空自动读取 workflow 文件 name: 字段，失败回退 "CI"
+# ci.workflow_name: "CI"
 ci.wait_timeout_seconds: 1800
 # 前置检查要求 workflow 的 on.push 覆盖功能分支（而非仅 main），
 # 否则 PR 前的"推送->CI 反馈"循环无法启动。
@@ -41,7 +53,10 @@ gates.quick_on_demand: true
 # 审计记录目录（相对仓库根）
 notes.reviews_dir: "notes/reviews"
 
+# 审查角色：留空自动探测 .claude/agents（code review/reviewer/审查 等关键词）；
+# 未命中时默认 "Code Reviewer"（* 作者项目准则），按实际环境覆盖。
 review.code_reviewer: "Code Reviewer"
+# CI 类 PR 的交叉意见角色：默认跟随 execution.devops_agent
 review.devops_opinion: "DevOps Automator"
 review.max_rounds: 5
 review.convergence_warn_rounds: 4
@@ -49,7 +64,8 @@ review.convergence_warn_rounds: 4
 review.second_opinion: false
 review.second_opinion_triggers: "确定性核心, 并发, 跨语言边界, 安全"
 
-# 前置检查要求每个任务 ID 都有对应 issue（配合 speckit.taskstoissues）
+# 前置检查要求每个任务 ID 都有对应 issue（配合 speckit.taskstoissues；
+# * 作者项目准则：任务先转 issue。不使用 issue 的项目可改为 false）
 github.require_issues: true
 github.issue_title_pattern: "^T\\d{3}"
 # PR 正文模板；留空用内置模板。占位符：{issues} {closes} {generator}

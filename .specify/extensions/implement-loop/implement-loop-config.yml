@@ -1,0 +1,24 @@
+# WarFictionSim 项目配置（implement-loop 扩展）
+#
+# 本文件把本项目（作者项目）的准则显式化，供扩展在本仓库内稳定使用，
+# 同时作为"换项目时如何配置"的活示例。其他项目请复制模板
+# （config/implement-loop.config.template.yml）并按实际情况覆盖。
+# 未显式列出的键走自动探测（宪法/仓库/agents）。
+
+language: "zh-CN"
+
+# 宪法第 2 条：测试保障（不可妥协）→ 测试先行
+execution.test_first: true
+execution.devops_agent: "DevOps Automator"
+
+branch.prefix: "feature/"
+branch.chained: true
+
+ci.workflow_file: "ci.yml"
+ci.workflow_name: "CI"
+
+review.code_reviewer: "Code Reviewer"
+review.devops_opinion: "DevOps Automator"
+
+# 工作流要求：任务先转 issue（speckit.taskstoissues）
+github.require_issues: true

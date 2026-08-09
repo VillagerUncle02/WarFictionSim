@@ -17,7 +17,7 @@ function Find-RepoRoot {
     return $null
 }
 
-# 从 git remote 推导 owner/repo（如 VillagerUncle02/WarFictionSim）
+# 从 git remote 推导 owner/repo（如 owner/repo）
 function Get-GitRemoteRepo {
     param([string]$RepoRoot)
     $remoteUrl = git -C $RepoRoot remote get-url origin 2>$null
