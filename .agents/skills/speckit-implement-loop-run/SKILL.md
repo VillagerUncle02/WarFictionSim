@@ -46,7 +46,7 @@ $ARGUMENTS
 - `REPO_ROOT` / `EXT_DIR` / `FEATURE_DIR` / `FEATURE_NAME`；
 - `SPEC_FILE` / `PLAN_FILE` / `TASKS_FILE` / `DATA_MODEL_FILE` / `CONTRACTS_DIR` / `RESEARCH_FILE` / `QUICKSTART_FILE`（可能不存在，逐个用文件系统确认）；
 - `ASSIGNMENTS_FILE` / `ASSIGNMENTS_PATH`（可能不存在，见第 4 步）；
-- `LANGUAGE` / `TEST_FIRST` / `PARALLEL` / `DEVOPS_AGENT`；
+- `LANGUAGE` / `PARALLEL` / `DEVOPS_AGENT`；
 - `BRANCH_PREFIX` / `BRANCH_BASE` / `CHAINED`；
 - `CI_WORKFLOW_FILE` / `CI_WORKFLOW_NAME` / `CI_WAIT_TIMEOUT_SECONDS` / `CI_REQUIRE_PUSH_TRIGGER`；
 - `GATES_SCRIPT` / `OPEN_PR_SCRIPT` / `WAIT_CI_SCRIPT`（已解析：项目自定义优先，否则扩展自带）；
@@ -57,7 +57,7 @@ $ARGUMENTS
 
 将上述值作为本命令全部后续步骤的唯一事实来源；不要硬编码任何路径。所有路径在引用前用 `Test-Path` 确认存在。
 
-**自动探测字段**（未在配置/环境变量中显式设置时）：`TEST_FIRST` 从项目宪法（`.specify/memory/constitution.md`）的"测试保障/测试优先/TDD/先写测试"等表述探测；`BRANCH_BASE` 从 `origin/HEAD` 探测（失败回退 `main`）；`CI_WORKFLOW_FILE` / `CI_WORKFLOW_NAME` 从 `.github/workflows/` 探测（优先 `ci.yml`，名称读 `name:` 字段）；`REVIEWER` / `DEVOPS_AGENT` / `DEVOPS_OPINION` 从 `.claude/agents/`（项目级优先）按关键词探测，未命中则使用内置默认角色名（作者项目准则，若当前平台没有该角色则按下文降级规则处理）。**不要假设目标项目与作者项目使用相同的宪法、角色或流程。**
+**自动探测字段**（未在配置/环境变量中显式设置时）：`BRANCH_BASE` 从 `origin/HEAD` 探测（失败回退 `main`）；`CI_WORKFLOW_FILE` / `CI_WORKFLOW_NAME` 从 `.github/workflows/` 探测（优先 `ci.yml`，名称读 `name:` 字段）；`REVIEWER` / `DEVOPS_AGENT` / `DEVOPS_OPINION` 从 `.claude/agents/`（项目级优先）按关键词探测，未命中则使用内置默认角色名（作者项目准则，若当前平台没有该角色则按下文降级规则处理）。**不要假设目标项目与作者项目使用相同的宪法、角色或流程。**
 
 ## 第 1 步：前置检查
 
@@ -111,7 +111,7 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 - **命名 agent**（分配文件中的角色名，如 Code Reviewer、Backend Architect、Desktop App Engineer、DevOps Automator、Multi-Agent Systems Architect、Prompt Engineer、Technical Writer、UI Designer、Software Architect 等）：以该角色 spawn 执行，**配置语言提示词**必须包含：任务 ID、完整描述、相关契约/数据模型引用、精确文件路径、依赖上下文（前一任务产物）；
 - **`default`**：在当前上下文内直接实现；
 - **`DEVOPS_AGENT` 类任务**（CI/流水线/构建/依赖锁定等）：若 `DEVOPS_AGENT` 非空且该角色在当前平台可 spawn，统一交给该角色 subagent 执行；角色不存在或 spawn 失败时，按普通分配/`default` 执行，并在汇报中提示"DevOps 角色不可用，已降级"；
-- **测试先行**：`TEST_FIRST` 由配置或自动探测决定（探测项目宪法中"测试保障/测试优先/TDD/先写测试"等表述）。为 `true` 时：测试任务先写并确认 FAIL（RED），再实现；为 `false` 时按任务描述顺序执行。**不要假设任何项目宪法条款**；
+- **测试先行（本工作流固定规则，不可关闭）**：测试任务先写并确认 FAIL（RED），再实现。这是扩展自身的工作流要求，不依赖任何项目的宪法条款；**任何项目都按此执行**；
 - 同文件任务串行；不同文件且标 `[P]` 的可并行（`PARALLEL=true`）；
 - 完成后在 `tasks.md` 将该任务标记为 `[X]`，用配置语言汇报进度；
 - 任务失败 → 该阶段暂停，收集错误上下文后用中文汇报，不静默跳过。

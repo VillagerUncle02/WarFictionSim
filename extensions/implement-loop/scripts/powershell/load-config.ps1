@@ -33,7 +33,6 @@ $cfg = @{
     "language"                        = "zh-CN"
     "feature.directory"               = ""
     "execution.assignments_file"      = "agent-assignments.yml"
-    "execution.test_first"            = $true
     "execution.parallel"              = $true
     "execution.devops_agent"          = "DevOps Automator"
     "branch.prefix"                   = "feature/"
@@ -125,19 +124,7 @@ foreach ($k in @($cfg.Keys)) {
 # 能探测的自动探测；探测不到的保留内置默认值（内置默认值来自作者项目的准则，
 # 可在项目配置中覆盖，见 config 模板注释）。
 
-# 3.5.1 test_first：从项目宪法探测测试纪律（测试保障/测试优先/TDD 等表述）
-if (-not $explicitKeys.ContainsKey("execution.test_first")) {
-    $cfg["execution.test_first"] = $false
-    $constitutionPath = Join-Path $repoRoot ".specify\memory\constitution.md"
-    if (Test-Path -LiteralPath $constitutionPath -PathType Leaf) {
-        $constitutionText = Get-Content -LiteralPath $constitutionPath -Raw
-        if ($constitutionText -match "测试保障|测试优先|测试先行|先写测试|TDD|test[-_ ]?first|test first") {
-            $cfg["execution.test_first"] = $true
-        }
-    }
-}
-
-# 3.5.2 branch.base：从 origin/HEAD 探测默认分支（无需网络），失败回退 main
+# 3.5.1 branch.base：从 origin/HEAD 探测默认分支（无需网络），失败回退 main
 if (-not $explicitKeys.ContainsKey("branch.base")) {
     $headRef = git -C $repoRoot symbolic-ref refs/remotes/origin/HEAD 2>$null
     if ($LASTEXITCODE -eq 0 -and $headRef -match 'refs/heads/(.+)$') {
@@ -147,7 +134,7 @@ if (-not $explicitKeys.ContainsKey("branch.base")) {
     }
 }
 
-# 3.5.3 ci.workflow_file：.github/workflows 下优先 ci.yml，其次唯一 workflow
+# 3.5.2 ci.workflow_file：.github/workflows 下优先 ci.yml，其次唯一 workflow
 if (-not $explicitKeys.ContainsKey("ci.workflow_file")) {
     $wfDir = Join-Path $repoRoot ".github\workflows"
     $wfFiles = @()
@@ -164,7 +151,7 @@ if (-not $explicitKeys.ContainsKey("ci.workflow_file")) {
     }
 }
 
-# 3.5.4 ci.workflow_name：读取 workflow 文件的 name: 字段，失败回退 "CI"
+# 3.5.3 ci.workflow_name：读取 workflow 文件的 name: 字段，失败回退 "CI"
 if (-not $explicitKeys.ContainsKey("ci.workflow_name")) {
     $cfg["ci.workflow_name"] = "CI"
     $wfFile = $cfg["ci.workflow_file"]
@@ -180,7 +167,7 @@ if (-not $explicitKeys.ContainsKey("ci.workflow_name")) {
     }
 }
 
-# 3.5.5 角色探测：扫描 .claude/agents（项目级优先，其次用户级），
+# 3.5.4 角色探测：扫描 .claude/agents（项目级优先，其次用户级），
 # 按名称/描述关键词匹配审查与 DevOps 角色；未命中保留内置默认值
 # （默认值取自作者项目的准则：Code Reviewer / DevOps Automator）。
 function Get-AgentDefinitionFiles {
@@ -313,7 +300,6 @@ $out = [ordered]@{
     "ASSIGNMENTS_FILE"           = $assignFile
     "ASSIGNMENTS_PATH"           = (Join-Path $featureDir $assignFile)
     "LANGUAGE"                   = $cfg["language"]
-    "TEST_FIRST"                 = [bool]$cfg["execution.test_first"]
     "PARALLEL"                   = [bool]$cfg["execution.parallel"]
     "DEVOPS_AGENT"               = $cfg["execution.devops_agent"]
     "BRANCH_PREFIX"              = $cfg["branch.prefix"]

@@ -47,7 +47,6 @@ specify extension list
 | `language` | `zh-CN` | 交互/审计/PR 说明语言 |
 | `feature.directory` | 自动 | 留空读取 `.specify/feature.json`，否则扫描 `specs/*/tasks.md` |
 | `execution.assignments_file` | `agent-assignments.yml` | agent 分配文件；不存在则全部按 `default` 执行并提示 |
-| `execution.test_first` | 自动 | 探测宪法中"测试保障/测试优先/TDD/先写测试"等表述；未命中为 `false`，不假设其他项目的宪法 |
 | `execution.devops_agent` | `DevOps Automator`* | DevOps 类任务角色；自动探测 `.claude/agents`，未命中用默认值 |
 | `branch.prefix` / `branch.base` / `branch.chained` | `feature/` / 自动 / `true` | 分支前缀；基线从 `origin/HEAD` 探测（失败回退 `main`）；链式策略 |
 | `ci.workflow_file` / `ci.workflow_name` | 自动 / 自动 | 优先 `ci.yml` 其次唯一 workflow；名称读 `name:` 字段，回退 `CI` |
@@ -63,7 +62,6 @@ specify extension list
 
 以下值在未显式配置时自动探测，避免把作者项目的宪法/流程当作隐性前提：
 
-- `execution.test_first`：读 `.specify/memory/constitution.md`，命中"测试保障/测试优先/测试先行/先写测试/TDD/test-first"等表述 → `true`，否则 `false`；
 - `branch.base`：`git symbolic-ref refs/remotes/origin/HEAD`（无网络），失败回退 `main`；
 - `ci.workflow_file` / `ci.workflow_name`：扫描 `.github/workflows/`，优先 `ci.yml`，其次唯一 workflow；名称读 `name:` 字段；
 - `review.code_reviewer` / `execution.devops_agent` / `review.devops_opinion`：扫描 `.claude/agents/`（项目级优先，其次用户级）frontmatter 的名称/描述关键词；未命中时使用内置默认角色名。
@@ -74,7 +72,7 @@ specify extension list
 2. **前置检查**：feature 制品存在；`tasks.md` 存在；issue 映射完整（若开启）；工作区干净；`gh` 已认证；CI workflow 存在且 `on.push` 覆盖功能分支；`git fetch origin <base>`。
 3. **加载上下文**：feature 目录下的制品 + 宪法。
 4. **分支**：按配置创建/检出功能分支（链式时基于上一分支 tip）。
-5. **任务执行**：按 `tasks.md` 的 Phase 顺序执行；读取 `agent-assignments.yml` 分配角色并以中文提示词 spawn；`default` 在当前上下文实现；CI/流水线类任务交给 `execution.devops_agent`；测试先写并确认 FAIL；`[P]` 且不同文件可并行；完成标记 `[X]`。
+5. **任务执行**：按 `tasks.md` 的 Phase 顺序执行；读取 `agent-assignments.yml` 分配角色并以中文提示词 spawn；`default` 在当前上下文实现；CI/流水线类任务交给 `execution.devops_agent`；**测试先行是本工作流固定规则**（测试任务先写并确认 FAIL 再实现，不依赖任何项目宪法）；`[P]` 且不同文件可并行；完成标记 `[X]`。
 6. **门禁**：每个 Phase 结束与 PR 前跑全量门禁；AI 判断必要时跑快速门禁。
 7. **AI 审查 ↔ 修复循环**（每个逻辑组）：Code Reviewer 审查 diff → 主循环核实（区分已确认问题与未验证猜测）→ 回传实现 agent 修复 → 快速门禁 → 重审，直到无 🔴/🟡。审计记录写入 `notes/reviews/<branch>-r<N>.md`。收敛异常（连续 4 轮不下降）与轮次过多（>5 轮）自动标注提醒。
 8. **提交**：每个逻辑组 Conventional Commits，审计记录随组提交。

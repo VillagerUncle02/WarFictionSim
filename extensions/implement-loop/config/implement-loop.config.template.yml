@@ -21,9 +21,6 @@ language: "zh-CN"
 feature.directory: ""
 
 execution.assignments_file: "agent-assignments.yml"
-# 留空自动探测：项目宪法含"测试保障/测试优先/TDD/先写测试"等表述时为 true，
-# 否则为 false。不假设其他项目的宪法要求。
-# execution.test_first: true
 execution.parallel: true
 # CI/流水线/构建/依赖锁定类任务统一交给该角色 subagent。
 # 留空自动探测 .claude/agents（devops/automation/ci-cd 等关键词）；

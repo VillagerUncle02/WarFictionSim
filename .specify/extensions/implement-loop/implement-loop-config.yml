@@ -7,8 +7,6 @@
 
 language: "zh-CN"
 
-# 宪法第 2 条：测试保障（不可妥协）→ 测试先行
-execution.test_first: true
 execution.devops_agent: "DevOps Automator"
 
 branch.prefix: "feature/"
