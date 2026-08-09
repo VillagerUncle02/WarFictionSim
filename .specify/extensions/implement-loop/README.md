@@ -7,7 +7,7 @@
 ## 设计目标
 
 - **换项目即用**：不硬编码 feature 目录、项目名、技术栈、分支名或 agent 名单。所有项目差异通过配置（`implement-loop-config.yml`）或自动探测解决。
-- **代码定不了的交给 AI**：配置与脚本只负责能确定的事；语言/工具链、角色替代等无法由代码确定的项目差异，由运行时使用本扩展的 AI 检查项目后自行补全，并把决定记入审计记录（详见 [run.md](commands/run.md) 的"运行时自适应"）。
+- **代码定不了的交给 AI**：配置与脚本只负责能确定的事；语言/工具链、门禁脚本、角色替代等无法由代码确定的项目差异，由运行时使用本扩展的 AI 检查项目后自行补全（门禁脚本缺失时按样板现场编写、经用户确认），并把决定记入审计记录（详见 [run.md](commands/run.md) 的"运行时自适应"）。
 - **建立在 speckit 制品之上**：读取 `specs/<feature>/` 下的 `spec.md / plan.md / tasks.md / data-model.md / contracts/ / research.md / quickstart.md` 与 `.specify/memory/constitution.md`，不重复生成制品。
 - **与 speckit 生态联动**：`speckit.tasks` 生成任务、`speckit.taskstoissues` 生成 issue、`speckit.agent-assign.*` 生成 agent 分配，本扩展负责从"已确认的分配"到"可人工合并的 PR"这一段。
 
@@ -48,25 +48,24 @@ specify extension list
 | `language` | `zh-CN` | 交互/审计/PR 说明语言 |
 | `feature.directory` | 自动 | 留空读取 `.specify/feature.json`，否则扫描 `specs/*/tasks.md` |
 | `execution.assignments_file` | `agent-assignments.yml` | agent 分配文件；不存在则全部按 `default` 执行并提示 |
-| `execution.devops_agent` | `DevOps Automator`* | DevOps 类任务角色；自动探测 `.claude/agents`，未命中用默认值 |
+| `execution.devops_agent` | 空 | DevOps 类任务角色；留空由 AI 运行时解析（分配文件/可用角色），不预设 |
 | `branch.prefix` / `branch.base` / `branch.chained` | `feature/` / 自动 / `true` | 分支前缀；基线从 `origin/HEAD` 探测（失败回退 `main`）；链式策略 |
 | `ci.workflow_file` / `ci.workflow_name` | 自动 / 自动 | 优先 `ci.yml` 其次唯一 workflow；名称读 `name:` 字段，回退 `CI` |
-| `gates.script` | 自动 | 门禁脚本：优先项目 `scripts/gates.ps1`（完全自定义），否则扩展自带通用门禁 |
-| `gates.steps` | 空 | 自定义门禁命令列表（YAML 列表）；换语言/工具时直接列命令，不必写脚本 |
+| `gates.script` | 自动 | 门禁脚本：配置 > 项目 `<repo>/scripts/gates.ps1`；都没有时由 AI 参照 `templates/gates-template.ps1` 现场编写并经用户确认 |
 | `notes.reviews_dir` | `notes/reviews` | 审计记录目录 |
-| `review.code_reviewer` | `Code Reviewer`* | AI 审查角色；自动探测 `.claude/agents`，未命中用默认值 |
-| `review.devops_opinion` | `DevOps Automator`* | CI 类 PR 交叉意见角色；默认跟随 `execution.devops_agent` |
+| `review.code_reviewer` | 空 | AI 审查角色；留空由 AI 运行时解析（分配文件/可用角色），不预设 |
+| `review.devops_opinion` | 空 | CI 类 PR 交叉意见角色；留空由 AI 运行时解析，不预设 |
 | `github.require_issues` | `true`* | 前置检查任务 ID ↔ issue 映射（作者项目准则：任务先转 issue） |
 
-\* 表示该默认值取自作者项目（WarFictionSim）的准则/角色名。换项目时请按实际情况在配置中显式覆盖；无法 spawn 默认角色时，扩展会降级执行并在审计记录中标注。
+\* 表示该默认值取自作者项目（WarFictionSim）的工作流准则。换项目时可在配置中显式覆盖；未配置的事项由 AI 在运行时解析，重要决定会询问用户并记入审计记录。
 
 ### 跨项目自动探测
 
 以下值在未显式配置时自动探测，避免把作者项目的宪法/流程当作隐性前提：
 
-- `branch.base`：`git symbolic-ref refs/remotes/origin/HEAD`（无网络），失败回退 `main`；
+- `branch.base`：`git symbolic-ref refs/remotes/origin/HEAD`（无网络）；探测不到则为空，由 AI 检查仓库后确定；
 - `ci.workflow_file` / `ci.workflow_name`：扫描 `.github/workflows/`，优先 `ci.yml`，其次唯一 workflow；名称读 `name:` 字段；
-- `review.code_reviewer` / `execution.devops_agent` / `review.devops_opinion`：扫描 `.claude/agents/`（项目级优先，其次用户级）frontmatter 的名称/描述关键词；未命中时使用内置默认角色名。
+- 角色类键不做代码猜测：未配置即为空，由 AI 在运行时解析。
 
 ## 工作流（`run` 主命令）
 
@@ -74,8 +73,8 @@ specify extension list
 2. **前置检查**：feature 制品存在；`tasks.md` 存在；issue 映射完整（若开启）；工作区干净；`gh` 已认证；CI workflow 存在且 `on.push` 覆盖功能分支；`git fetch origin <base>`。
 3. **加载上下文**：feature 目录下的制品 + 宪法。
 4. **分支**：按配置创建/检出功能分支（链式时基于上一分支 tip）。
-5. **任务执行**：按 `tasks.md` 的 Phase 顺序执行；读取 `agent-assignments.yml` 分配角色并以中文提示词 spawn；`default` 在当前上下文实现；CI/流水线类任务交给 `execution.devops_agent`；**测试先行是本工作流固定规则**（测试任务先写并确认 FAIL 再实现，不依赖任何项目宪法）；`[P]` 且不同文件可并行；完成标记 `[X]`。
-6. **门禁**：每个 Phase 结束与 PR 前跑全量门禁；AI 判断必要时跑快速门禁。
+5. **任务执行**：按 `tasks.md` 的 Phase 顺序执行；读取 `agent-assignments.yml` 分配角色并以中文提示词 spawn；`default` 在当前上下文实现；CI/流水线类任务交给 `execution.devops_agent`（为空时 AI 选最接近角色）；**测试先行是本工作流固定规则**（测试任务先写并确认 FAIL 再实现，不依赖任何项目宪法）；`[P]` 且不同文件可并行；完成标记 `[X]`。
+6. **门禁**：`<repo>/scripts/gates.ps1` 缺失时由 AI 参照样板现场编写并经用户确认；每个 Phase 结束与 PR 前跑全量门禁；AI 判断必要时跑快速门禁；未覆盖的工具链由 AI 补充命令并记入审计记录。
 7. **AI 审查 ↔ 修复循环**（每个逻辑组）：Code Reviewer 审查 diff → 主循环核实（区分已确认问题与未验证猜测）→ 回传实现 agent 修复 → 快速门禁 → 重审，直到无 🔴/🟡。审计记录写入 `notes/reviews/<branch>-r<N>.md`。收敛异常（连续 4 轮不下降）与轮次过多（>5 轮）自动标注提醒。
 8. **提交**：每个逻辑组 Conventional Commits，审计记录随组提交。
 9. **推送与 CI**：推送分支 → `wait-ci.ps1` 轮询直至完成 → 失败则结合 CI 日志与审查 findings 修复再推，直到 CI 绿。CI 收敛异常同样标注。
@@ -105,8 +104,8 @@ speckit.implement-loop.run    # 本扩展：实现 -> 门禁 -> CI -> PR -> PR �
 
 - **找不到 feature 目录**：配置 `feature.directory`，或确认 `.specify/feature.json` 存在（`speckit.specify` 会自动写入）。
 - **等待 CI 超时/未触发**：检查 workflow 文件名与 `ci.workflow_name`、`on.push` 的 `paths` 过滤（纯文档改动会被跳过）；必要时 `gh workflow run <file> --ref <branch>` 手动触发。
-- **门禁脚本**：项目有自定义 `scripts/gates.ps1` 时自动优先；否则用扩展自带通用门禁（CMake/dotnet/cargo/npm/pytest 自动探测，缺失即跳过）。
-- **换了语言/工具怎么办**：四层机制——① 项目写自己的 `scripts/gates.ps1`（最优先，完全自定义）；② 配置 `gates.steps` 列命令（如 `go test ./...`、`mvn -q test`）；③ 扩展通用门禁自动探测 CMake / .NET / Cargo / npm / pytest / Go / Maven / Gradle；④ 以上都没覆盖的（Makefile、Bun、Zig 等），由运行时 AI 检查项目后自行补充门禁命令并记入审计记录。**不需要为了换语言而改扩展代码。**
+- **门禁脚本**：解析顺序——配置 `gates.script` > 项目 `<repo>/scripts/gates.ps1`；都没有时，AI 参照 `templates/gates-template.ps1` 样板现场编写，经用户确认后执行并随分支提交。
+- **换了语言/工具怎么办**：不需要改扩展——门禁脚本缺失时 AI 按样板现场写；已有脚本但没覆盖的命令（Makefile、Bun、Zig 等），AI 检查项目后自行补充执行并记入审计记录。**扩展不再枚举语言/工具。**
 - **skills 模式命令引用**：本扩展命令体不依赖 `__SPECKIT_COMMAND_*__` 占位符（该占位符在 Codex/ZCode 等 skills 模式下暂不解析），核心命令按中性名称描述并在正文给出对应技能名。
 
 ## 许可证

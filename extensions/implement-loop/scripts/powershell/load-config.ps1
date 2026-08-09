@@ -5,7 +5,7 @@
 #   pwsh load-config.ps1 [-Feature <dir>] [-Json]
 #
 # 配置优先级（低 -> 高）：
-#   内置默认值 < 自动探测（宪法/仓库/agents，仅未显式配置时） <
+#   内置默认值 < 自动探测（仓库事实，仅未显式配置时） <
 #   .specify/extensions/implement-loop/implement-loop-config.yml
 #   < implement-loop-config.local.yml < 环境变量 SPECKIT_IMPLEMENT_LOOP_*
 #   < -Feature 命令行参数
@@ -34,7 +34,7 @@ $cfg = @{
     "feature.directory"               = ""
     "execution.assignments_file"      = "agent-assignments.yml"
     "execution.parallel"              = $true
-    "execution.devops_agent"          = "DevOps Automator"
+    "execution.devops_agent"          = ""
     "branch.prefix"                   = "feature/"
     "branch.base"                     = "main"
     "branch.chained"                  = $true
@@ -43,11 +43,10 @@ $cfg = @{
     "ci.wait_timeout_seconds"         = 1800
     "ci.require_push_trigger"         = $true
     "gates.script"                    = ""
-    "gates.steps"                     = ""
     "gates.quick_on_demand"           = $true
     "notes.reviews_dir"               = "notes/reviews"
-    "review.code_reviewer"            = "Code Reviewer"
-    "review.devops_opinion"           = "DevOps Automator"
+    "review.code_reviewer"            = ""
+    "review.devops_opinion"           = ""
     "review.max_rounds"               = 5
     "review.convergence_warn_rounds"  = 4
     "review.second_opinion"           = $false
@@ -61,9 +60,7 @@ $cfg = @{
 function Read-FlatYaml {
     param([string]$Path)
     $result = @{}
-    $lines = @(Get-Content -LiteralPath $Path)
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        $raw = $lines[$i]
+    foreach ($raw in Get-Content -LiteralPath $Path) {
         $line = $raw.Trim()
         if (-not $line -or $line.StartsWith("#")) { continue }
         # 去掉不在引号内的行尾注释
@@ -83,26 +80,7 @@ function Read-FlatYaml {
              ($value.StartsWith("'") -and $value.EndsWith("'")))) {
             $value = $value.Substring(1, $value.Length - 2)
         }
-        if ($value -eq "") {
-            # 缩进 YAML 列表（gates.steps 等）：
-            #   gates.steps:
-            #     - "go test ./..."
-            $list = @()
-            while ($i + 1 -lt $lines.Count) {
-                $lm = [regex]::Match($lines[$i + 1], '^\s+-\s+(.*)$')
-                if (-not $lm.Success) { break }
-                $item = $lm.Groups[1].Value.Trim()
-                if ($item.Length -ge 2 -and
-                    (($item.StartsWith('"') -and $item.EndsWith('"')) -or
-                     ($item.StartsWith("'") -and $item.EndsWith("'")))) {
-                    $item = $item.Substring(1, $item.Length - 2)
-                }
-                $list += $item
-                $i++
-            }
-            $result[$key] = $list
-            continue
-        }
+        if ($value -eq "") { $result[$key] = ""; continue }
         if ($value -ieq "true") { $result[$key] = $true; continue }
         if ($value -ieq "false") { $result[$key] = $false; continue }
         if ($value -match '^-?\d+$') { $result[$key] = [int]$value; continue }
@@ -143,16 +121,16 @@ foreach ($k in @($cfg.Keys)) {
 
 # ---------- 3.5 自动探测（仅针对未显式配置的键） ----------
 # 目的：换项目不把本项目（WarFictionSim）的宪法/流程/角色当作隐性前提。
-# 能探测的自动探测；探测不到的保留内置默认值（内置默认值来自作者项目的准则，
-# 可在项目配置中覆盖，见 config 模板注释）。
+# 只探测"仓库里能读到的确定事实"；探测不到的值为空，
+# 由使用扩展的 AI 在运行时检查项目后确定（必要时询问用户）。
 
-# 3.5.1 branch.base：从 origin/HEAD 探测默认分支（无需网络），失败回退 main
+# 3.5.1 branch.base：从 origin/HEAD 探测默认分支（无需网络）；探测不到则为空
 if (-not $explicitKeys.ContainsKey("branch.base")) {
     $headRef = git -C $repoRoot symbolic-ref refs/remotes/origin/HEAD 2>$null
     if ($LASTEXITCODE -eq 0 -and $headRef -match 'refs/heads/(.+)$') {
         $cfg["branch.base"] = $Matches[1]
     } else {
-        $cfg["branch.base"] = "main"
+        $cfg["branch.base"] = ""
     }
 }
 
@@ -173,9 +151,9 @@ if (-not $explicitKeys.ContainsKey("ci.workflow_file")) {
     }
 }
 
-# 3.5.3 ci.workflow_name：读取 workflow 文件的 name: 字段，失败回退 "CI"
+# 3.5.3 ci.workflow_name：读取 workflow 文件的 name: 字段；读取不到则为空
 if (-not $explicitKeys.ContainsKey("ci.workflow_name")) {
-    $cfg["ci.workflow_name"] = "CI"
+    $cfg["ci.workflow_name"] = ""
     $wfFile = $cfg["ci.workflow_file"]
     if ($wfFile) {
         $wfPath = Join-Path $repoRoot (".github\workflows\$wfFile")
@@ -186,59 +164,6 @@ if (-not $explicitKeys.ContainsKey("ci.workflow_name")) {
                 if ($nameVal) { $cfg["ci.workflow_name"] = $nameVal }
             }
         }
-    }
-}
-
-# 3.5.4 角色探测：扫描 .claude/agents（项目级优先，其次用户级），
-# 按名称/描述关键词匹配审查与 DevOps 角色；未命中保留内置默认值
-# （默认值取自作者项目的准则：Code Reviewer / DevOps Automator）。
-function Get-AgentDefinitionFiles {
-    param([string]$RepoRoot)
-    $result = @()
-    $projectAgents = Join-Path $RepoRoot ".claude\agents"
-    $userAgents = Join-Path $HOME ".claude\agents"
-    if (Test-Path -LiteralPath $projectAgents -PathType Container) {
-        $result += @(Get-ChildItem -LiteralPath $projectAgents -Filter *.md -File -ErrorAction SilentlyContinue |
-            ForEach-Object { @{ Path = $_.FullName; Level = "project" } })
-    }
-    if (Test-Path -LiteralPath $userAgents -PathType Container) {
-        $result += @(Get-ChildItem -LiteralPath $userAgents -Filter *.md -File -ErrorAction SilentlyContinue |
-            ForEach-Object { @{ Path = $_.FullName; Level = "user" } })
-    }
-    return $result
-}
-
-function Find-AgentByKeyword {
-    # 注意：AgentFiles 必须是对象数组（哈希表 Path/Level），不能声明为 [string[]]
-    param([object[]]$AgentFiles, [string[]]$Patterns)
-    foreach ($agent in $AgentFiles) {
-        $raw = Get-Content -LiteralPath $agent.Path -Raw -ErrorAction SilentlyContinue
-        if (-not $raw) { continue }
-        $name = ""
-        $desc = ""
-        if ($raw -match '(?m)^name:\s*(.+)$') { $name = $Matches[1].Trim().Trim('"').Trim("'") }
-        if ($raw -match '(?m)^description:\s*(.+)$') { $desc = $Matches[1].Trim() }
-        $haystack = ($name + " " + $desc).ToLower()
-        foreach ($p in $Patterns) {
-            if ($haystack.Contains($p.ToLower())) { return $name }
-        }
-    }
-    return ""
-}
-
-$agentFiles = Get-AgentDefinitionFiles $repoRoot
-if (-not $explicitKeys.ContainsKey("review.code_reviewer")) {
-    $detectedReviewer = Find-AgentByKeyword $agentFiles @("code review", "code-review", "reviewer", "审查")
-    if ($detectedReviewer) { $cfg["review.code_reviewer"] = $detectedReviewer }
-}
-if (-not $explicitKeys.ContainsKey("execution.devops_agent") -or
-    -not $explicitKeys.ContainsKey("review.devops_opinion")) {
-    $detectedDevops = Find-AgentByKeyword $agentFiles @("devops", "automation", "ci/cd", "流水线", "deployment")
-    if (-not $explicitKeys.ContainsKey("execution.devops_agent") -and $detectedDevops) {
-        $cfg["execution.devops_agent"] = $detectedDevops
-    }
-    if (-not $explicitKeys.ContainsKey("review.devops_opinion") -and $detectedDevops) {
-        $cfg["review.devops_opinion"] = $detectedDevops
     }
 }
 
@@ -285,25 +210,23 @@ function Resolve-Script {
     return (Resolve-Path -LiteralPath $ExtPath).Path
 }
 
+# GATES_SCRIPT 解析：配置 gates.script > 项目 <repo>/scripts/gates.ps1 > 空
+# （为空时由使用扩展的 AI 参照 templates/gates-template.ps1 现场编写，经用户确认）
 $gatesScript = $cfg["gates.script"]
-if (-not $gatesScript) {
-    $gatesScript = Resolve-Script (Join-Path $repoRoot "scripts\gates.ps1") (Join-Path $extRoot "scripts\powershell\gates.ps1")
-} elseif (Test-Path -LiteralPath $gatesScript) {
-    $gatesScript = (Resolve-Path -LiteralPath $gatesScript).Path
+if ($gatesScript) {
+    if (Test-Path -LiteralPath $gatesScript -PathType Leaf) {
+        $gatesScript = (Resolve-Path -LiteralPath $gatesScript).Path
+    } else {
+        Write-Err "WARN: 配置的 gates.script 不存在：$gatesScript（按未配置处理，由 AI 现场编写）"
+        $gatesScript = ""
+    }
+} elseif (Test-Path -LiteralPath (Join-Path $repoRoot "scripts\gates.ps1") -PathType Leaf) {
+    $gatesScript = (Resolve-Path -LiteralPath (Join-Path $repoRoot "scripts\gates.ps1")).Path
 } else {
-    Write-Err "WARN: 配置的 gates.script 不存在：$gatesScript（回退到扩展自带通用门禁）"
-    $gatesScript = (Resolve-Path -LiteralPath (Join-Path $extRoot "scripts\powershell\gates.ps1")).Path
+    $gatesScript = ""
 }
 $openPrScript = Resolve-Script (Join-Path $repoRoot "scripts\open-pr.ps1") (Join-Path $extRoot "scripts\powershell\open-pr.ps1")
 $waitCiScript = Resolve-Script (Join-Path $repoRoot "scripts\wait-ci.ps1") (Join-Path $extRoot "scripts\powershell\wait-ci.ps1")
-
-# gates.steps：YAML 列表直接用；标量（环境变量/逗号形式）按逗号拆分
-$stepsVal = $cfg["gates.steps"]
-if ($stepsVal -is [System.Array]) {
-    $gatesSteps = @($stepsVal)
-} else {
-    $gatesSteps = @(("$stepsVal" -split ",") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-}
 $extScripts = Join-Path $extRoot "scripts\powershell"
 $checkIssuesScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "check-issues.ps1")).Path
 $prepareBranchScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "prepare-branch.ps1")).Path
@@ -340,7 +263,7 @@ $out = [ordered]@{
     "CI_WAIT_TIMEOUT_SECONDS"    = [int]$cfg["ci.wait_timeout_seconds"]
     "CI_REQUIRE_PUSH_TRIGGER"    = [bool]$cfg["ci.require_push_trigger"]
     "GATES_SCRIPT"               = $gatesScript
-    "GATES_STEPS"                = $gatesSteps
+    "GATES_TEMPLATE"             = (Join-Path $extRoot "templates\gates-template.ps1")
     "OPEN_PR_SCRIPT"             = $openPrScript
     "WAIT_CI_SCRIPT"             = $waitCiScript
     "CHECK_ISSUES_SCRIPT"        = $checkIssuesScript

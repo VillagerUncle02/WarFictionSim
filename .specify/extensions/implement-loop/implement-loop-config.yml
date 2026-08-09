@@ -10,6 +10,7 @@ language: "zh-CN"
 execution.devops_agent: "DevOps Automator"
 
 branch.prefix: "feature/"
+branch.base: "main"
 branch.chained: true
 
 ci.workflow_file: "ci.yml"

@@ -23,9 +23,8 @@ feature.directory: ""
 execution.assignments_file: "agent-assignments.yml"
 execution.parallel: true
 # CI/流水线/构建/依赖锁定类任务统一交给该角色 subagent。
-# 留空自动探测 .claude/agents（devops/automation/ci-cd 等关键词）；
-# 未命中时默认 "DevOps Automator"（* 作者项目准则），按实际环境覆盖。
-execution.devops_agent: "DevOps Automator"
+# 留空时由使用扩展的 AI 在运行时解析（分配文件/平台可用角色），不预设角色名。
+# execution.devops_agent: "DevOps Automator"
 
 branch.prefix: "feature/"
 # 留空自动探测 origin/HEAD 的默认分支，失败回退 main
@@ -42,28 +41,20 @@ ci.wait_timeout_seconds: 1800
 # 否则 PR 前的"推送->CI 反馈"循环无法启动。
 ci.require_push_trigger: true
 
-# 留空时优先使用 <repo>/scripts/gates.ps1（项目自定义门禁）；
-# 不存在时回退到扩展自带的通用门禁（自动探测 CMake / dotnet / cargo / npm /
-# pytest / go / mvn / gradle）。
-gates.script: ""
-# 项目自定义门禁命令（换语言/工具时的扩展口，无需写完整脚本）。
-# 仅在项目没有 scripts/gates.ps1（使用扩展通用门禁）时生效；
-# 每项在仓库根依次执行，失败即中断。YAML 列表语法：
-# gates.steps:
-#   - "go test ./..."
-#   - "mvn -q test"
-# 注意：未知项目无需配全——通用门禁没覆盖的工具链，
-# 由使用扩展的 AI 在运行时检查项目后自行补充门禁命令（见 run.md"运行时自适应"）。
+# 门禁脚本：配置本项 > 项目 <repo>/scripts/gates.ps1；
+# 两者都没有时，由使用扩展的 AI 参照 templates/gates-template.ps1 样板
+# 现场编写 <repo>/scripts/gates.ps1，经用户确认后执行并提交（见 run.md"运行时自适应"）。
+# gates.script: ""
 gates.quick_on_demand: true
 
 # 审计记录目录（相对仓库根）
 notes.reviews_dir: "notes/reviews"
 
-# 审查角色：留空自动探测 .claude/agents（code review/reviewer/审查 等关键词）；
-# 未命中时默认 "Code Reviewer"（* 作者项目准则），按实际环境覆盖。
-review.code_reviewer: "Code Reviewer"
-# CI 类 PR 的交叉意见角色：默认跟随 execution.devops_agent
-review.devops_opinion: "DevOps Automator"
+# 审查角色：留空时由使用扩展的 AI 在运行时解析（分配文件/平台可用角色），
+# 不预设角色名；无法确定时询问用户。
+# review.code_reviewer: "Code Reviewer"
+# CI 类 PR 的交叉意见角色：留空由 AI 运行时解析。
+# review.devops_opinion: "DevOps Automator"
 review.max_rounds: 5
 review.convergence_warn_rounds: 4
 # 第二意见（独立只读交叉审查），命中以下任意关键词时启用

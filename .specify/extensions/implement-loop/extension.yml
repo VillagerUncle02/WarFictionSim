@@ -44,6 +44,10 @@ provides:
       template: "config/implement-loop.config.template.yml"
       description: "Project-level configuration for the implement-loop extension (flat dotted-key YAML subset)"
       required: false
+  templates:
+    - name: "implement-loop-gates-template"
+      file: "templates/gates-template.ps1"
+      description: "Minimal gates script template the AI adapts per project at runtime"
 
 hooks:
   after_taskstoissues:

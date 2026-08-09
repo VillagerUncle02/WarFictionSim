@@ -20,7 +20,7 @@
     "implement-loop": {
       "version": "1.0.0",
       "source": "local",
-      "manifest_hash": "sha256:18d9a5fdefdcdb3a54dbefbdd5fc2188036acc9d1de7a2baef41498328ed25e8",
+      "manifest_hash": "sha256:54f3649543e5b567cabc6c65b7df1d64c4bfd7c6cf4ac85eeb57e0aaf1d9c9c9",
       "enabled": true,
       "priority": 10,
       "registered_commands": {
@@ -33,7 +33,7 @@
         ]
       },
       "registered_skills": [],
-      "installed_at": "2026-08-09T17:02:11.340483+00:00"
+      "installed_at": "2026-08-09T17:10:59.253770+00:00"
     }
   }
 }

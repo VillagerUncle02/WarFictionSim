@@ -10,7 +10,7 @@
 [CmdletBinding()]
 param(
     [string]$Branch = "",
-    [string]$WorkflowName = "CI",
+    [string]$WorkflowName = "",
     [int]$TimeoutSeconds = 1800,
     [int]$PollSeconds = 15,
     [int]$RunAppearWaitSeconds = 120,
@@ -112,7 +112,8 @@ while ((Get-Date) -lt $appearDeadline) {
     }
     $runs = Get-JsonObject $runsJson
     if (-not $runs) { $runs = @() }
-    $run = $runs | Where-Object { $_.workflowName -eq $WorkflowName -and $_.headSha -eq $headSha } | Select-Object -First 1
+    # WorkflowName 为空时按"分支 + 当前 HEAD"匹配任意 workflow
+    $run = $runs | Where-Object { ($_.headSha -eq $headSha) -and (-not $WorkflowName -or $_.workflowName -eq $WorkflowName) } | Select-Object -First 1
     if ($run) { $runId = $run.databaseId; break }
     Start-Sleep -Seconds $PollSeconds
 }

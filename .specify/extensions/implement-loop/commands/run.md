@@ -33,9 +33,9 @@ $ARGUMENTS
 
 配置与脚本只负责"能确定的事"；**凡是无法由代码确定的项目差异，由当前运行本命令的 AI 检查项目后自行补全**，并把决定写入审计记录：
 
-- **门禁**：`<GATES_SCRIPT>` 只覆盖常见工具链（CMake/.NET/Cargo/npm/pytest/Go/Maven/Gradle）。执行前先检查项目实际使用的语言/工具（如 `go.mod`、`pom.xml`、`build.gradle`、`Makefile`、`package.json`、`pyproject.toml`、`Cargo.toml` 等）；若默认门禁没有覆盖，**AI 自行运行对应的测试/构建/格式命令**作为门禁的一部分（如 `go test ./...`、`make test`、`bun test`），并记录到审计记录；
-- **agent 角色**：若配置/探测的角色在当前平台不存在或 spawn 失败，AI 扫描可用 agent（`.claude/agents/`、平台内置角色）后选用最接近的角色，或降级为 `default`，并记录；
-- **其它项目事实**：凡配置缺失且无法自动探测的，AI 基于项目现状作出合理决定，在汇报中说明，不阻塞流程。
+- **门禁**：`<GATES_SCRIPT>` 为空时，AI 检查项目实际使用的语言/工具（如 `go.mod`、`pom.xml`、`build.gradle`、`Makefile`、`package.json`、`pyproject.toml`、`Cargo.toml` 等），参照 `<GATES_TEMPLATE>`（样板）**现场编写 `<repo>/scripts/gates.ps1`**，经用户确认后执行并提交；已有门禁脚本但未覆盖某些命令时，**AI 自行运行对应的测试/构建/格式命令**作为补充（如 `go test ./...`、`make test`、`bun test`），并记录到审计记录；
+- **agent 角色**：配置的角色为空、在当前平台不存在或 spawn 失败时，AI 扫描可用 agent（`.claude/agents/`、平台内置角色）后选用最接近的角色，或降级为 `default`，并在汇报中说明；无法确定时询问用户；
+- **其它项目事实**：凡配置缺失且无法自动探测的，AI 基于项目现状作出合理决定，在汇报中说明；重要且不确定的（如默认分支、CI 触发方式）先询问用户再继续。
 
 ## 第 0 步：加载配置
 
@@ -53,7 +53,8 @@ $ARGUMENTS
 - `LANGUAGE` / `PARALLEL` / `DEVOPS_AGENT`；
 - `BRANCH_PREFIX` / `BRANCH_BASE` / `CHAINED`；
 - `CI_WORKFLOW_FILE` / `CI_WORKFLOW_NAME` / `CI_WAIT_TIMEOUT_SECONDS` / `CI_REQUIRE_PUSH_TRIGGER`；
-- `GATES_SCRIPT` / `OPEN_PR_SCRIPT` / `WAIT_CI_SCRIPT`（已解析：项目自定义优先，否则扩展自带）；
+- `GATES_SCRIPT`（可能为空：配置 `gates.script` > 项目 `<repo>/scripts/gates.ps1`；为空时按"运行时自适应"现场编写）与 `GATES_TEMPLATE`（样板路径）；
+- `OPEN_PR_SCRIPT` / `WAIT_CI_SCRIPT`（已解析：项目自定义优先，否则扩展自带）；
 - `CHECK_ISSUES_SCRIPT` / `PREPARE_BRANCH_SCRIPT` / `MERGE_REBASE_SCRIPT` / `CHECK_PR_ORDER_SCRIPT`（扩展自带辅助脚本绝对路径）；
 - `REVIEWS_DIR` / `REVIEWER` / `DEVOPS_OPINION` / `MAX_ROUNDS` / `CONVERGENCE_WARN_ROUNDS` / `SECOND_OPINION` / `SECOND_OPINION_TRIGGERS`；
 - `REQUIRE_ISSUES` / `ISSUE_TITLE_PATTERN` / `PR_BODY_TEMPLATE`；
@@ -61,7 +62,7 @@ $ARGUMENTS
 
 将上述值作为本命令全部后续步骤的唯一事实来源；不要硬编码任何路径。所有路径在引用前用 `Test-Path` 确认存在。
 
-**自动探测字段**（未在配置/环境变量中显式设置时）：`BRANCH_BASE` 从 `origin/HEAD` 探测（失败回退 `main`）；`CI_WORKFLOW_FILE` / `CI_WORKFLOW_NAME` 从 `.github/workflows/` 探测（优先 `ci.yml`，名称读 `name:` 字段）；`REVIEWER` / `DEVOPS_AGENT` / `DEVOPS_OPINION` 从 `.claude/agents/`（项目级优先）按关键词探测，未命中则使用内置默认角色名（作者项目准则，若当前平台没有该角色则按下文降级规则处理）。**不要假设目标项目与作者项目使用相同的宪法、角色或流程。**
+**自动探测字段**（未在配置/环境变量中显式设置时）：`BRANCH_BASE` 从 `origin/HEAD` 探测（探测不到则为空，由你检查仓库后确定）；`CI_WORKFLOW_FILE` / `CI_WORKFLOW_NAME` 从 `.github/workflows/` 探测（优先 `ci.yml`，名称读 `name:` 字段；探测不到则为空，由你读取 workflow 确定）；`REVIEWER` / `DEVOPS_AGENT` / `DEVOPS_OPINION` **不做代码猜测**（未配置即为空），由你在第 4 步按"运行时自适应"解析。**不要假设目标项目与作者项目使用相同的宪法、角色或流程。**
 
 ## 第 1 步：前置检查
 
@@ -74,9 +75,9 @@ pwsh -File <CHECK_ISSUES_SCRIPT> -TasksFile <TASKS_FILE> -TitlePattern "<ISSUE_T
 
    存在缺失 → 停下，提示用户先运行 `speckit.taskstoissues`；网络/认证错误（退出码 2）→ 确认在可访问 gh 的环境执行；
 3. 工作区干净（`git status --porcelain --untracked-files=no` 为空；未跟踪文件不阻塞但需提示）；有已跟踪改动 → 停下询问用户处理方式；
-4. `git fetch origin <BRANCH_BASE>`；
+4. `git fetch origin <BRANCH_BASE>`（`BRANCH_BASE` 为空时先确定：用 `git remote show origin` 或查看现有 PR 的 base，通常为 `main`/`master`；不确定则询问用户后再继续）；
 5. 确认 `gh` 已认证（`gh auth status`）。git fetch/push、gh 等网络命令如受运行环境沙箱限制，需在沙箱外执行或先向用户请求授权；
-6. **CI 触发检查**（`CI_REQUIRE_PUSH_TRIGGER=true`）：确认 `.github/workflows/<CI_WORKFLOW_FILE>` 存在，且 `on.push` 覆盖功能分支（不是仅 main）。若 `on.push` 带 `paths` 过滤，记录下来——纯文档改动可能不触发 CI，等待脚本超时（退出码 2）时按此判断；
+6. **CI 触发检查**（`CI_REQUIRE_PUSH_TRIGGER=true`）：`CI_WORKFLOW_FILE` 为空时先列出 `.github/workflows/`，读取各 workflow 确定本项目用哪个（参考项目宪法/README/既有 PR 的 checks）；确认该 workflow 的 `on.push` 覆盖功能分支（不是仅 main）。若 `on.push` 带 `paths` 过滤，记录下来——纯文档改动可能不触发 CI，等待脚本超时（退出码 2）时按此判断；
 7. 加载上下文文件（见第 2 步），并向用户做一次简短中文/配置语言汇报："准备在 <branch> 上执行 <TASKS_FILE>，范围 <阶段>，等待你的确认后开始"。**如果用户尚未确认 agent 分配，先停下等待确认**。
 
 ## 第 2 步：加载上下文
@@ -112,9 +113,9 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 按 `tasks.md` 的 Phase 顺序执行（Setup → Foundational → User Story… → Polish；若传了 `--phase` / `--tasks` 则只执行指定范围）。对每个任务：
 
 - 读取 `ASSIGNMENTS_PATH` 中该任务的 agent（不存在分配文件 → 全部按 `default` 并在第一次时提示用户"未找到 agent 分配，全部由当前上下文直接实现"）；
-- **命名 agent**（分配文件中的角色名，如 Code Reviewer、Backend Architect、Desktop App Engineer、DevOps Automator、Multi-Agent Systems Architect、Prompt Engineer、Technical Writer、UI Designer、Software Architect 等）：以该角色 spawn 执行，**配置语言提示词**必须包含：任务 ID、完整描述、相关契约/数据模型引用、精确文件路径、依赖上下文（前一任务产物）；
+- **命名 agent**（以 `ASSIGNMENTS_PATH` 中的角色名为准，不要假设固定角色清单）：以该角色 spawn 执行，**配置语言提示词**必须包含：任务 ID、完整描述、相关契约/数据模型引用、精确文件路径、依赖上下文（前一任务产物）；spawn 前确认该角色在当前平台存在；不存在或 spawn 失败时，按"运行时自适应"选择最接近的可用角色或降级 `default`，并在汇报中说明；无法确定时询问用户；
 - **`default`**：在当前上下文内直接实现；
-- **`DEVOPS_AGENT` 类任务**（CI/流水线/构建/依赖锁定等）：若 `DEVOPS_AGENT` 非空且该角色在当前平台可 spawn，统一交给该角色 subagent 执行；角色不存在或 spawn 失败时，按普通分配/`default` 执行，并在汇报中提示"DevOps 角色不可用，已降级"；
+- **`DEVOPS_AGENT` 类任务**（CI/流水线/构建/依赖锁定等）：`DEVOPS_AGENT` 非空且可用时统一交给该角色 subagent 执行；为空或角色不可用时，由你（AI）选择当前平台最接近的 DevOps 角色，或按普通分配/`default` 执行，并在汇报中提示；
 - **测试先行（本工作流固定规则，不可关闭）**：测试任务先写并确认 FAIL（RED），再实现。这是扩展自身的工作流要求，不依赖任何项目的宪法条款；**任何项目都按此执行**；
 - 同文件任务串行；不同文件且标 `[P]` 的可并行（`PARALLEL=true`）；
 - 完成后在 `tasks.md` 将该任务标记为 `[X]`，用配置语言汇报进度；
@@ -122,11 +123,11 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 
 ## 第 5 步：门禁
 
+- **门禁脚本解析**：`<GATES_SCRIPT>` 非空时直接使用（配置 `gates.script` > 项目 `<repo>/scripts/gates.ps1`）；为空时按"运行时自适应"原则，检查项目实际使用的语言/工具链，参照 `<GATES_TEMPLATE>` 样板**现场编写 `<repo>/scripts/gates.ps1`**，**先给用户确认再执行**，编写结果随功能分支提交（之后即为该项目门禁）；
 - **固定**：每个 Phase 结束跑全量 `<GATES_SCRIPT>`；PR 创建前跑全量 `<GATES_SCRIPT>`；
 - **按需**（`GATES_QUICK_ON_DEMAND=true`）：AI 判断该跑了就跑（改动涉及测试、跨语言边界、高风险代码、审查修复后）→ `<GATES_SCRIPT> -Quick`；
 - 门禁失败必须修复后再继续；无法修复时停下用配置语言汇报；
-- 若使用扩展自带通用门禁，配置 `gates.steps` 的自定义命令会自动并入，无需手动传参；项目有自定义 `scripts/gates.ps1` 时以项目脚本为准；
-- **未知语言/工具不设限**：`<GATES_SCRIPT>` 没覆盖到的（如 Makefile、Bun、Zig 等），按"运行时自适应"原则由 AI 检查项目后自行补充门禁命令，并把补充命令记入审计记录；不要因为没有配置就跳过门禁；
+- **未知语言/工具不设限**：门禁脚本没覆盖的命令（如 Makefile、Bun、Zig 等），按"运行时自适应"原则由 AI 检查项目后自行补充执行，并把补充命令记入审计记录；不要因为没有门禁脚本就跳过门禁；
 - 本地门禁只是前置，最终门禁是 GitHub Actions CI（第 8 步）。
 
 ## 第 6 步：AI 审查 ↔ 修复循环（每个逻辑组）
@@ -156,7 +157,7 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 - **实现 agent**：只修复自己实现的问题，不扩大改动范围；
 - **主循环 agent（orchestrator）**：核实 findings、调度回传、跑门禁、写审计记录，不代写修复。
 
-若 `<REVIEWER>` 角色在当前平台不存在或 spawn 失败：由主循环 agent 在当前上下文执行审查（降级模式），在审计记录中标注"降级审查（无专职 REVIEWER 角色）"，并提示用户配置 `review.code_reviewer`。
+若 `<REVIEWER>` 为空、在当前平台不存在或 spawn 失败：由主循环 agent 在当前上下文执行审查（降级模式），在审计记录中标注"降级审查（无专职 REVIEWER 角色）"，并提示用户配置 `review.code_reviewer`。
 
 附加规则：
 
@@ -202,6 +203,7 @@ git push -u origin <branch>
 pwsh -File <WAIT_CI_SCRIPT> -Branch <branch> -WorkflowName <CI_WORKFLOW_NAME> -TimeoutSeconds <CI_WAIT_TIMEOUT_SECONDS>
 ```
 
+   - `CI_WORKFLOW_NAME` 为空时不传 `-WorkflowName`（脚本按"分支 + 当前 HEAD"匹配任意 workflow）；
    - 脚本轮询该分支最新 CI run 直至完成（成功 exit 0；失败 exit 1；超时/未触发 exit 2；认证/网络 exit 3）；
    - 成功（success）→ 进入第 9 步；
    - 失败/取消 → 输出失败 job 与失败步骤日志（`gh run view <id> --log-failed`），进入修复循环；
