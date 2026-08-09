@@ -7,6 +7,7 @@
 ## 设计目标
 
 - **换项目即用**：不硬编码 feature 目录、项目名、技术栈、分支名或 agent 名单。所有项目差异通过配置（`implement-loop-config.yml`）或自动探测解决。
+- **代码定不了的交给 AI**：配置与脚本只负责能确定的事；语言/工具链、角色替代等无法由代码确定的项目差异，由运行时使用本扩展的 AI 检查项目后自行补全，并把决定记入审计记录（详见 [run.md](commands/run.md) 的"运行时自适应"）。
 - **建立在 speckit 制品之上**：读取 `specs/<feature>/` 下的 `spec.md / plan.md / tasks.md / data-model.md / contracts/ / research.md / quickstart.md` 与 `.specify/memory/constitution.md`，不重复生成制品。
 - **与 speckit 生态联动**：`speckit.tasks` 生成任务、`speckit.taskstoissues` 生成 issue、`speckit.agent-assign.*` 生成 agent 分配，本扩展负责从"已确认的分配"到"可人工合并的 PR"这一段。
 
@@ -50,7 +51,8 @@ specify extension list
 | `execution.devops_agent` | `DevOps Automator`* | DevOps 类任务角色；自动探测 `.claude/agents`，未命中用默认值 |
 | `branch.prefix` / `branch.base` / `branch.chained` | `feature/` / 自动 / `true` | 分支前缀；基线从 `origin/HEAD` 探测（失败回退 `main`）；链式策略 |
 | `ci.workflow_file` / `ci.workflow_name` | 自动 / 自动 | 优先 `ci.yml` 其次唯一 workflow；名称读 `name:` 字段，回退 `CI` |
-| `gates.script` | 自动 | 优先项目 `scripts/gates.ps1`，否则扩展自带通用门禁 |
+| `gates.script` | 自动 | 门禁脚本：优先项目 `scripts/gates.ps1`（完全自定义），否则扩展自带通用门禁 |
+| `gates.steps` | 空 | 自定义门禁命令列表（YAML 列表）；换语言/工具时直接列命令，不必写脚本 |
 | `notes.reviews_dir` | `notes/reviews` | 审计记录目录 |
 | `review.code_reviewer` | `Code Reviewer`* | AI 审查角色；自动探测 `.claude/agents`，未命中用默认值 |
 | `review.devops_opinion` | `DevOps Automator`* | CI 类 PR 交叉意见角色；默认跟随 `execution.devops_agent` |
@@ -104,6 +106,7 @@ speckit.implement-loop.run    # 本扩展：实现 -> 门禁 -> CI -> PR -> PR �
 - **找不到 feature 目录**：配置 `feature.directory`，或确认 `.specify/feature.json` 存在（`speckit.specify` 会自动写入）。
 - **等待 CI 超时/未触发**：检查 workflow 文件名与 `ci.workflow_name`、`on.push` 的 `paths` 过滤（纯文档改动会被跳过）；必要时 `gh workflow run <file> --ref <branch>` 手动触发。
 - **门禁脚本**：项目有自定义 `scripts/gates.ps1` 时自动优先；否则用扩展自带通用门禁（CMake/dotnet/cargo/npm/pytest 自动探测，缺失即跳过）。
+- **换了语言/工具怎么办**：四层机制——① 项目写自己的 `scripts/gates.ps1`（最优先，完全自定义）；② 配置 `gates.steps` 列命令（如 `go test ./...`、`mvn -q test`）；③ 扩展通用门禁自动探测 CMake / .NET / Cargo / npm / pytest / Go / Maven / Gradle；④ 以上都没覆盖的（Makefile、Bun、Zig 等），由运行时 AI 检查项目后自行补充门禁命令并记入审计记录。**不需要为了换语言而改扩展代码。**
 - **skills 模式命令引用**：本扩展命令体不依赖 `__SPECKIT_COMMAND_*__` 占位符（该占位符在 Codex/ZCode 等 skills 模式下暂不解析），核心命令按中性名称描述并在正文给出对应技能名。
 
 ## 许可证

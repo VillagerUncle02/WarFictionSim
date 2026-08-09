@@ -33,6 +33,14 @@ $ARGUMENTS
 
 **语言**：与实现/审查 agent 的对话、提示词、审计记录、门禁输出、PR 说明、汇报**全部使用配置语言**（默认中文 `zh-CN`，配置项 `language`），方便人工审查。
 
+## 运行时自适应（AI 补全原则）
+
+配置与脚本只负责"能确定的事"；**凡是无法由代码确定的项目差异，由当前运行本命令的 AI 检查项目后自行补全**，并把决定写入审计记录：
+
+- **门禁**：`<GATES_SCRIPT>` 只覆盖常见工具链（CMake/.NET/Cargo/npm/pytest/Go/Maven/Gradle）。执行前先检查项目实际使用的语言/工具（如 `go.mod`、`pom.xml`、`build.gradle`、`Makefile`、`package.json`、`pyproject.toml`、`Cargo.toml` 等）；若默认门禁没有覆盖，**AI 自行运行对应的测试/构建/格式命令**作为门禁的一部分（如 `go test ./...`、`make test`、`bun test`），并记录到审计记录；
+- **agent 角色**：若配置/探测的角色在当前平台不存在或 spawn 失败，AI 扫描可用 agent（`.claude/agents/`、平台内置角色）后选用最接近的角色，或降级为 `default`，并记录；
+- **其它项目事实**：凡配置缺失且无法自动探测的，AI 基于项目现状作出合理决定，在汇报中说明，不阻塞流程。
+
 ## 第 0 步：加载配置
 
 在仓库根目录运行：
@@ -121,6 +129,8 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 - **固定**：每个 Phase 结束跑全量 `<GATES_SCRIPT>`；PR 创建前跑全量 `<GATES_SCRIPT>`；
 - **按需**（`GATES_QUICK_ON_DEMAND=true`）：AI 判断该跑了就跑（改动涉及测试、跨语言边界、高风险代码、审查修复后）→ `<GATES_SCRIPT> -Quick`；
 - 门禁失败必须修复后再继续；无法修复时停下用配置语言汇报；
+- 若使用扩展自带通用门禁，配置 `gates.steps` 的自定义命令会自动并入，无需手动传参；项目有自定义 `.specify/extensions/implement-loop/scripts/gates.ps1` 时以项目脚本为准；
+- **未知语言/工具不设限**：`<GATES_SCRIPT>` 没覆盖到的（如 Makefile、Bun、Zig 等），按"运行时自适应"原则由 AI 检查项目后自行补充门禁命令，并把补充命令记入审计记录；不要因为没有配置就跳过门禁；
 - 本地门禁只是前置，最终门禁是 GitHub Actions CI（第 8 步）。
 
 ## 第 6 步：AI 审查 ↔ 修复循环（每个逻辑组）
@@ -168,6 +178,7 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 - Findings：
   | # | 级别 | file:line | 问题 | 修复方向 | 状态 |
 - 未验证猜测：<清单>
+- 运行时自适应：<补充的门禁命令 / 角色替代 / 其它决定>
 - 整体结论：patch is correct/incorrect（置信度 0.xx）
 - 收敛检测：正常 / 收敛异常提醒
 - 轮次提醒：正常 / 已超 N 轮

@@ -43,8 +43,17 @@ ci.wait_timeout_seconds: 1800
 ci.require_push_trigger: true
 
 # 留空时优先使用 <repo>/scripts/gates.ps1（项目自定义门禁）；
-# 不存在时回退到扩展自带的通用门禁（自动探测 CMake / dotnet / cargo / npm / pytest）。
+# 不存在时回退到扩展自带的通用门禁（自动探测 CMake / dotnet / cargo / npm /
+# pytest / go / mvn / gradle）。
 gates.script: ""
+# 项目自定义门禁命令（换语言/工具时的扩展口，无需写完整脚本）。
+# 仅在项目没有 scripts/gates.ps1（使用扩展通用门禁）时生效；
+# 每项在仓库根依次执行，失败即中断。YAML 列表语法：
+# gates.steps:
+#   - "go test ./..."
+#   - "mvn -q test"
+# 注意：未知项目无需配全——通用门禁没覆盖的工具链，
+# 由使用扩展的 AI 在运行时检查项目后自行补充门禁命令（见 run.md"运行时自适应"）。
 gates.quick_on_demand: true
 
 # 审计记录目录（相对仓库根）

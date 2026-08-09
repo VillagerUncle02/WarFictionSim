@@ -43,6 +43,7 @@ $cfg = @{
     "ci.wait_timeout_seconds"         = 1800
     "ci.require_push_trigger"         = $true
     "gates.script"                    = ""
+    "gates.steps"                     = ""
     "gates.quick_on_demand"           = $true
     "notes.reviews_dir"               = "notes/reviews"
     "review.code_reviewer"            = "Code Reviewer"
@@ -60,7 +61,9 @@ $cfg = @{
 function Read-FlatYaml {
     param([string]$Path)
     $result = @{}
-    foreach ($raw in Get-Content -LiteralPath $Path) {
+    $lines = @(Get-Content -LiteralPath $Path)
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $raw = $lines[$i]
         $line = $raw.Trim()
         if (-not $line -or $line.StartsWith("#")) { continue }
         # 去掉不在引号内的行尾注释
@@ -80,7 +83,26 @@ function Read-FlatYaml {
              ($value.StartsWith("'") -and $value.EndsWith("'")))) {
             $value = $value.Substring(1, $value.Length - 2)
         }
-        if ($value -eq "") { $result[$key] = ""; continue }
+        if ($value -eq "") {
+            # 缩进 YAML 列表（gates.steps 等）：
+            #   gates.steps:
+            #     - "go test ./..."
+            $list = @()
+            while ($i + 1 -lt $lines.Count) {
+                $lm = [regex]::Match($lines[$i + 1], '^\s+-\s+(.*)$')
+                if (-not $lm.Success) { break }
+                $item = $lm.Groups[1].Value.Trim()
+                if ($item.Length -ge 2 -and
+                    (($item.StartsWith('"') -and $item.EndsWith('"')) -or
+                     ($item.StartsWith("'") -and $item.EndsWith("'")))) {
+                    $item = $item.Substring(1, $item.Length - 2)
+                }
+                $list += $item
+                $i++
+            }
+            $result[$key] = $list
+            continue
+        }
         if ($value -ieq "true") { $result[$key] = $true; continue }
         if ($value -ieq "false") { $result[$key] = $false; continue }
         if ($value -match '^-?\d+$') { $result[$key] = [int]$value; continue }
@@ -274,6 +296,14 @@ if (-not $gatesScript) {
 }
 $openPrScript = Resolve-Script (Join-Path $repoRoot "scripts\open-pr.ps1") (Join-Path $extRoot "scripts\powershell\open-pr.ps1")
 $waitCiScript = Resolve-Script (Join-Path $repoRoot "scripts\wait-ci.ps1") (Join-Path $extRoot "scripts\powershell\wait-ci.ps1")
+
+# gates.steps：YAML 列表直接用；标量（环境变量/逗号形式）按逗号拆分
+$stepsVal = $cfg["gates.steps"]
+if ($stepsVal -is [System.Array]) {
+    $gatesSteps = @($stepsVal)
+} else {
+    $gatesSteps = @(("$stepsVal" -split ",") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
 $extScripts = Join-Path $extRoot "scripts\powershell"
 $checkIssuesScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "check-issues.ps1")).Path
 $prepareBranchScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "prepare-branch.ps1")).Path
@@ -310,6 +340,7 @@ $out = [ordered]@{
     "CI_WAIT_TIMEOUT_SECONDS"    = [int]$cfg["ci.wait_timeout_seconds"]
     "CI_REQUIRE_PUSH_TRIGGER"    = [bool]$cfg["ci.require_push_trigger"]
     "GATES_SCRIPT"               = $gatesScript
+    "GATES_STEPS"                = $gatesSteps
     "OPEN_PR_SCRIPT"             = $openPrScript
     "WAIT_CI_SCRIPT"             = $waitCiScript
     "CHECK_ISSUES_SCRIPT"        = $checkIssuesScript
