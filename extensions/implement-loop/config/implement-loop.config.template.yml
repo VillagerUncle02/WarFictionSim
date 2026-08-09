@@ -1,0 +1,56 @@
+# speckit-implement-loop 项目配置模板
+#
+# 使用方式：复制本文件到
+#   .specify/extensions/implement-loop/implement-loop-config.yml
+# 并按需修改；也可使用同目录下的 implement-loop-config.local.yml
+# （不提交到版本库）覆盖同一份配置。
+#
+# 格式说明：本扩展使用扁平的 dotted-key YAML 子集（键名含 "." 表示层级），
+# 每行一个 `key: value`，支持引号字符串、true/false、数字、逗号分隔列表。
+# 所有键均有默认值，模板仅列出常用项。
+
+# 交互、审计记录、PR 说明使用的语言：zh-CN（默认）| en
+language: "zh-CN"
+
+# feature 目录（相对仓库根）。留空时自动读取 .specify/feature.json；
+# 若不存在 feature.json，则自动扫描 specs/*/tasks.md（唯一时自动选中，否则报错）。
+feature.directory: ""
+
+execution.assignments_file: "agent-assignments.yml"
+execution.test_first: true
+execution.parallel: true
+# CI/流水线/构建/依赖锁定类任务统一交给该角色 subagent
+execution.devops_agent: "DevOps Automator"
+
+branch.prefix: "feature/"
+branch.base: "main"
+branch.chained: true
+
+ci.workflow_file: "ci.yml"
+ci.workflow_name: "CI"
+ci.wait_timeout_seconds: 1800
+# 前置检查要求 workflow 的 on.push 覆盖功能分支（而非仅 main），
+# 否则 PR 前的"推送->CI 反馈"循环无法启动。
+ci.require_push_trigger: true
+
+# 留空时优先使用 <repo>/scripts/gates.ps1（项目自定义门禁）；
+# 不存在时回退到扩展自带的通用门禁（自动探测 CMake / dotnet / cargo / npm / pytest）。
+gates.script: ""
+gates.quick_on_demand: true
+
+# 审计记录目录（相对仓库根）
+notes.reviews_dir: "notes/reviews"
+
+review.code_reviewer: "Code Reviewer"
+review.devops_opinion: "DevOps Automator"
+review.max_rounds: 5
+review.convergence_warn_rounds: 4
+# 第二意见（独立只读交叉审查），命中以下任意关键词时启用
+review.second_opinion: false
+review.second_opinion_triggers: "确定性核心, 并发, 跨语言边界, 安全"
+
+# 前置检查要求每个任务 ID 都有对应 issue（配合 speckit.taskstoissues）
+github.require_issues: true
+github.issue_title_pattern: "^T\\d{3}"
+# PR 正文模板；留空用内置模板。占位符：{issues} {closes} {generator}
+github.pr_body_template: ""
