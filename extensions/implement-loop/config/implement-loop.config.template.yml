@@ -64,6 +64,6 @@ review.second_opinion_triggers: "确定性核心, 并发, 跨语言边界, 安�
 # 前置检查要求每个任务 ID 都有对应 issue（配合 speckit.taskstoissues；
 # * 作者项目准则：任务先转 issue。不使用 issue 的项目可改为 false）
 github.require_issues: true
-github.issue_title_pattern: "^T\\d{3}"
+github.issue_title_pattern: '^T\d{3}'
 # PR 正文模板；留空用内置模板。占位符：{issues} {closes} {generator}
 github.pr_body_template: ""

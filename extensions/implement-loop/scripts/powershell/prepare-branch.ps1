@@ -43,8 +43,12 @@ if ($LASTEXITCODE -ne 0) {
 $exists = git -C $repoRoot rev-parse --verify --quiet "refs/heads/$Branch"
 if ($LASTEXITCODE -eq 0) {
     Write-Host "分支已存在：检出 $Branch"
-    git -C $repoRoot checkout $Branch
-    if ($LASTEXITCODE -ne 0) { Write-Err "ERROR: 检出失败"; exit 1 }
+    $coOut = git -C $repoRoot checkout $Branch 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "ERROR: 检出 $Branch 失败。"
+        Write-UntrackedConflictHint ($coOut | Out-String)
+        exit 1
+    }
     $behind = git -C $repoRoot rev-list --count "HEAD..origin/$Base" 2>$null
     if ($LASTEXITCODE -eq 0 -and [int]$behind -gt 0) {
         Write-Host "提示：$Branch 落后 origin/$Base $behind 个提交，未自动合并；如需同步请人工处理（如 git merge --ff-only origin/$Base）。"
@@ -56,9 +60,10 @@ if ($LASTEXITCODE -eq 0) {
 
 $basePoint = if ($Chained -and $Tip) { $Tip } else { "origin/$Base" }
 Write-Host "创建分支 $Branch（基点：$basePoint）"
-git -C $repoRoot checkout -b $Branch $basePoint
+$coOut = git -C $repoRoot checkout -b $Branch $basePoint 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Err "ERROR: 创建分支失败（基点不存在或其它 git 错误）。"
+    Write-Err "ERROR: 创建分支失败（基点不存在、未跟踪文件冲突或其它 git 错误）。"
+    Write-UntrackedConflictHint ($coOut | Out-String)
     exit 1
 }
 

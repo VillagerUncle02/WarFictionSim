@@ -27,9 +27,11 @@ git -C $repoRoot fetch origin $Base
 if ($LASTEXITCODE -ne 0) { Write-Err "ERROR: git fetch 失败。"; exit 1 }
 
 Write-Host "== rebase $Branch -> origin/$Base =="
-git -C $repoRoot rebase "origin/$Base"
+$rbOut = git -C $repoRoot rebase "origin/$Base" 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Err "ERROR: rebase 冲突。请人工解决后继续：git rebase --continue，然后重新运行本脚本（或直接 push --force-with-lease）。"
+    Write-Err "ERROR: rebase 失败。"
+    Write-UntrackedConflictHint ($rbOut | Out-String)
+    Write-Err "若是 rebase 冲突：请人工解决后继续 git rebase --continue，然后重新运行本脚本（或直接 push --force-with-lease）。"
     exit 2
 }
 

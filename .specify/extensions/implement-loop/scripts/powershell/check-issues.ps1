@@ -10,7 +10,7 @@
 param(
     [string]$TasksFile = "",
     [string]$Repo = "",
-    [string]$TitlePattern = "^T\\d{3}",
+    [string]$TitlePattern = "^T\d{3}",
     [switch]$Json
 )
 
@@ -44,15 +44,15 @@ if ($ids.Count -eq 0) {
     exit 2
 }
 
-# 拉取 open issues 标题
-$ghOut = (& gh api --paginate "repos/$Repo/issues?state=open&per_page=100" 2>$null) | Out-String
+# 拉取 open issues 标题（gh issue list 输出单一 JSON 数组，天然排除 PR）
+$ghOut = (& gh issue list --repo $Repo --state open --limit 1000 --json number,title 2>$null) | Out-String
 if ($LASTEXITCODE -ne 0) {
-    Write-Err "ERROR: gh api 拉取 issue 失败（网络/权限）。请确认在已登录 gh 的环境执行。"
+    Write-Err "ERROR: gh issue list 拉取失败（网络/权限）。请确认在已登录 gh 的环境执行。"
     exit 2
 }
 $issues = @()
 try { $issues = @($ghOut | ConvertFrom-Json) } catch { }
-$issueTitles = @($issues | Where-Object { -not $_.pull_request } | ForEach-Object { $_.title })
+$issueTitles = @($issues | ForEach-Object { $_.title })
 
 $pattern = if ($TitlePattern) { $TitlePattern } else { "" }
 $missing = @()

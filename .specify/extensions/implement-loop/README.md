@@ -31,7 +31,7 @@ specify extension list
 
 | 命令 | 技能（Codex skills 模式） | 作用 |
 |---|---|---|
-| `speckit.implement-loop.run` | `$speckit-implement-loop-run` | 全流程主命令（见下方工作流） |
+| `speckit.implement-loop.run` | `$speckit-implement-loop-run` | 全流程主命令（见下方工作流；PR 正文 Closes 自动同步） |
 | `speckit.implement-loop.gates` | `$speckit-implement-loop-gates` | 单独跑门禁（`--quick` 快速模式） |
 | `speckit.implement-loop.ci-wait` | `$speckit-implement-loop-ci-wait` | 推送当前分支并等待 CI 反馈 |
 | `speckit.implement-loop.pr-review` | `$speckit-implement-loop-pr-review` | 对已开 PR 做 AI 审查并回填评论 |
@@ -76,9 +76,9 @@ specify extension list
 5. **任务执行**：按 `tasks.md` 的 Phase 顺序执行；读取 `agent-assignments.yml` 分配角色并以中文提示词 spawn；`default` 在当前上下文实现；CI/流水线类任务交给 `execution.devops_agent`（为空时 AI 选最接近角色）；**测试先行是本工作流固定规则**（测试任务先写并确认 FAIL 再实现，不依赖任何项目宪法）；`[P]` 且不同文件可并行；完成标记 `[X]`。
 6. **门禁**：`<repo>/scripts/gates.ps1` 缺失时由 AI 参照样板现场编写并经用户确认；每个 Phase 结束与 PR 前跑全量门禁；AI 判断必要时跑快速门禁；未覆盖的工具链由 AI 补充命令并记入审计记录。
 7. **AI 审查 ↔ 修复循环**（每个逻辑组）：Code Reviewer 审查 diff → 主循环核实（区分已确认问题与未验证猜测）→ 回传实现 agent 修复 → 快速门禁 → 重审，直到无 🔴/🟡。审计记录写入 `notes/reviews/<branch>-r<N>.md`。收敛异常（连续 4 轮不下降）与轮次过多（>5 轮）自动标注提醒。
-8. **提交**：每个逻辑组 Conventional Commits，审计记录随组提交。
-9. **推送与 CI**：推送分支 → `wait-ci.ps1` 轮询直至完成 → 失败则结合 CI 日志与审查 findings 修复再推，直到 CI 绿。CI 收敛异常同样标注。
-10. **开 PR**：`open-pr.ps1` 生成 PR，正文含 `Closes #<issue>`，标题/正文按配置语言。
+8. **提交**：每个逻辑组 Conventional Commits，审计记录随组提交；若分支已有 open PR，自动同步 PR 正文 `Closes #`（`sync-pr-closes.ps1`）。
+9. **推送与 CI**：推送分支 → `wait-ci.ps1` 轮询直至完成 → 失败则结合 CI 日志与审查 findings 修复再推，直到 CI 绿。CI 收敛异常同样标注。workflow 未合入默认分支时自动降级为先开 PR、用 pull_request 触发 CI。
+10. **开 PR**：`open-pr.ps1` 自动收集 tasks.md 中全部 `[X]` 任务并映射真实 issue 号生成 `Closes #`；标题/正文按配置语言。
 11. **AI PR 审查**：审查整个 PR diff + 与 spec/plan/tasks/宪法一致性 + 门禁与 CI 证据；结论 PASS/FAIL 回填 PR Comment；**不 Approve、不 Merge**；FAIL 则同分支修复 → CI → 重审，直到 PASS。
 12. **下一功能**：本 PR AI 审查 PASS 且 CI 绿后，创建下一个链式分支回到流程开头（合并仍等人工）。
 
@@ -106,6 +106,9 @@ speckit.implement-loop.run    # 本扩展：实现 -> 门禁 -> CI -> PR -> PR �
 - **等待 CI 超时/未触发**：检查 workflow 文件名与 `ci.workflow_name`、`on.push` 的 `paths` 过滤（纯文档改动会被跳过）；必要时 `gh workflow run <file> --ref <branch>` 手动触发。
 - **门禁脚本**：解析顺序——配置 `gates.script` > 项目 `<repo>/scripts/gates.ps1`；都没有时，AI 参照 `templates/gates-template.ps1` 样板现场编写，经用户确认后执行并随分支提交。
 - **换了语言/工具怎么办**：不需要改扩展——门禁脚本缺失时 AI 按样板现场写；已有脚本但没覆盖的命令（Makefile、Bun、Zig 等），AI 检查项目后自行补充执行并记入审计记录。**扩展不再枚举语言/工具。**
+- **PR 合并后 issue 没自动关？**：已修复——开 PR 时 `open-pr.ps1` 自动收集 tasks.md 中全部 `[X]` 任务并按 issue 标题映射真实编号生成 `Closes #`；阶段提交后与 AI PR 审查前会自动运行 `sync-pr-closes.ps1` 保持正文最新，防止"PR 先开、任务后追加"导致漏关。
+- **新仓库首个 feature 的 CI 起不来？**：workflow 尚未合入默认分支时 `gh workflow run` 会 404——前置检查会探测默认分支上是否存在 workflow，不存在则自动降级为"先开 PR、用 pull_request 触发 CI"（见 run.md 第 8 步降级路径）。
+- **wait-ci 报 gh 认证失败但主进程 gh 正常？**：已修复——认证预检改为当前进程直调，Start-Job 轮询显式传入 `GH_TOKEN`；失败时按提示区分"无凭据"与"token 无效/keyring 失效"。
 - **skills 模式命令引用**：本扩展命令体不依赖 `__SPECKIT_COMMAND_*__` 占位符（该占位符在 Codex/ZCode 等 skills 模式下暂不解析），核心命令按中性名称描述并在正文给出对应技能名。
 
 ## 许可证

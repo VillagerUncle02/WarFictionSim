@@ -55,7 +55,7 @@ $ARGUMENTS
 - `CI_WORKFLOW_FILE` / `CI_WORKFLOW_NAME` / `CI_WAIT_TIMEOUT_SECONDS` / `CI_REQUIRE_PUSH_TRIGGER`；
 - `GATES_SCRIPT`（可能为空：配置 `gates.script` > 项目 `<repo>/scripts/gates.ps1`；为空时按"运行时自适应"现场编写）与 `GATES_TEMPLATE`（样板路径）；
 - `OPEN_PR_SCRIPT` / `WAIT_CI_SCRIPT`（已解析：项目自定义优先，否则扩展自带）；
-- `CHECK_ISSUES_SCRIPT` / `PREPARE_BRANCH_SCRIPT` / `MERGE_REBASE_SCRIPT` / `CHECK_PR_ORDER_SCRIPT`（扩展自带辅助脚本绝对路径）；
+- `CHECK_ISSUES_SCRIPT` / `SYNC_PR_CLOSES_SCRIPT` / `PREPARE_BRANCH_SCRIPT` / `MERGE_REBASE_SCRIPT` / `CHECK_PR_ORDER_SCRIPT`（扩展自带辅助脚本绝对路径）；
 - `REVIEWS_DIR` / `REVIEWER` / `DEVOPS_OPINION` / `MAX_ROUNDS` / `CONVERGENCE_WARN_ROUNDS` / `SECOND_OPINION` / `SECOND_OPINION_TRIGGERS`；
 - `REQUIRE_ISSUES` / `ISSUE_TITLE_PATTERN` / `PR_BODY_TEMPLATE`；
 - `CURRENT_BRANCH`。
@@ -78,7 +78,10 @@ pwsh -File <CHECK_ISSUES_SCRIPT> -TasksFile <TASKS_FILE> -TitlePattern "<ISSUE_T
 4. `git fetch origin <BRANCH_BASE>`（`BRANCH_BASE` 为空时先确定：用 `git remote show origin` 或查看现有 PR 的 base，通常为 `main`/`master`；不确定则询问用户后再继续）；
 5. 确认 `gh` 已认证（`gh auth status`）。git fetch/push、gh 等网络命令如受运行环境沙箱限制，需在沙箱外执行或先向用户请求授权；
 6. **CI 触发检查**（`CI_REQUIRE_PUSH_TRIGGER=true`）：`CI_WORKFLOW_FILE` 为空时先列出 `.github/workflows/`，读取各 workflow 确定本项目用哪个（参考项目宪法/README/既有 PR 的 checks）；确认该 workflow 的 `on.push` 覆盖功能分支（不是仅 main）。若 `on.push` 带 `paths` 过滤，记录下来——纯文档改动可能不触发 CI，等待脚本超时（退出码 2）时按此判断；
-7. 加载上下文文件（见第 2 步），并向用户做一次简短中文/配置语言汇报："准备在 <branch> 上执行 <TASKS_FILE>，范围 <阶段>，等待你的确认后开始"。**如果用户尚未确认 agent 分配，先停下等待确认**。
+7. **workflow 位于默认分支检查**：`git ls-tree origin/<BRANCH_BASE> --name-only .github/workflows/`，确认 `<CI_WORKFLOW_FILE>` 是否已存在于默认分支：
+   - 存在 → 第 8 步走"推送触发 CI"；
+   - 不存在（新仓库首个 feature 常见，`gh workflow run` 会 404）→ 记录"workflow 未合入默认分支"，第 8 步自动降级为"先开 PR、用 pull_request 触发 CI"（见第 8 步降级路径）；
+8. 加载上下文文件（见第 2 步），并向用户做一次简短中文/配置语言汇报："准备在 <branch> 上执行 <TASKS_FILE>，范围 <阶段>，等待你的确认后开始"。**如果用户尚未确认 agent 分配，先停下等待确认**。
 
 ## 第 2 步：加载上下文
 
@@ -185,11 +188,20 @@ pwsh -File <PREPARE_BRANCH_SCRIPT> -Branch <分支名> -Base <BRANCH_BASE> [-Cha
 
 - 每个逻辑组用 Conventional Commits 提交（`feat:` / `fix:` / `test:` / `docs:` / `refactor:` / `chore:`），提交信息说明变更原因；
 - `<REVIEWS_DIR>/` 审计记录随对应逻辑组一起提交；
+- 若当前分支已有 open PR：运行 `<SYNC_PR_CLOSES_SCRIPT> -TasksFile <TASKS_FILE>`，保持 PR 正文 `Closes #` 与已完成任务同步（防止合并时漏关 issue）；
 - 提交信息使用配置语言或英文均可，但必须结构清晰。
 
 ## 第 8 步：推送与 CI 反馈循环（PR 之前）
 
 **目的**：PR 之前先推送分支触发 GitHub Actions CI，结合 CI 反馈与 AI 审查修复问题，直到 CI 无异常再开 PR。
+
+**降级路径（workflow 未合入默认分支，由第 1.7 步判定）**：
+
+- 跳过下面的"推送→等 push CI"，直接进入第 9 步开 PR；
+- 开 PR 后立即用 `<WAIT_CI_SCRIPT>` 等待 pull_request 触发的 CI（同一脚本按"分支 + 当前 HEAD"匹配，无需指定 workflow 名称）；
+- CI 失败 → 修复 → 推送（推送会更新 PR 并重新触发 PR CI）→ 回到等待；
+- CI 绿 → 进入第 10 步 AI PR 审查；
+- 审计记录标注"降级：workflow 未合入默认分支，改用 PR 触发 CI"。
 
 1. 推送当前分支（网络命令按运行环境要求沙箱外执行）：
 
@@ -226,16 +238,18 @@ pwsh -File <WAIT_CI_SCRIPT> -Branch <branch> -WorkflowName <CI_WORKFLOW_NAME> -T
 - **前提**：本地门禁通过 且 CI 反馈无异常；
 
 ```powershell
-pwsh -File <OPEN_PR_SCRIPT> -Title "<feat: 说明>" -Issues "<任务 ID 列表,逗号分隔>" -Base <BRANCH_BASE> -Language <LANGUAGE>
+pwsh -File <OPEN_PR_SCRIPT> -Title "<feat: 说明>" -TasksFile <TASKS_FILE> -Base <BRANCH_BASE> -Language <LANGUAGE>
 ```
 
 - PR 标题与说明使用配置语言（默认中文）；
-- PR 正文必须包含 `Closes #<issue>`（issue 编号来自前置检查的映射）；自定义正文可用 `-BodyFile` 或配置 `PR_BODY_TEMPLATE`；
+- **Closes 自动收集**：调用时传 `-TasksFile <TASKS_FILE>`，脚本自动收集 tasks.md 中所有 `[X]` 任务、按 issue 标题映射真实 issue 号，生成完整 `Closes #` 列表（不需要手传 `-Issues`）；映射不到的任务会警告列出（不阻塞，可人工补）；自定义正文可用 `-BodyFile` 或配置 `PR_BODY_TEMPLATE`；
+- 若当前分支已存在 open PR（例如降级路径已先开 PR）：跳过创建，改用 `<SYNC_PR_CLOSES_SCRIPT> -TasksFile <TASKS_FILE>` 更新正文即可；
 - 若仓库启用了链式顺序检查，可在 CI 中调用 `check-pr-order.ps1` 保证合并顺序（见扩展 README）。
 
 ## 第 10 步：AI PR 审查（开 PR 后，不批准合并）
 
 - **审查对象**：整个 PR diff + 与 spec/plan/tasks 一致性 + 宪法合规（确定性/AI 边界/数据驱动/无头可测/代码风格等，按项目宪法）+ 门禁与 CI 证据 + PR 说明完整性；
+- **审查前**：先运行 `<SYNC_PR_CLOSES_SCRIPT> -TasksFile <TASKS_FILE>`，确保正文 `Closes #` 覆盖全部已完成任务；
 - **执行者**：`<REVIEWER>`（CI/流水线类 PR 可请 `<DEVOPS_OPINION>` 出具交叉意见，仅意见不并入流程）；
 - **结论**：PASS / FAIL + findings（级别、file:line、修复方向）；
 - **审计文件**：`<REVIEWS_DIR>/<branch>-pr-review.md`（改动范围、关键决策、门禁/CI 证据、审查结论、遗留 TODO）；
@@ -266,6 +280,7 @@ pwsh -File <MERGE_REBASE_SCRIPT> -Branch <下一分支>
 - 门禁：通过（构建/测试/格式）
 - CI：通过（N 轮，失败 M 次已修复）或"未触发"说明
 - AI 审查：N 轮，🔴/🟡 问题 M 个（已修复 / 待确认）
+- PR Closes 同步：已覆盖 N 个任务 issue（最新）
 - PR 审查：PASS/FAIL（N 轮），PR Comment：<url>
 - 审计记录：<REVIEWS_DIR>/<branch>-r*.md、<branch>-ci.md、<branch>-pr-review.md
 - 下一步：等待人工 Approve + Merge（AI 审查已通过，可继续下一功能）

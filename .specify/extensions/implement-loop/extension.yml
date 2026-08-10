@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: "implement-loop"
   name: "Implement Loop"
-  version: "1.0.0"
+  version: "1.1.0"
   description: "Reusable automation loop on top of spec-kit: chained feature branches, agent-assigned task execution, gates, AI review/fix cycles, CI feedback, PR creation and AI PR review with human gates preserved"
   author: "VillagerUncle02"
   license: "MIT"

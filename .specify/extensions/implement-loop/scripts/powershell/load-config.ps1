@@ -52,7 +52,7 @@ $cfg = @{
     "review.second_opinion"           = $false
     "review.second_opinion_triggers"  = "确定性核心, 并发, 跨语言边界, 安全"
     "github.require_issues"           = $true
-    "github.issue_title_pattern"      = "^T\\d{3}"
+    "github.issue_title_pattern"      = "^T\d{3}"
     "github.pr_body_template"         = ""
 }
 
@@ -229,6 +229,7 @@ $openPrScript = Resolve-Script (Join-Path $repoRoot "scripts\open-pr.ps1") (Join
 $waitCiScript = Resolve-Script (Join-Path $repoRoot "scripts\wait-ci.ps1") (Join-Path $extRoot "scripts\powershell\wait-ci.ps1")
 $extScripts = Join-Path $extRoot "scripts\powershell"
 $checkIssuesScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "check-issues.ps1")).Path
+$syncPrClosesScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "sync-pr-closes.ps1")).Path
 $prepareBranchScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "prepare-branch.ps1")).Path
 $mergeRebaseScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "merge-rebase-next.ps1")).Path
 $checkPrOrderScript = (Resolve-Path -LiteralPath (Join-Path $extScripts "check-pr-order.ps1")).Path
@@ -267,6 +268,7 @@ $out = [ordered]@{
     "OPEN_PR_SCRIPT"             = $openPrScript
     "WAIT_CI_SCRIPT"             = $waitCiScript
     "CHECK_ISSUES_SCRIPT"        = $checkIssuesScript
+    "SYNC_PR_CLOSES_SCRIPT"      = $syncPrClosesScript
     "PREPARE_BRANCH_SCRIPT"      = $prepareBranchScript
     "MERGE_REBASE_SCRIPT"        = $mergeRebaseScript
     "CHECK_PR_ORDER_SCRIPT"      = $checkPrOrderScript
