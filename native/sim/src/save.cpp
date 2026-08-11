@@ -169,17 +169,18 @@ wfs_sim_result WriteFileAtomic(const std::filesystem::path& path, const std::str
     }
     return WFS_SIM_RESULT_OK;
 #else
-    // 非 Windows 回退：POSIX rename 本身原子替换；个别平台不支持覆盖时
-    // 先移除旧文件再重命名（Windows 主目标走 MoveFileExW 路径）。
+    // 非 Windows 回退（best-effort）：POSIX rename 本身可原子覆盖目标，
+    // 因此先直接 rename；个别平台不支持覆盖时再退化为"删旧 + rename"
+    // （该退化存在短暂丢旧档窗口，仅作为不可用环境下的尽力而为；Windows
+    // 主目标走上方 MoveFileExW 原子路径）。
     std::error_code error;
-    if (std::filesystem::exists(path)) {
-        std::filesystem::remove(path, error);
-        if (error) {
-            std::error_code cleanup_error;
-            std::filesystem::remove(temp, cleanup_error);
-            return WFS_SIM_RESULT_IO_ERROR;
-        }
+    std::filesystem::rename(temp, path, error);
+    if (!error) {
+        return WFS_SIM_RESULT_OK;
     }
+    error.clear();
+    std::filesystem::remove(path, error);  // 目标不存在时 remove 会失败，忽略。
+    error.clear();
     std::filesystem::rename(temp, path, error);
     if (error) {
         std::error_code cleanup_error;

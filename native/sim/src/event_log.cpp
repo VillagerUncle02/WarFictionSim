@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -88,6 +89,11 @@ std::size_t EventLog::critical_count() const noexcept {
 }
 
 void EventLog::append(GameTick tick, EventCategory category, EventSeverity severity, std::string message) {
+    // 游标饱和在 UINT64_MAX（seq == MAX 已入队）时 auto 追加必须显式
+    // 报错，绝不回绕到 0 复用序列号（与 EventQueue 溢出语义一致）。
+    if (next_seq_ == std::numeric_limits<std::uint64_t>::max()) {
+        throw std::overflow_error("wfs::sim::EventLog: auto sequence number space exhausted");
+    }
     append(tick, category, severity, std::move(message), next_seq_);
 }
 
@@ -98,7 +104,10 @@ void EventLog::append(GameTick tick, EventCategory category, EventSeverity sever
         throw std::invalid_argument("wfs::sim::EventLog: explicit seq must be monotonic (seq < next_seq)");
     }
     insert(SimEvent{tick, seq, category, severity, std::move(message)});
-    next_seq_ = seq + 1U;
+    // 游标 = max(next_seq_, seq + 1) 且饱和：seq == UINT64_MAX 时停在 MAX，
+    // 不回绕到 0（存档恢复的恶意 seq=MAX 不会让后续 auto 序号回到 0）。
+    next_seq_ =
+        (seq == std::numeric_limits<std::uint64_t>::max()) ? std::numeric_limits<std::uint64_t>::max() : seq + 1U;
 }
 
 void EventLog::insert(SimEvent event) {

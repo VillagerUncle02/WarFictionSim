@@ -15,7 +15,9 @@
 //   必然产生同一结果。
 // - 显式 seq 追加接口专供存档恢复（T017）：要求 seq >= next_seq()，
 //   保持全局单调、天然防重复；非法调用抛 std::invalid_argument（宪法
-//   第 17 条：显式报错，不静默吞错）。
+//   第 17 条：显式报错，不静默吞错）。seq == UINT64_MAX 时游标饱和停在
+//   MAX（与 EventQueue 一致，不回绕）；空间耗尽后 auto 追加抛
+//   std::overflow_error。
 // - 类别/严重级与字符串的互转使用稳定名称，供存档序列化（save-format.md：
 //   state_blob 完整可序列化）；未知名称抛 std::invalid_argument，损坏数据
 //   报错而非静默恢复。

@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -223,6 +224,21 @@ TEST(WfsEventLogTest, ExplicitSeqRestorePath) {
     // 显式 seq 之后 auto 从 max+1 继续。
     log.append(14u, EventCategory::kSystem, EventSeverity::kInfo, "auto");
     EXPECT_EQ(Seqs(log.events()).back(), 1006u);
+}
+
+TEST(WfsEventLogTest, ExplicitMaxSeqSaturatesWithoutWrapping) {
+    EventLog log(3u);
+    // 存档恢复路径：恶意/极端 seq=UINT64_MAX 后游标必须饱和停在 MAX，
+    // 绝不 +1 回绕到 0（与 EventQueue 溢出语义一致）。
+    log.append(0u, EventCategory::kSystem, EventSeverity::kInfo, "max-seq", std::numeric_limits<std::uint64_t>::max());
+    EXPECT_EQ(log.next_seq(), std::numeric_limits<std::uint64_t>::max());
+    EXPECT_EQ(Seqs(log.events()), (std::vector<std::uint64_t>{std::numeric_limits<std::uint64_t>::max()}));
+
+    // auto 追加不得回绕到 0：序列号空间耗尽显式报错，日志与游标不变。
+    EXPECT_THROW(log.append(1u, kCat, kInfo, "auto-after-max"), std::overflow_error);
+    EXPECT_EQ(log.size(), 1u);
+    EXPECT_EQ(log.next_seq(), std::numeric_limits<std::uint64_t>::max());
+    EXPECT_EQ(Seqs(log.events()), (std::vector<std::uint64_t>{std::numeric_limits<std::uint64_t>::max()}));
 }
 
 TEST(WfsEventLogTest, CategoryAndSeverityNameRoundTrip) {

@@ -440,6 +440,38 @@ TEST(WfsSaveTest, LoadRejectsEventLogExceedingCapacity) {
     EXPECT_EQ(wfs_sim_load_save(handle.get(), crafted.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
 }
 
+TEST(WfsSaveTest, LoadRestoresMaxEventLogSeqWithoutWrapping) {
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "max-seq.wfs";
+    Handle handle;
+    ASSERT_NE(handle.get(), nullptr);
+    EXPECT_EQ(wfs_sim_save(handle.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    const SavedLayout layout = ParseLayout(ReadFile(path));
+    nlohmann::json header = nlohmann::json::parse(layout.header);
+    nlohmann::json blob = nlohmann::json::parse(layout.blob);
+    // 恶意存档：事件日志条目 seq=UINT64_MAX。恢复路径必须接受（显式 seq
+    // 饱和）且游标不回绕；回绕的破坏性由 EventLog 单测的 auto 追加断言覆盖。
+    blob["event_log"]["capacity"] = 1;
+    blob["event_log"]["entries"] = nlohmann::json::array({
+        nlohmann::json{{"seq", std::numeric_limits<std::uint64_t>::max()},
+                       {"tick", 0},
+                       {"category", "system"},
+                       {"severity", "info"},
+                       {"message", "max-seq"}},
+    });
+    const std::string new_blob = blob.dump();
+    header["state_size_bytes"] = new_blob.size();
+    const std::filesystem::path crafted =
+        dir.Write("max-seq-fixed.wfs", BuildSaveBytes(layout.version, header.dump(), new_blob));
+
+    Handle restored;
+    ASSERT_NE(restored.get(), nullptr);
+    EXPECT_EQ(wfs_sim_load_save(restored.get(), crafted.string().c_str()), WFS_SIM_RESULT_OK);
+    // 恢复后的状态哈希必须与存档 blob 一致（seq=MAX 原样恢复，无回绕污染）。
+    EXPECT_EQ(StateHash(restored.get()), sha256_hex(sha256(new_blob)));
+}
+
 TEST(WfsSaveTest, LoadRejectsAbiVersionMismatch) {
     TempDir dir;
     const std::filesystem::path path = dir.path() / "abi.wfs";
