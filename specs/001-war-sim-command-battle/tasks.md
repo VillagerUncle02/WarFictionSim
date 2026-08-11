@@ -59,7 +59,7 @@ description: "Task list template for feature implementation"
 - [x] T019 实现无头 CLI（sim/headless/main.cpp：sim_headless run/inject/save 子命令、--scenario/--seed/--script/--out/--hash/--threads/--ai-backend，JSONL 事件输出）
 - [x] T020 实现 AI 后端抽象与决策注入通道（sim/include/wfs/sim/ai/ia_backend.h、sim/src/ai_inject.cpp：wfs_sim_inject_ai_decision 经校验入队、到达 tick+序列号记录，支持 CHK052 回放）
 - [x] T021 实现无 AI 脚本后端（sim/src/ai/script_backend.cpp：确定性脚本 AI，输出与 LLM 同构的命令 JSON，无 AI 模式完整驱动战斗）
-- [ ] T022 搭建黄金确定性测试框架（tests/sim_tests/golden/：同输入两次运行哈希一致、--threads 1 vs 4 哈希一致、跨运行形态一致性）
+- [x] T022 搭建黄金确定性测试框架（tests/sim_tests/golden/：同输入两次运行哈希一致、--threads 1 vs 4 哈希一致、跨运行形态一致性）
 
 **Checkpoint**: 基础就绪 —— 用户故事实现可在 Foundational 后并行开始
 

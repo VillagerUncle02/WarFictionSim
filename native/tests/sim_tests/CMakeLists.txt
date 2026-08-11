@@ -19,12 +19,16 @@ add_executable(sim_tests
     c_api_test.cpp
     ai_inject_test.cpp
     script_backend_test.cpp
+    golden/golden_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)
 
 # 测试需要定位仓库根目录下的 data/ 与 contracts/ 数据（T012–T014 测试）。
 target_compile_definitions(sim_tests PRIVATE "WFS_SOURCE_ROOT=\"${PROJECT_SOURCE_DIR}/..\"")
+
+# T022 黄金测试需要调用无头 CLI 可执行文件（跨运行形态一致性）。
+target_compile_definitions(sim_tests PRIVATE "WFS_SIM_HEADLESS_EXE=\"$<TARGET_FILE:sim_headless>\"")
 
 # T020 白盒测试直接驱动内部注入通道/SimState（ai_inject.h、sim_state.h）。
 target_include_directories(sim_tests PRIVATE "${PROJECT_SOURCE_DIR}/sim/src")
