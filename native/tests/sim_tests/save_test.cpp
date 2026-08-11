@@ -6,13 +6,16 @@
 // 变句柄状态、IO 错误、确定性字节级一致，以及迁移链骨架（宪法第 13/17 条）。
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -251,6 +254,7 @@ TEST(WfsSaveTest, SaveFileLayoutMatchesContract) {
     EXPECT_EQ(blob.at("scenario_id"), "scn-smoke-test");
     EXPECT_TRUE(blob.at("rng").is_object());
     EXPECT_TRUE(blob.at("queue").at("events").is_array());
+    EXPECT_EQ(blob.at("queue").at("next_seq"), 0);
     EXPECT_TRUE(blob.at("event_log").at("entries").is_array());
     EXPECT_EQ(blob.at("processed_events"), 0);
 
@@ -343,6 +347,26 @@ TEST(WfsSaveTest, LoadRejectsHashMismatch) {
     EXPECT_EQ(wfs_sim_load_save(handle.get(), corrupt.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
 }
 
+TEST(WfsSaveTest, LoadRejectsHugeBlobLengthWithoutOverflow) {
+    TempDir dir;
+    Handle handle;
+    ASSERT_NE(handle.get(), nullptr);
+    const std::string header = "{}";
+    std::string bytes = "WFS-SAVE";
+    AppendU32(bytes, kCurrentSaveFormatVersion);
+    AppendU32(bytes, static_cast<std::uint32_t>(header.size()));
+    bytes.append(header);
+    const std::size_t blob_offset = 16U + header.size() + 8U;
+    // 恶意 blob_length：旧"加法后比较"的边界检查会无符号回绕并放行，
+    // 随后 hash_offset 溢出到地址空间之外（UB）。修复后必须直接拒绝。
+    const std::uint64_t blob_length =
+        std::numeric_limits<std::uint64_t>::max() - static_cast<std::uint64_t>(blob_offset) - 15U;
+    AppendU64(bytes, blob_length);
+    bytes.append(32U, '\0');  // 占位"blob"字节：满足 header 长度检查的最小文件。
+    const std::filesystem::path path = dir.Write("huge-blob-length.wfs", bytes);
+    EXPECT_EQ(wfs_sim_load_save(handle.get(), path.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
+}
+
 TEST(WfsSaveTest, LoadRejectsTruncatedFile) {
     TempDir dir;
     const std::filesystem::path path = dir.path() / "truncated.wfs";
@@ -355,6 +379,80 @@ TEST(WfsSaveTest, LoadRejectsTruncatedFile) {
         WFS_SIM_RESULT_INVALID_DATA);
     EXPECT_EQ(wfs_sim_load_save(handle.get(), dir.Write("tiny.wfs", "WFS").string().c_str()),
               WFS_SIM_RESULT_INVALID_DATA);
+}
+
+TEST(WfsSaveTest, SaveLoadRestoresQueueSequenceCursor) {
+    TempDir dir;
+    const std::filesystem::path first_path = dir.path() / "cursor-a.wfs";
+    Handle first;
+    ASSERT_NE(first.get(), nullptr);
+    // 两条同 tick 命令入队并处理：队列清空但 auto 游标推进到 2。
+    EXPECT_EQ(wfs_sim_inject_command(first.get(), ValidCommandJson().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(wfs_sim_inject_command(first.get(), ValidCommandJson().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(wfs_sim_step(first.get()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(SnapshotJson(first.get()).at("pending_events"), 0);
+    EXPECT_EQ(wfs_sim_save(first.get(), first_path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    Handle restored;
+    ASSERT_NE(restored.get(), nullptr);
+    EXPECT_EQ(wfs_sim_load_save(restored.get(), first_path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    // 原始与恢复句柄各自再注入两条同 tick 命令并处理：auto 序列号必须与
+    // 原始运行完全一致（T011 全局单调不回收，加载后从 2 继续而非归零）。
+    for (int i = 0; i < 2; ++i) {
+        EXPECT_EQ(wfs_sim_inject_command(first.get(), ValidCommandJson().c_str()), WFS_SIM_RESULT_OK);
+        EXPECT_EQ(wfs_sim_inject_command(restored.get(), ValidCommandJson().c_str()), WFS_SIM_RESULT_OK);
+    }
+    EXPECT_EQ(wfs_sim_step(first.get()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(wfs_sim_step(restored.get()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(StateHash(first.get()), StateHash(restored.get()));
+
+    const std::filesystem::path second_path = dir.path() / "cursor-b.wfs";
+    const std::filesystem::path third_path = dir.path() / "cursor-c.wfs";
+    EXPECT_EQ(wfs_sim_save(first.get(), second_path.string().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(wfs_sim_save(restored.get(), third_path.string().c_str()), WFS_SIM_RESULT_OK);
+    // 字节级一致 + 显式断言游标值：两路运行都应为 2 + 2 = 4。
+    EXPECT_EQ(ReadFile(second_path), ReadFile(third_path));
+    const SavedLayout layout = ParseLayout(ReadFile(second_path));
+    EXPECT_EQ(nlohmann::json::parse(layout.blob).at("queue").at("next_seq"), 4);
+}
+
+TEST(WfsSaveTest, LoadRejectsEventLogExceedingCapacity) {
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "log-capacity.wfs";
+    Handle handle;
+    ASSERT_NE(handle.get(), nullptr);
+    EXPECT_EQ(wfs_sim_save(handle.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    const SavedLayout layout = ParseLayout(ReadFile(path));
+    nlohmann::json header = nlohmann::json::parse(layout.header);
+    nlohmann::json blob = nlohmann::json::parse(layout.blob);
+    // 2 条事件但环形容量只有 1：合法状态不可能出现，必须拒绝。
+    blob["event_log"]["capacity"] = 1;
+    blob["event_log"]["entries"] = nlohmann::json::array({
+        nlohmann::json{{"seq", 0}, {"tick", 0}, {"category", "command"}, {"severity", "info"}, {"message", "a"}},
+        nlohmann::json{{"seq", 1}, {"tick", 0}, {"category", "command"}, {"severity", "info"}, {"message", "b"}},
+    });
+    const std::string new_blob = blob.dump();
+    header["state_size_bytes"] = new_blob.size();
+    const std::filesystem::path crafted =
+        dir.Write("log-capacity-fixed.wfs", BuildSaveBytes(layout.version, header.dump(), new_blob));
+    EXPECT_EQ(wfs_sim_load_save(handle.get(), crafted.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
+}
+
+TEST(WfsSaveTest, LoadRejectsAbiVersionMismatch) {
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "abi.wfs";
+    Handle handle;
+    ASSERT_NE(handle.get(), nullptr);
+    EXPECT_EQ(wfs_sim_save(handle.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    const SavedLayout layout = ParseLayout(ReadFile(path));
+    nlohmann::json header = nlohmann::json::parse(layout.header);
+    header["abi_version"] = "0.0.0";
+    const std::filesystem::path mismatched =
+        dir.Write("abi-fixed.wfs", BuildSaveBytes(layout.version, header.dump(), layout.blob));
+    EXPECT_EQ(wfs_sim_load_save(handle.get(), mismatched.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
 }
 
 TEST(WfsSaveTest, LoadRejectsGarbageStateBlob) {
@@ -427,6 +525,42 @@ TEST(WfsSaveTest, SaveTwiceOverwritesExistingFile) {
     ASSERT_NE(restored.get(), nullptr);
     EXPECT_EQ(wfs_sim_load_save(restored.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
     EXPECT_EQ(SnapshotJson(restored.get()).at("tick"), 1);
+}
+
+TEST(WfsSaveTest, ConcurrentSavesToSamePathRemainValid) {
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "concurrent.wfs";
+    std::atomic<bool> start_flag{false};
+    std::vector<wfs_sim_result> results(2U, WFS_SIM_RESULT_INTERNAL_ERROR);
+    std::vector<std::thread> threads;
+    threads.reserve(results.size());
+    for (std::size_t t = 0U; t < results.size(); ++t) {
+        threads.emplace_back([&, t]() {
+            Handle handle;
+            if (handle.get() == nullptr) {
+                return;
+            }
+            start_flag.wait(false);
+            for (int i = 0; i < 20; ++i) {
+                results[t] = wfs_sim_save(handle.get(), path.string().c_str());
+                if (results[t] != WFS_SIM_RESULT_OK) {
+                    return;
+                }
+            }
+        });
+    }
+    start_flag.store(true);
+    start_flag.notify_all();
+    for (std::thread& thread : threads) {
+        thread.join();
+    }
+    EXPECT_EQ(results[0], WFS_SIM_RESULT_OK);
+    EXPECT_EQ(results[1], WFS_SIM_RESULT_OK);
+
+    // 并发写入后文件必须是完整可加载的存档（无半写）。
+    Handle restored;
+    ASSERT_NE(restored.get(), nullptr);
+    EXPECT_EQ(wfs_sim_load_save(restored.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
 }
 
 TEST(WfsSaveTest, MigrateStateIdentityForCurrentVersion) {

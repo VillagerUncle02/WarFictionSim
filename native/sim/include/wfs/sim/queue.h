@@ -20,6 +20,10 @@
 // - 空队列 front()/pop() 抛 std::out_of_range；try_pop() 弹出
 //   tick <= 请求 tick 的最早事件：请求 tick 大于事件 tick 时按补发语义
 //   弹出（不丢命令），事件 tick 晚于请求 tick 时返回 false。
+// - restore_next_seq() 是存档恢复入口（T017）：先按 (tick, seq) 显式入队
+//   全部待处理事件，再恢复游标；禁止回退（seq < 当前游标抛
+//   std::invalid_argument），保证加载后 auto 序列号与原始运行完全一致
+//   （全局单调不回收）。
 // - 非线程安全：并发注入/弹出必须由调用方串行化（AI 注入边界由 T020 落实）。
 //
 // 自动分配的序列号从 0 开始单调递增，不回收；序列号空间为 uint64。
@@ -59,6 +63,9 @@ class EventQueue {
     bool try_pop(GameTick tick, QueuedEvent& out);
 
     std::uint64_t next_seq() const noexcept;
+
+    // 恢复自动分配游标到存档记录值（存档加载，T017）。
+    void restore_next_seq(std::uint64_t seq);
 
    private:
     void insert(GameTick tick, std::uint64_t seq, std::string payload);

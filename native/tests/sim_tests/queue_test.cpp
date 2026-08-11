@@ -178,6 +178,30 @@ TEST(WfsQueueTest, AutoSeqStaysMonotonicAfterExplicitSeq) {
     EXPECT_TRUE(queue.empty());
 }
 
+TEST(WfsQueueTest, RestoreNextSeqContinuesFromSavedCursor) {
+    EventQueue queue;
+    // 存档恢复流程：先显式入队全部待处理事件，再恢复游标。
+    queue.enqueue(0u, 0u, "pending");
+    EXPECT_EQ(queue.next_seq(), 1u);
+    queue.restore_next_seq(100u);  // 历史 seq 1..99 已弹出：游标跳到存档值。
+    EXPECT_EQ(queue.next_seq(), 100u);
+    const uint64_t auto_seq = queue.enqueue(1u, "auto");
+    EXPECT_EQ(auto_seq, 100u);  // auto 从恢复的游标继续，全局单调不回收。
+    EXPECT_EQ(queue.next_seq(), 101u);
+}
+
+TEST(WfsQueueTest, RestoreNextSeqRejectsRewindWithoutStateChange) {
+    EventQueue queue;
+    queue.enqueue(0u, 5u, "explicit-5");
+    EXPECT_EQ(queue.next_seq(), 6u);
+    EXPECT_THROW(queue.restore_next_seq(3u), std::invalid_argument);
+    EXPECT_EQ(queue.next_seq(), 6u);
+    EXPECT_EQ(queue.size(), 1u);
+    EXPECT_EQ(queue.front().seq, 5u);
+    queue.restore_next_seq(7u);  // 前进到存档值允许。
+    EXPECT_EQ(queue.next_seq(), 7u);
+}
+
 TEST(WfsQueueTest, AutoSeqSkipsExplicitZero) {
     EventQueue queue;
     queue.enqueue(0u, 0u, "explicit-zero");

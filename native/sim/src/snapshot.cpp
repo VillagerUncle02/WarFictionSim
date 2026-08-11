@@ -97,6 +97,9 @@ nlohmann::json serialize_state_json(const SimState& state) {
          }},
         {"queue",
          nlohmann::json{
+             // next_seq 是队列状态的一部分（T011 全局单调不回收游标）：
+             // 存档恢复后 auto 序列号必须与原始运行一致，因此进入哈希。
+             {"next_seq", state.queue.next_seq()},
              {"events", QueueToJson(state.queue)},
          }},
         {"processed_events", state.processed_events},

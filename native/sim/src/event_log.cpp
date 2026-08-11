@@ -5,7 +5,8 @@
 // 实现策略：
 // - 存储使用 std::vector 并始终保持 seq 升序（append 单调 + 驱逐只删头部
 //   或最旧非关键），保留集合等价于环形缓冲的"最新 N 条（关键优先）"语义，
-//   不需要物理环形索引即可获得 O(1) 摊销追加与确定性的全量遍历。
+//   不需要物理环形索引即可获得 O(capacity) 有界的追加（满员驱逐时
+//   find_if 扫描最旧非关键事件）与确定性的全量遍历。
 // - 满员驱逐固定为"最旧非关键 → 最旧"：先扫描最旧的非关键事件删除；全部
 //   为关键事件时才删除最旧事件。该策略保证关键事件优先存活，且所有事件都
 //   会被接纳（保留集合始终达到容量）。
@@ -24,6 +25,17 @@
 namespace wfs::sim {
 
 namespace {
+
+constexpr std::size_t kCategoryCount = static_cast<std::size_t>(EventCategory::kCount);
+constexpr std::size_t kSeverityCount = static_cast<std::size_t>(EventSeverity::kCount);
+
+// 枚举越界立即显式报错（宪法第 17 条）：损坏的 category/severity 不应
+// 进入日志后才在序列化阶段失败（fail-late）。
+void ValidateEventEnums(EventCategory category, EventSeverity severity) {
+    if (static_cast<std::size_t>(category) >= kCategoryCount || static_cast<std::size_t>(severity) >= kSeverityCount) {
+        throw std::invalid_argument("wfs::sim::EventLog: unknown event category or severity");
+    }
+}
 
 // 稳定名称表：顺序与枚举值一一对应，存档/日志输出不得变更。
 constexpr std::array<std::string_view, static_cast<std::size_t>(EventCategory::kCount)> kCategoryNames = {
@@ -81,6 +93,7 @@ void EventLog::append(GameTick tick, EventCategory category, EventSeverity sever
 
 void EventLog::append(GameTick tick, EventCategory category, EventSeverity severity, std::string message,
                       std::uint64_t seq) {
+    ValidateEventEnums(category, severity);
     if (seq < next_seq_) {
         throw std::invalid_argument("wfs::sim::EventLog: explicit seq must be monotonic (seq < next_seq)");
     }

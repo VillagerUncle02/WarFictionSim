@@ -107,4 +107,11 @@ std::uint64_t EventQueue::next_seq() const noexcept {
     return next_seq_;
 }
 
+void EventQueue::restore_next_seq(std::uint64_t seq) {
+    if (seq < next_seq_) {
+        throw std::invalid_argument("wfs::sim::EventQueue: restore_next_seq must not rewind the cursor");
+    }
+    next_seq_ = seq;
+}
+
 }  // namespace wfs::sim

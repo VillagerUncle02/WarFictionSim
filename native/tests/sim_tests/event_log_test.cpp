@@ -193,6 +193,18 @@ TEST(WfsEventLogTest, ZeroCapacityRejected) {
     EXPECT_THROW(EventLog(0u), std::invalid_argument);
 }
 
+TEST(WfsEventLogTest, InvalidCategoryOrSeverityRejectedImmediately) {
+    EventLog log;
+    const auto bad_category = static_cast<EventCategory>(static_cast<std::uint8_t>(EventCategory::kCount) + 1U);
+    const auto bad_severity = static_cast<EventSeverity>(static_cast<std::uint8_t>(EventSeverity::kCount) + 1U);
+    EXPECT_THROW(log.append(0u, bad_category, kInfo, "x"), std::invalid_argument);
+    EXPECT_THROW(log.append(0u, kCat, bad_severity, "x"), std::invalid_argument);
+    EXPECT_THROW(log.append(0u, bad_category, kInfo, "x", 0u), std::invalid_argument);
+    EXPECT_THROW(log.append(0u, kCat, bad_severity, "x", 0u), std::invalid_argument);
+    EXPECT_TRUE(log.empty());
+    EXPECT_EQ(log.next_seq(), 0u);
+}
+
 TEST(WfsEventLogTest, ExplicitSeqRestorePath) {
     EventLog log;
     // 存档恢复路径：显式 seq 必须单调（>= next_seq）。

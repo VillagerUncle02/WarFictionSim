@@ -20,16 +20,24 @@
 #include "save.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <functional>
+#include <map>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -107,23 +115,62 @@ bool ReadWholeFile(const std::filesystem::path& path, std::string& content) {
     return true;
 }
 
-// 临时文件 + 替换：写入中断不会留下半写存档；目标已存在时先移除再重命名。
-wfs_sim_result WriteFileAtomic(const std::filesystem::path& path, const std::string& content) {
+// 同一路径的并发写入互斥：按规范化路径持锁，保证"并发写入串行化、
+// 不产生半写存档"（contracts/save-format.md；T089 槽位管理同源约束）。
+std::mutex& PathLock(const std::filesystem::path& path) {
+    static std::mutex registry_mutex;
+    static std::map<std::string, std::mutex> locks;
+    const std::string key = path.lexically_normal().string();
+    std::lock_guard<std::mutex> registry_guard(registry_mutex);
+    return locks[key];
+}
+
+// 每次写入使用唯一临时名（进程内原子计数 + 线程 id）：并发写同一路径时
+// 各线程写各自临时文件，不会交错写同一文件。
+std::filesystem::path UniqueTempPath(const std::filesystem::path& path) {
+    static std::atomic<std::uint64_t> counter{0U};
     std::filesystem::path temp = path;
-    temp += ".tmp";
-    {
-        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-        if (!out) {
-            return WFS_SIM_RESULT_IO_ERROR;
-        }
-        out.write(content.data(), static_cast<std::streamsize>(content.size()));
-        out.close();
-        if (!out) {
-            std::error_code cleanup_error;
-            std::filesystem::remove(temp, cleanup_error);
-            return WFS_SIM_RESULT_IO_ERROR;
-        }
+    temp += ".tmp." + std::to_string(counter.fetch_add(1U)) + "." +
+            std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+    return temp;
+}
+
+// 写临时文件；失败清理临时文件并返回 IO_ERROR。
+wfs_sim_result WriteTempFile(const std::filesystem::path& temp, const std::string& content) {
+    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        return WFS_SIM_RESULT_IO_ERROR;
     }
+    out.write(content.data(), static_cast<std::streamsize>(content.size()));
+    out.close();
+    if (!out) {
+        std::error_code cleanup_error;
+        std::filesystem::remove(temp, cleanup_error);
+        return WFS_SIM_RESULT_IO_ERROR;
+    }
+    return WFS_SIM_RESULT_OK;
+}
+
+// 临时文件 + 原子替换：写入中断不会留下半写存档；目标替换原子完成，
+// 不存在"旧存档已删、新存档未就位"的崩溃窗口。
+wfs_sim_result WriteFileAtomic(const std::filesystem::path& path, const std::string& content) {
+    std::lock_guard<std::mutex> path_guard(PathLock(path));
+    const std::filesystem::path temp = UniqueTempPath(path);
+    if (WriteTempFile(temp, content) != WFS_SIM_RESULT_OK) {
+        return WFS_SIM_RESULT_IO_ERROR;
+    }
+#ifdef _WIN32
+    // MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)：原子替换目标并落盘。
+    if (MoveFileExW(temp.wstring().c_str(), path.wstring().c_str(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
+        std::error_code cleanup_error;
+        std::filesystem::remove(temp, cleanup_error);
+        return WFS_SIM_RESULT_IO_ERROR;
+    }
+    return WFS_SIM_RESULT_OK;
+#else
+    // 非 Windows 回退：POSIX rename 本身原子替换；个别平台不支持覆盖时
+    // 先移除旧文件再重命名（Windows 主目标走 MoveFileExW 路径）。
     std::error_code error;
     if (std::filesystem::exists(path)) {
         std::filesystem::remove(path, error);
@@ -140,6 +187,7 @@ wfs_sim_result WriteFileAtomic(const std::filesystem::path& path, const std::str
         return WFS_SIM_RESULT_IO_ERROR;
     }
     return WFS_SIM_RESULT_OK;
+#endif
 }
 
 nlohmann::json BuildHeader(const SimState& state, std::size_t blob_size) {
@@ -162,18 +210,29 @@ T RequireField(const nlohmann::json& document, const char* key) {
 }
 
 EventQueue RestoreQueue(const nlohmann::json& root) {
+    const nlohmann::json& queue_json = root.at("queue");
     EventQueue queue;
-    for (const nlohmann::json& event : root.at("queue").at("events")) {
+    for (const nlohmann::json& event : queue_json.at("events")) {
         queue.enqueue(RequireField<GameTick>(event, "tick"), RequireField<std::uint64_t>(event, "seq"),
                       RequireField<std::string>(event, "payload"));
     }
+    // 游标是队列状态的一部分：恢复后 auto 序列号与原始运行完全一致
+    // （T011 全局单调不回收）；回退游标视为损坏数据，restore_next_seq
+    // 显式报错（宪法第 17 条）。
+    queue.restore_next_seq(RequireField<std::uint64_t>(queue_json, "next_seq"));
     return queue;
 }
 
 EventLog RestoreEventLog(const nlohmann::json& root) {
     const nlohmann::json& log = root.at("event_log");
-    EventLog restored(RequireField<std::size_t>(log, "capacity"));
-    for (const nlohmann::json& entry : log.at("entries")) {
+    const std::size_t capacity = RequireField<std::size_t>(log, "capacity");
+    const nlohmann::json& entries = log.at("entries");
+    if (entries.size() > capacity) {
+        // 条目数超过环形容量在合法状态下不可能出现：损坏数据显式拒绝。
+        throw std::invalid_argument("wfs::sim::load_save_into: event log entries exceed capacity");
+    }
+    EventLog restored(capacity);
+    for (const nlohmann::json& entry : entries) {
         restored.append(RequireField<GameTick>(entry, "tick"),
                         event_category_from_string(RequireField<std::string>(entry, "category")),
                         event_severity_from_string(RequireField<std::string>(entry, "severity")),
@@ -201,10 +260,11 @@ nlohmann::json migrate_state(const nlohmann::json& state, std::uint32_t from_ver
         throw std::invalid_argument("wfs::sim::migrate_state: target version must not be older than source version");
     }
 
-    // 迁移链骨架：索引 = 源版本，函数把状态从 v 迁移到 v+1。v1 是第一版
-    // 格式，表为空；未来破坏性变更按版本号追加步骤并递增
-    // kCurrentSaveFormatVersion（宪法第 13 条：逐级迁移，禁止跳级）。
-    static const std::vector<std::function<nlohmann::json(nlohmann::json)>> migration_steps;
+    // 迁移链骨架：键 = 源版本，函数把状态从 v 迁移到 v+1。v1 是第一版
+    // 格式，表为空；未来破坏性变更按版本号登记步骤并递增
+    // kCurrentSaveFormatVersion（宪法第 13 条：逐级迁移，禁止跳级；
+    // 缺失步骤由 std::map::at 显式报错）。
+    static const std::map<std::uint32_t, std::function<nlohmann::json(nlohmann::json)>> migration_steps;
     nlohmann::json current = state;
     for (std::uint32_t version = from_version; version < to_version; ++version) {
         current = migration_steps.at(version)(std::move(current));
@@ -263,7 +323,10 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
             return WFS_SIM_RESULT_INVALID_DATA;
         }
         const std::size_t blob_offset = header_offset + header_length + kBlobLengthSize;
-        if (blob_offset + blob_length + kSaveStateHashSize > data.size()) {
+        // 先减后比：blob_length 是 u64，加法可能无符号回绕；前面的 header
+        // 长度检查已保证 data.size() >= blob_offset + kSaveStateHashSize，
+        // 因此右侧不会下溢——恶意超大 blob_length 直接拒绝（宪法第 17 条）。
+        if (blob_length > data.size() - blob_offset - kSaveStateHashSize) {
             return WFS_SIM_RESULT_INVALID_DATA;
         }
         const std::string blob = data.substr(blob_offset, blob_length);
@@ -287,6 +350,10 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         }
 
         // 元数据交叉校验：header / blob / 当前句柄三者必须一致。
+        if (RequireField<std::string>(header, "abi_version") != WFS_SIM_VERSION_STRING) {
+            // 核心 ABI 与存档 ABI 错配：禁止静默加载（防跨版本损坏）。
+            return WFS_SIM_RESULT_INVALID_DATA;
+        }
         if (RequireField<std::string>(header, "scenario_id") != state.scenario.id ||
             RequireField<std::string>(parsed, "scenario_id") != state.scenario.id) {
             return WFS_SIM_RESULT_INVALID_DATA;
