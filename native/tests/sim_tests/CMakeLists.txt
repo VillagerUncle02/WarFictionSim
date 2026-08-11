@@ -27,4 +27,11 @@ if (MSVC)
 endif()
 
 include(GoogleTest)
-gtest_discover_tests(sim_tests)
+if (WIN32)
+    # 双保险：CTest 运行测试时把 gtest DLL 目录与测试输出目录加入 PATH，
+    # 即使 POST_BUILD 复制失效也不会出现"找不到 gtest.dll"弹窗。
+    gtest_discover_tests(sim_tests PROPERTIES ENVIRONMENT
+        "PATH=$<TARGET_FILE_DIR:GTest::gtest>;$<TARGET_FILE_DIR:sim_tests>;$ENV{PATH}")
+else()
+    gtest_discover_tests(sim_tests)
+endif()
