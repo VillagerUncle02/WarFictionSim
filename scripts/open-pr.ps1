@@ -13,7 +13,7 @@ if (-not $Issue) {
 $issueNums = @()
 if ($Issue) {
     # 支持逗号分隔的多个 issue：-Issue "T001,T002,T003"
-    $issueNums = $Issue -split ',' | ForEach-Object { ($_ -replace '^T', '').Trim() } | Where-Object { $_ -ne "" }
+    $issueNums = $Issue -split ',' | ForEach-Object { [int]($_ -replace '^T', '').Trim() } | Where-Object { $_ -ne "" }
 }
 $closesLines = if ($issueNums.Count -gt 0) { ($issueNums | ForEach-Object { "Closes #$_" }) -join "`n" } else { "" }
 $body = @"
