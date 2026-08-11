@@ -1,5 +1,7 @@
 # 自动化实现循环 v2 方案
 
+> **已归档（2026-08-12）**：本方案已被 implement-loop 扩展 v1.1.1 取代——源码见 `extensions/implement-loop/`（5 命令 + 8 脚本 + gates 样板 + 配置模板），旧单体技能归档于 `notes/archive/speckit-implement-loop-v2/`。本文档仅作历史参考，当前用法以 `extensions/implement-loop/README.md` 与 `commands/run.md` 为准。
+
 ## 0. 目标
 
 在 `speckit-implement-loop` 基础上闭环：AI 审查 PR（不批准、不合并）→ 审查通过后自动进入下一功能；
