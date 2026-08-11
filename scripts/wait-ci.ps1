@@ -1,6 +1,17 @@
-﻿param(
+#!/usr/bin/env pwsh
+# wait-ci.ps1 — 等待当前分支 + 当前 HEAD 的 GitHub Actions CI run 完成并输出反馈
+#
+# 用法：
+#   pwsh wait-ci.ps1 [-Branch <branch>] [-WorkflowName CI] [-TimeoutSeconds 1800]
+#                    [-PollSeconds 15] [-RunAppearWaitSeconds 120] [-GhCallTimeoutSeconds 30]
+#
+# 退出码：0 = CI 通过；1 = CI 失败（已输出失败 job/日志）；2 = 超时/未触发；3 = gh 认证/网络/连续超时
+
+[CmdletBinding()]
+param(
     [string]$Branch = "",
-    [int]$TimeoutSeconds = 900,
+    [string]$WorkflowName = "",
+    [int]$TimeoutSeconds = 1800,
     [int]$PollSeconds = 15,
     [int]$RunAppearWaitSeconds = 120,
     [int]$GhCallTimeoutSeconds = 30
@@ -9,35 +20,41 @@
 # 说明：用 Continue 而非 Stop——本脚本大量调用 gh/git 等原生命令，
 # Windows PowerShell 5.1 会把原生 stderr 当作 ErrorRecord，Stop 模式会误终止。
 $ErrorActionPreference = "Continue"
-$root = Split-Path -Parent $PSScriptRoot
-Set-Location $root
+. "$PSScriptRoot/common.ps1"
+
+$repoRoot = Find-RepoRoot
+if (-not $repoRoot) { Write-Host "ERROR: 未找到仓库根（缺少 .specify/）"; exit 3 }
+Set-Location $repoRoot
 
 if (-not $Branch) { $Branch = git branch --show-current }
 if (-not $Branch) { Write-Host "ERROR: 无法确定当前分支，请用 -Branch 指定"; exit 2 }
 
 # 从 git remote 推导 owner/repo（Start-Job 子进程不在仓库目录，gh 需显式 --repo）
-$script:ghRepo = ""
-$remoteUrl = git remote get-url origin 2>$null
-if ($remoteUrl -match 'github\.com[/:]([^/]+)/([^/]+?)(\.git)?$') {
-    $script:ghRepo = "$($Matches[1])/$($Matches[2])"
-}
+$script:ghRepo = Get-GitRemoteRepo $repoRoot
+if (-not $script:ghRepo) { Write-Host "ERROR: 无法从 git remote 推导 owner/repo"; exit 3 }
 
 $script:ghExitCode = 0
 $script:ghTimeoutCount = 0
 
+# 当前进程的环境 token（Start-Job 子进程对凭据上下文不总是可靠继承，
+# 例如 keyring 失效但 GH_TOKEN 可用的环境——显式传入 job 并设置）
+$script:ghToken = $env:GH_TOKEN
+if (-not $script:ghToken) { $script:ghToken = $env:GITHUB_TOKEN }
+
 # gh 调用统一走 Start-Job 硬超时：即使网络卡死，单次调用最多 GhCallTimeoutSeconds 秒。
 # 注意：job 进程内必须先设置 UTF-8 输出编码，否则 gh 返回的中文（如提交信息）会被
-# Windows PowerShell 5.1 按 GBK 解码成坏字节，破坏 JSON 解析（曾导致轮询一直读不到完成态）。
+# Windows PowerShell 5.1 按 GBK 解码成坏字节，破坏 JSON 解析。
 function Invoke-Gh {
     param([string]$ArgsText)
     $job = Start-Job -ScriptBlock {
-        param($a)
+        param($a, $token)
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $OutputEncoding = [System.Text.Encoding]::UTF8
+        if ($token) { $env:GH_TOKEN = $token }
         $o = & gh @($a -split ' ') 2>&1
         Write-Output ("__GH_EXIT__=" + $LASTEXITCODE)
         if ($null -ne $o) { Write-Output $o }
-    } -ArgumentList $ArgsText
+    } -ArgumentList $ArgsText, $script:ghToken
     if (-not (Wait-Job $job -Timeout $GhCallTimeoutSeconds)) {
         Stop-Job $job
         Remove-Job $job -Force
@@ -68,18 +85,27 @@ function Get-JsonObject {
 }
 
 Write-Host "== 等待 CI：分支 $Branch @ $((git rev-parse HEAD).Trim().Substring(0,7)) =="
-Write-Host "run 出现窗口：$RunAppearWaitSeconds 秒；总超时：$TimeoutSeconds 秒；gh 单次调用硬超时：$GhCallTimeoutSeconds 秒"
+Write-Host "workflow: $WorkflowName | run 出现窗口：$RunAppearWaitSeconds 秒；总超时：$TimeoutSeconds 秒；gh 单次调用硬超时：$GhCallTimeoutSeconds 秒"
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $appearDeadline = (Get-Date).AddSeconds($RunAppearWaitSeconds)
 $runId = $null
 $run = $null
 
-# 0) gh 认证预检（带硬超时）：未登录/凭据不可访问时立即退出，不空转
-$null = Invoke-Gh "auth status"
-if ($script:ghExitCode -ne 0 -or $script:ghTimeoutCount -gt 0) {
-    Write-Host "ERROR: gh 未认证或无法访问凭据（keyring）/调用超时。"
-    Write-Host "请在已登录 gh 的环境（沙箱外/escalated）执行；确认方式：gh auth status"
+# 0) gh 认证预检：主进程直调（Start-Job 子进程对 keyring/环境凭据的解析可能不一致，
+#    导致"主进程正常、job 内失败"；直调拿到与后续操作一致的凭据结论）
+$authOut = (& gh auth status 2>&1) | Out-String
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: gh 认证检查失败（主进程直调）。"
+    Write-Host $authOut.Trim()
+    if ($script:ghToken) {
+        Write-Host "检测到环境变量 GH_TOKEN/GITHUB_TOKEN 已设置，但 gh auth status 仍失败。"
+        Write-Host "可能原因：token 无效/已过期；或 gh 优先使用了失效的 keyring 凭据。"
+        Write-Host "处理：确认 token 有效后重新运行；或先 gh auth login 修复默认凭据。"
+    } else {
+        Write-Host "未检测到 GH_TOKEN/GITHUB_TOKEN 环境变量。"
+        Write-Host "处理：gh auth login，或设置 \$env:GH_TOKEN 后重试。"
+    }
     exit 3
 }
 
@@ -101,18 +127,19 @@ while ((Get-Date) -lt $appearDeadline) {
     }
     $runs = Get-JsonObject $runsJson
     if (-not $runs) { $runs = @() }
-    $run = $runs | Where-Object { $_.workflowName -eq "CI" -and $_.headSha -eq $headSha } | Select-Object -First 1
+    # WorkflowName 为空时按"分支 + 当前 HEAD"匹配任意 workflow
+    $run = $runs | Where-Object { ($_.headSha -eq $headSha) -and (-not $WorkflowName -or $_.workflowName -eq $WorkflowName) } | Select-Object -First 1
     if ($run) { $runId = $run.databaseId; break }
     Start-Sleep -Seconds $PollSeconds
 }
 
 if (-not $runId) {
-    Write-Host "ERROR: 在 $RunAppearWaitSeconds 秒内未找到与当前 HEAD ($($headSha.Substring(0,7))) 匹配的 CI run。"
+    Write-Host "ERROR: 在 $RunAppearWaitSeconds 秒内未找到与当前 HEAD ($($headSha.Substring(0,7))) 匹配的 CI run（workflow: $WorkflowName）。"
     Write-Host "可能原因："
-    Write-Host "  1) 本次改动只涉及非代码路径（ci.yml 的 paths 过滤跳过了 CI）——若确认是纯文档改动，可跳过等待；"
+    Write-Host "  1) 本次改动只涉及非代码路径（workflow 的 paths 过滤跳过了 CI）——若确认是纯文档改动，可跳过等待；"
     Write-Host "  2) 仓库 Actions 未启用、排队超时；"
     Write-Host "  3) 推送未成功（git push 可能因凭据问题挂起，确认在沙箱外执行）。"
-    Write-Host "可尝试手动触发：gh workflow run ci.yml --ref $Branch"
+    Write-Host "可尝试手动触发：gh workflow run $WorkflowName --ref $Branch"
     exit 2
 }
 
