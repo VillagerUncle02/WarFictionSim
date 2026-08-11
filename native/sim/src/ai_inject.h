@@ -8,9 +8,9 @@
 // 线程安全：本通道与 wfs_sim_step 一样非线程安全；注入/step 必须由调用方
 // 串行化（queue.h 契约同步；T080 云端异步接入前必须加锁）。
 //
-// 频率上限预留（FR-052）：按节点限频的强制位置在本通道——T080 触发引擎将
-// 基于 AiDecisionMeta / 决策日志实现 interval；本阶段注入只做校验 + 入队，
-// 不改变既有确定性契约。
+// 频率上限（FR-052）：由 T080 触发引擎在 decide 前执行（基于
+// AiDecisionInput.last_decision_tick / rate_limit_interval_ticks），字段仅作
+// 上下文传递；注入通道只做校验 + 入队，不据此限频，不改变既有确定性契约。
 
 #pragma once
 

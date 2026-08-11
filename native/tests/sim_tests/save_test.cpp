@@ -472,6 +472,63 @@ TEST(WfsSaveTest, LoadRejectsDecisionCounterMismatch) {
     const std::filesystem::path crafted =
         dir.Write("decision-counter-fixed.wfs", BuildSaveBytes(layout.version, header.dump(), new_blob));
     EXPECT_EQ(wfs_sim_load_save(handle.get(), crafted.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
+
+    // 反向不一致：日志 1 条但游标 2（每条记录必递增游标，size == counter）。
+    blob["ai_decision_counter"] = 2;
+    const std::string second_blob = blob.dump();
+    header["state_size_bytes"] = second_blob.size();
+    const std::filesystem::path crafted_size =
+        dir.Write("decision-counter-size-fixed.wfs", BuildSaveBytes(layout.version, header.dump(), second_blob));
+    EXPECT_EQ(wfs_sim_load_save(handle.get(), crafted_size.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
+}
+
+TEST(WfsSaveTest, LoadRejectsDuplicateDecisionIds) {
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "duplicate-decision-id.wfs";
+    Handle handle;
+    ASSERT_NE(handle.get(), nullptr);
+    EXPECT_EQ(wfs_sim_save(handle.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    const SavedLayout layout = ParseLayout(ReadFile(path));
+    nlohmann::json header = nlohmann::json::parse(layout.header);
+    nlohmann::json blob = nlohmann::json::parse(layout.blob);
+    const auto record = [](const std::string& decision_id) {
+        return nlohmann::json{{"decision_id", decision_id},
+                              {"node_id", "n1"},
+                              {"trigger", "t"},
+                              {"arrival_tick", 0},
+                              {"arrival_seq", 0},
+                              {"state_hash", ""},
+                              {"input_json", "{}"},
+                              {"events_json", "[]"},
+                              {"output_json", "{}"},
+                              {"validation_ok", true},
+                              {"validation_errors", nlohmann::json::array()}};
+    };
+    // 大小一致（2 条 / 游标 2）但 decision_id 重复：CHK052 回放标识必须唯一。
+    blob["ai_decision_counter"] = 2;
+    blob["decision_log"] = nlohmann::json{{"entries", nlohmann::json::array({record("dup"), record("dup")})}};
+    const std::string new_blob = blob.dump();
+    header["state_size_bytes"] = new_blob.size();
+    const std::filesystem::path crafted =
+        dir.Write("duplicate-decision-id-fixed.wfs", BuildSaveBytes(layout.version, header.dump(), new_blob));
+    EXPECT_EQ(wfs_sim_load_save(handle.get(), crafted.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
+}
+
+TEST(WfsSaveTest, LoadLegacySaveWithoutAiFieldsClearsDirtyDecisionState) {
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "legacy-no-ai-fields.wfs";
+    Handle source;  // 干净句柄：存档不含 decision_log / ai_decision_counter。
+    ASSERT_NE(source.get(), nullptr);
+    EXPECT_EQ(wfs_sim_save(source.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    // 脏句柄已产生决策（日志/游标非空）：旧存档缺失两字段时对称重置为
+    // 空日志/0 游标并成功加载（与 decision_log 缺失处理一致）。
+    Handle dirty;
+    ASSERT_NE(dirty.get(), nullptr);
+    EXPECT_EQ(wfs_sim_inject_ai_decision(dirty.get(), ValidCommandJson().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(wfs_sim_load_save(dirty.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(StateHash(dirty.get()), StateHash(source.get()));
 }
 
 TEST(WfsSaveTest, LoadRestoresMaxEventLogSeqWithoutWrapping) {

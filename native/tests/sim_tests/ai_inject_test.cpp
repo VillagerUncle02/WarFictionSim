@@ -329,3 +329,22 @@ TEST(WfsAiInjectTest, DuplicateExplicitDecisionIdRejectedWithoutLogEntry) {
     EXPECT_EQ(state.queue.size(), 1U);
     EXPECT_TRUE(HasEvent(state.event_log, "AI_DECISION_REJECTED"));
 }
+
+TEST(WfsAiInjectTest, ReservedAutoIdPrefixRejectedAndAutoSpaceIntact) {
+    SimState state = MakeState();
+    const AiInjectResult reserved = inject_ai_decision(state, ValidCommandJson(), Meta("ai-1"), CommandSchema());
+    ASSERT_FALSE(reserved.accepted);
+    ASSERT_FALSE(reserved.errors.empty());
+    EXPECT_EQ(reserved.errors.front().code, "RESERVED_DECISION_ID");
+    // 被拒的保留前缀不占用日志/游标/队列。
+    EXPECT_EQ(state.decision_log.size(), 0U);
+    EXPECT_EQ(state.ai_decision_counter, 0U);
+    EXPECT_EQ(state.queue.size(), 0U);
+    EXPECT_TRUE(HasEvent(state.event_log, "AI_DECISION_REJECTED"));
+
+    // 自动分配空间不受影响：counter 从 0 生成 ai-0（显式 ai-1 未撞车）。
+    const AiInjectResult automatic = inject_ai_decision(state, ValidCommandJson(), Meta({}), CommandSchema());
+    ASSERT_TRUE(automatic.accepted) << (automatic.errors.empty() ? "" : automatic.errors.front().message);
+    EXPECT_EQ(automatic.decision_id, "ai-0");
+    EXPECT_EQ(state.decision_log.size(), 1U);
+}

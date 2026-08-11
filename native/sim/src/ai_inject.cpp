@@ -91,6 +91,16 @@ AiInjectResult inject_ai_decision(SimState& state, const std::string& command_js
     // 显式 decision_id 必须全局唯一（CHK052 回放标识）：重复拒绝且不追加
     // 记录/不递增游标，保持决策日志唯一（宪法 10/17）。
     if (!meta.decision_id.empty()) {
+        // "ai-" 前缀保留给自动分配空间（ai-<counter>）：显式使用直接拒绝，
+        // 保证自动 ID 永不与显式 ID 撞车。
+        if (result.decision_id.starts_with("ai-")) {
+            result.errors.push_back(
+                ValidationError{"RESERVED_DECISION_ID", "决策标识前缀 ai- 保留给自动分配: " + result.decision_id});
+            state.event_log.append(
+                state.clock.tick(), EventCategory::kCommand, EventSeverity::kWarning,
+                "AI_DECISION_REJECTED decision_id=" + result.decision_id + " code=RESERVED_DECISION_ID");
+            return result;
+        }
         for (const AiDecisionRecord& record : state.decision_log.entries()) {
             if (record.decision_id == result.decision_id) {
                 result.errors.push_back(

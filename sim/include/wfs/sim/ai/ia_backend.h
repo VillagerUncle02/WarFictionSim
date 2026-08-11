@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "wfs/sim/clock.h"
@@ -38,9 +39,12 @@ struct AiDecisionInput {
     GameTick game_tick = 0U;         // 决策请求时的游戏 tick（不读现实时钟）。
     std::string state_summary_json;  // 状态快照摘要（确定性 JSON，不含线程数）。
     std::string events_json;         // 决策点可见事件（JSON 数组，seq 升序）。
-    // FR-052 预留：本节点上次决策 tick（0 = 尚无）；T080 触发引擎填充。
-    GameTick last_decision_tick = 0U;
-    // FR-052 预留：本节点决策最小间隔（tick；0 = 未配置）。
+    // FR-052 上下文：本节点上次决策 tick；nullopt = 尚无决策（区别于 tick 0
+    // 决策）。由触发引擎（T080）在 decide 前填充并执行限频，本字段仅作
+    // 上下文传递，注入通道不据此限频。
+    std::optional<GameTick> last_decision_tick;
+    // FR-052 上下文：本节点决策最小间隔（tick；0 = 未配置）。由触发引擎
+    // （T080）在 decide 前执行，本字段仅作上下文传递。
     std::uint64_t rate_limit_interval_ticks = 0U;
 };
 

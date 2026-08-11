@@ -35,6 +35,7 @@
 #include <string>
 #include <system_error>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -252,6 +253,17 @@ DecisionLog RestoreDecisionLog(const nlohmann::json& root) {
     return decision_log_from_json(root.at("decision_log"));
 }
 
+// 决策日志内 decision_id 必须唯一（CHK052 回放标识）；重复视为损坏数据。
+bool HasDuplicateDecisionIds(const DecisionLog& log) {
+    std::unordered_set<std::string> seen_decision_ids;
+    for (const AiDecisionRecord& record : log.entries()) {
+        if (!seen_decision_ids.insert(record.decision_id).second) {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 nlohmann::json migrate_state(const nlohmann::json& state, std::uint32_t from_version, std::uint32_t to_version) {
@@ -390,12 +402,17 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         next.processed_events = RequireField<std::uint64_t>(parsed, "processed_events");
         next.event_log = RestoreEventLog(parsed);
         next.decision_log = RestoreDecisionLog(parsed);
-        if (parsed.contains("ai_decision_counter")) {
-            next.ai_decision_counter = RequireField<std::uint64_t>(parsed, "ai_decision_counter");
+        // 旧存档缺失 ai_decision_counter 时显式置 0（与 decision_log 缺失
+        // 重置为空对称），保证脏句柄加载旧存档后决策状态完全清空。
+        next.ai_decision_counter =
+            parsed.contains("ai_decision_counter") ? RequireField<std::uint64_t>(parsed, "ai_decision_counter") : 0U;
+        // 决策日志与编号游标必须一一对应：每条记录都递增游标，因此
+        // size == counter；不一致说明存档被篡改/损坏（宪法 17）。
+        if (next.decision_log.size() != next.ai_decision_counter) {
+            return WFS_SIM_RESULT_INVALID_DATA;
         }
-        // 决策日志与编号游标必须同生共死：每次记录都递增游标，因此
-        // 日志非空 ⇔ 游标 > 0；不一致说明存档被篡改/损坏（宪法 17）。
-        if (next.decision_log.empty() != (next.ai_decision_counter == 0U)) {
+        // decision_id 是 CHK052 回放标识，日志内必须唯一；重复按损坏拒绝。
+        if (HasDuplicateDecisionIds(next.decision_log)) {
             return WFS_SIM_RESULT_INVALID_DATA;
         }
         state = std::move(next);
