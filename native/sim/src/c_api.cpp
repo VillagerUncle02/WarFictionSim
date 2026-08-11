@@ -72,6 +72,10 @@ wfs_sim_result InjectCommand(wfs_sim_handle* handle, const char* command_json) {
 
 extern "C" {
 
+// 参数顺序是 contracts/sim-c-api.md 固定的 C ABI 契约
+// （scenario_path, seed, threads），C# P/Invoke 按该顺序声明；
+// seed/threads 类型相近但语义不同，契约不允许改名/换序。
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 wfs_sim_handle* wfs_sim_create(const char* scenario_path, std::uint64_t seed, int threads) {
     if (scenario_path == nullptr || threads < 1) {
         return nullptr;
@@ -166,7 +170,10 @@ wfs_sim_result wfs_sim_get_snapshot(wfs_sim_handle* handle, char* out_buf, std::
     }
 }
 
-wfs_sim_result wfs_sim_get_state_hash(wfs_sim_handle* handle, char out_hex[65]) {
+// out_hex 是输出缓冲，T016 将向其中写入 SHA-256 十六进制文本，
+// 非 const 是语义要求。
+// NOLINTNEXTLINE(readability-non-const-parameter)
+wfs_sim_result wfs_sim_get_state_hash(wfs_sim_handle* handle, char out_hex[WFS_SIM_STATE_HASH_HEX_LEN]) {
     if (handle == nullptr || out_hex == nullptr) {
         return WFS_SIM_RESULT_INVALID_ARGUMENT;
     }

@@ -19,25 +19,26 @@
 
 namespace wfs::sim::detail {
 
+struct SchemaViolation {
+    std::string pointer;
+    std::string message;
+};
+
 struct SchemaFileResult {
     bool ok() const noexcept { return code.empty(); }
 
     std::string code;  // "IO_ERROR" | "INVALID_JSON" | "SCHEMA_INVALID"
     std::string message;
     nlohmann::json schema;
-};
 
-struct SchemaViolation {
-    std::string pointer;
-    std::string message;
+    // 校验文档是否符合本结果携带的 Schema；返回已确定性排序的违规列表。
+    // Schema 本身非法（无法构造校验器）时抛 std::invalid_argument，
+    // 由调用方转换为 SCHEMA_INVALID 错误。
+    // 校验绑定在结果对象上，避免"实例/Schema 两个同类型参数易互换"的误用面。
+    std::vector<SchemaViolation> validate(const nlohmann::json& instance) const;
 };
 
 // 读取并解析 Schema 文件（错误结构化返回，不抛异常）。
 SchemaFileResult load_schema_file(const std::filesystem::path& schema_path);
-
-// 校验 instance 是否符合 schema；返回已确定性排序的违规列表。
-// schema 本身非法（无法构造校验器）时抛 std::invalid_argument，
-// 由调用方转换为 SCHEMA_INVALID 错误。
-std::vector<SchemaViolation> validate_against_schema(const nlohmann::json& instance, const nlohmann::json& schema);
 
 }  // namespace wfs::sim::detail

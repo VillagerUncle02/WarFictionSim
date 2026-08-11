@@ -12,6 +12,7 @@
 #include "wfs/sim/loader.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <set>
 #include <string>
@@ -38,74 +39,35 @@ bool HasIntegerSchemaVersion(const nlohmann::json& document) {
     return document.contains("schema_version") && document["schema_version"].is_number_integer();
 }
 
-}  // namespace
-
-std::filesystem::path resolve_schema_path(const std::filesystem::path& data_file, const std::string& schema_file) {
-    std::filesystem::path directory =
-        data_file.has_parent_path() ? data_file.parent_path() : std::filesystem::current_path();
-    for (;;) {
-        const std::filesystem::path candidate = directory / "contracts" / "schemas" / schema_file;
-        if (std::filesystem::is_regular_file(candidate)) {
-            return candidate;
-        }
-        const std::filesystem::path parent = directory.parent_path();
-        if (parent == directory) {
-            return {};
-        }
-        directory = parent;
+// 读取并解析 JSON 文档；失败返回 false 并追加结构化 issue（不抛异常）。
+bool ReadJsonDocument(const std::filesystem::path& path, nlohmann::json& document, std::vector<DataIssue>& issues) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        issues.push_back(Issue("IO_ERROR", "无法打开场景文件: " + path.string()));
+        return false;
     }
-}
-
-ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path) {
-    const std::filesystem::path schema_path = resolve_schema_path(scenario_path, kScenarioSchemaFile);
-    if (schema_path.empty()) {
-        return Failure({Issue("SCHEMA_NOT_FOUND", "无法按仓库约定从 " + scenario_path.string() +
-                                                      " 解析 contracts/schemas/scenario.schema.json")});
-    }
-    return load_scenario(scenario_path, schema_path);
-}
-
-ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path) {
-    std::ifstream in(scenario_path, std::ios::binary);
-    if (!in) {
-        return Failure({Issue("IO_ERROR", "无法打开场景文件: " + scenario_path.string())});
-    }
-
-    nlohmann::json root;
     try {
-        root = nlohmann::json::parse(in);
+        document = nlohmann::json::parse(input);
+        return true;
     } catch (const nlohmann::json::parse_error& error) {
-        return Failure({Issue("INVALID_JSON", std::string("场景不是合法 JSON: ") + error.what())});
+        issues.push_back(Issue("INVALID_JSON", std::string("场景不是合法 JSON: ") + error.what()));
+        return false;
     }
+}
 
-    const detail::SchemaFileResult schema_file = detail::load_schema_file(schema_path);
-    if (!schema_file.ok()) {
-        return Failure({Issue(schema_file.code, schema_file.message)});
-    }
-    if (!HasIntegerSchemaVersion(schema_file.schema)) {
-        return Failure({Issue("SCHEMA_INVALID", "Schema 缺少整数 schema_version 字段: " + schema_path.string())});
-    }
-
-    // 第一层：JSON Schema 结构校验（违规已确定性排序）。
-    std::vector<DataIssue> issues;
-    const std::vector<detail::SchemaViolation> violations = detail::validate_against_schema(root, schema_file.schema);
-    for (const detail::SchemaViolation& violation : violations) {
-        issues.push_back(Issue("SCHEMA_INVALID", "[" + violation.pointer + "] " + violation.message));
-    }
-    if (!issues.empty()) {
-        return Failure(std::move(issues));
-    }
-
-    // 第二层：语义校验。Schema 已保证必需字段存在，此处只做跨字段完整性。
+// 语义校验 + 实体提取。Schema 已保证必需字段存在，此处只做跨字段完整性；
+// 失败时按固定顺序追加 issue 并返回 false。
+bool ExtractScenarioData(const nlohmann::json& root, const detail::SchemaFileResult& schema_file, Scenario& scenario,
+                         std::vector<DataIssue>& issues) {
     const std::int64_t data_version = root["schema_version"].get<std::int64_t>();
     const std::int64_t schema_version = schema_file.schema["schema_version"].get<std::int64_t>();
     if (data_version != schema_version) {
-        return Failure({Issue("SCHEMA_VERSION_MISMATCH",
-                              "场景 schema_version=" + std::to_string(data_version) +
-                                  " 与 Schema schema_version=" + std::to_string(schema_version) + " 不一致")});
+        issues.push_back(Issue("SCHEMA_VERSION_MISMATCH",
+                               "场景 schema_version=" + std::to_string(data_version) +
+                                   " 与 Schema schema_version=" + std::to_string(schema_version) + " 不一致"));
+        return false;
     }
 
-    Scenario scenario;
     scenario.schema_version = data_version;
     scenario.id = root["id"].get<std::string>();
     scenario.name = root["name"].get<std::string>();
@@ -115,16 +77,21 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, con
     scenario.map_width_km = root["map"]["width_km"].get<double>();
     scenario.map_height_km = root["map"]["height_km"].get<double>();
     scenario.tick_hz = root.value("tick_hz", Scenario::kDefaultTickHz);
-    scenario.seed = root.value("seed", 0u);
+    scenario.seed = root.value("seed", 0U);
+
+    // 预先分配容量：避免大场景（预算测试 2000 单位）循环内反复扩容。
+    scenario.zones.reserve(root["zones"].size());
+    scenario.units.reserve(root["units"].size());
+    scenario.objectives.reserve(root["objectives"].size());
 
     std::set<std::string> zone_ids;
     for (const nlohmann::json& zone : root["zones"]) {
-        const std::string id = zone["id"].get<std::string>();
-        if (!zone_ids.insert(id).second) {
-            issues.push_back(Issue("DUPLICATE_ZONE_ID", "区域 id 重复: " + id));
+        const std::string zone_id = zone["id"].get<std::string>();
+        if (!zone_ids.insert(zone_id).second) {
+            issues.push_back(Issue("DUPLICATE_ZONE_ID", "区域 id 重复: " + zone_id));
             continue;
         }
-        scenario.zones.push_back(id);
+        scenario.zones.push_back(zone_id);
     }
 
     std::set<std::string> unit_ids;
@@ -180,8 +147,67 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, con
                 Issue("PLAYER_NODE_NOT_FOUND", "player_node_id 不存在于场景单位中: " + scenario.player_node_id));
         }
     }
+    return issues.empty();
+}
 
+}  // namespace
+
+std::filesystem::path resolve_schema_path(const std::filesystem::path& data_file, const std::string& schema_file) {
+    std::filesystem::path directory =
+        data_file.has_parent_path() ? data_file.parent_path() : std::filesystem::current_path();
+    for (;;) {
+        std::filesystem::path candidate = directory / "contracts" / "schemas" / schema_file;
+        if (std::filesystem::is_regular_file(candidate)) {
+            return candidate;
+        }
+        const std::filesystem::path parent = directory.parent_path();
+        if (parent == directory) {
+            return {};
+        }
+        directory = parent;
+    }
+}
+
+ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path) {
+    const std::filesystem::path schema_path = resolve_schema_path(scenario_path, kScenarioSchemaFile);
+    if (schema_path.empty()) {
+        return Failure({Issue("SCHEMA_NOT_FOUND", "无法按仓库约定从 " + scenario_path.string() +
+                                                      " 解析 contracts/schemas/scenario.schema.json")});
+    }
+    return load_scenario(scenario_path, schema_path);
+}
+
+// 双路径重载是 loader.h 公开 API：固定"数据文件在前、Schema 在后"，
+// 参数名即语义（scenario_path/schema_path），调用方无需猜测；
+// 为两个路径引入包装结构体会降低可读性，故保留显式参数并禁止换序。
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path) {
+    std::vector<DataIssue> issues;
+    nlohmann::json root;
+    if (!ReadJsonDocument(scenario_path, root, issues)) {
+        return Failure(std::move(issues));
+    }
+
+    const detail::SchemaFileResult schema_file = detail::load_schema_file(schema_path);
+    if (!schema_file.ok()) {
+        return Failure({Issue(schema_file.code, schema_file.message)});
+    }
+    if (!HasIntegerSchemaVersion(schema_file.schema)) {
+        return Failure({Issue("SCHEMA_INVALID", "Schema 缺少整数 schema_version 字段: " + schema_path.string())});
+    }
+
+    // 第一层：JSON Schema 结构校验（违规已确定性排序）。
+    const std::vector<detail::SchemaViolation> violations = schema_file.validate(root);
+    for (const detail::SchemaViolation& violation : violations) {
+        issues.push_back(Issue("SCHEMA_INVALID", "[" + violation.pointer + "] " + violation.message));
+    }
     if (!issues.empty()) {
+        return Failure(std::move(issues));
+    }
+
+    // 第二层：语义校验 + 实体提取。
+    Scenario scenario;
+    if (!ExtractScenarioData(root, schema_file, scenario, issues)) {
         return Failure(std::move(issues));
     }
 

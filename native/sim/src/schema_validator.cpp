@@ -45,7 +45,7 @@ SchemaFileResult load_schema_file(const std::filesystem::path& schema_path) {
     }
 }
 
-std::vector<SchemaViolation> validate_against_schema(const nlohmann::json& instance, const nlohmann::json& schema) {
+std::vector<SchemaViolation> SchemaFileResult::validate(const nlohmann::json& instance) const {
     CollectingErrorHandler handler;
     nlohmann::json_schema::json_validator validator;
     validator.set_root_schema(schema);
