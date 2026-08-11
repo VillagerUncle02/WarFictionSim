@@ -9,6 +9,9 @@
 #   - -TasksFile 提供时，自动收集其中所有 [X] 任务，并通过 issue 标题映射真实 issue 号；
 #   - -Issues 中的 "T###" 同样按标题映射；纯数字（123 或 #123）直接作为 issue 号；
 #   - 映射不到的任务输出警告（不阻塞创建，人工可补）。
+# 失败语义（防漏关 issue）：
+#   - -TasksFile 不存在或不可读 → 退出 1，不创建 PR；
+#   - -TasksFile 有效但没有已完成（[X]）任务 → 退出 1（除非 -AllowEmptyCloses）。
 
 [CmdletBinding()]
 param(
@@ -21,7 +24,8 @@ param(
     [string]$Repo = "",
     [string]$GeneratorName = "speckit-implement-loop",
     [string]$TitlePattern = "^T\d{3,}",
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$AllowEmptyCloses
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,7 +39,16 @@ if (-not $Repo) { Write-Err "ERROR: 无法从 git remote 推导 owner/repo，请
 # ---- 1. 收集任务 ID ----
 $taskIds = @()
 if ($TasksFile) {
+    if (-not (Test-Path -LiteralPath $TasksFile -PathType Leaf)) {
+        Write-Err "ERROR: tasks.md 不存在：$TasksFile（不会创建无 Closes 的 PR）。"
+        exit 1
+    }
     $taskIds += @(Get-TaskIdsFromTasksFile -TasksFile $TasksFile -CompletedOnly)
+    if ($taskIds.Count -eq 0 -and -not $AllowEmptyCloses) {
+        Write-Err "ERROR: tasks.md 中没有已完成（[X]）任务，将生成无 Closes 的 PR（正是漏关 issue 的根源）。"
+        Write-Err "请确认调用时机；确需创建请加 -AllowEmptyCloses。"
+        exit 1
+    }
 }
 $directIssueNums = @()
 if ($Issues) {
@@ -75,7 +88,7 @@ if ($unmapped.Count -gt 0) {
 }
 $closesLines = if ($closesNums.Count -gt 0) { ($closesNums | ForEach-Object { "Closes #$_" }) -join "`n" } else { "" }
 
-# ---- 3. 正文（统一移除旧 Closes 行，末尾追加最新 Closes 块） ----
+# ---- 3. 正文（Closes 块由 Set-ClosesBlock 管理：只替换标记区，保留人工 Closes 行） ----
 if ($BodyFile) {
     if (-not (Test-Path -LiteralPath $BodyFile -PathType Leaf)) {
         Write-Err "ERROR: 正文文件不存在：$BodyFile"
@@ -97,9 +110,9 @@ if ($BodyFile) {
 - 生成方式：$GeneratorName，待人工审查。
 "@
 }
-$body = [regex]::Replace($body, '(?m)^\s*Closes\s+#\d+\s*$', '')
-$body = $body.TrimEnd()
-if ($closesLines) { $body = $body + "`n`n" + $closesLines }
+# 注意：open-pr 不启用旧格式迁移——BodyFile 是人工正文，裸 Closes 行一律保留，
+# 只在末尾追加标记区；旧格式迁移仅由 sync-pr-closes 对既有 PR 执行。
+$body = Set-ClosesBlock -Body $body -ClosesLines $closesLines
 
 # ---- 4. 创建（或 DryRun） ----
 if ($DryRun) {

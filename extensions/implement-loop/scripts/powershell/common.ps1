@@ -51,8 +51,7 @@ function Get-TaskIdsFromTasksFile {
         [switch]$CompletedOnly
     )
     if (-not (Test-Path -LiteralPath $TasksFile -PathType Leaf)) {
-        Write-Err "ERROR: tasks.md 不存在：$TasksFile"
-        return @()
+        throw "tasks.md 不存在：$TasksFile"
     }
     $ids = @()
     foreach ($line in Get-Content -LiteralPath $TasksFile) {
@@ -63,6 +62,42 @@ function Get-TaskIdsFromTasksFile {
         }
     }
     return @($ids | Select-Object -Unique)
+}
+
+# PR 正文 Closes 块管理：
+# 脚本生成的 Closes 放在 HTML 注释标记区内（GitHub 渲染时不可见），
+# 更新时只替换标记区，保留人工写的 Closes # 行（如"本 PR 还修复了非任务 issue"）。
+# 旧格式正文（无标记、v1.1.0 生成）首次同步时清理所有裸 Closes 行并迁移到标记区，
+# 迁移前会给出提示（旧格式无法区分人工行与脚本行，需人工审查）。
+function Set-ClosesBlock {
+    param(
+        [string]$Body,
+        [string]$ClosesLines,
+        [switch]$MigrateLegacy
+    )
+    $start = "<!-- implement-loop:closes:start -->"
+    $end = "<!-- implement-loop:closes:end -->"
+    $newBody = $Body
+
+    if ($MigrateLegacy -and $newBody -notmatch [regex]::Escape($start)) {
+        # 旧格式（仅 sync-pr-closes 更新既有 PR 时启用）：一次性清理裸 Closes 行并迁移（会提示）
+        if ($newBody -match '(?m)^\s*Closes\s+#\d+\s*$') {
+            Write-Host "WARN: 检测到旧格式 Closes 行（无标记区），将清理所有裸 Closes 行并迁移到标记区；若其中有手工关联的 issue，请审查后人工补回。"
+            $newBody = [regex]::Replace($newBody, '(?m)^\s*Closes\s+#\d+\s*$', '')
+            $newBody = $newBody.TrimEnd()
+        }
+    } else {
+        # 新格式：只替换标记区，人工行不受影响
+        $pattern = '(?s)' + [regex]::Escape($start) + '.*?' + [regex]::Escape($end) + '\s*'
+        $newBody = [regex]::Replace($newBody, $pattern, '')
+        $newBody = $newBody.TrimEnd()
+    }
+
+    if ($ClosesLines) {
+        $block = $start + "`n" + $ClosesLines + "`n" + $end
+        $newBody = $newBody + "`n`n" + $block
+    }
+    return $newBody
 }
 
 # 拉取仓库 issue（state=all，不含 PR）并按标题建立 任务ID→issue号 映射。

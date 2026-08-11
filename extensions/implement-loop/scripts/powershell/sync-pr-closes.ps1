@@ -72,14 +72,12 @@ if ($unmapped.Count -gt 0) {
 }
 $closesLines = if ($closesNums.Count -gt 0) { ($closesNums | ForEach-Object { "Closes #$_" }) -join "`n" } else { "" }
 
-# 读取现有正文并规范化 Closes 块
+# 读取现有正文并用 Set-ClosesBlock 更新 Closes 块（保留人工 Closes 行）
 $viewOut = (& gh pr view $PR --repo $Repo --json body 2>$null) | Out-String
 if ($LASTEXITCODE -ne 0) { Write-Err "ERROR: gh pr view $PR 失败（网络/权限）。"; exit 2 }
 $body = ""
 try { $body = [string](($viewOut | ConvertFrom-Json).body) } catch { }
-$newBody = [regex]::Replace($body, '(?m)^\s*Closes\s+#\d+\s*$', '')
-$newBody = $newBody.TrimEnd()
-if ($closesLines) { $newBody = $newBody + "`n`n" + $closesLines }
+$newBody = Set-ClosesBlock -Body $body -ClosesLines $closesLines -MigrateLegacy
 
 if ($newBody.Trim() -eq $body.Trim()) {
     Write-Host "PR #$PR 正文 Closes 已是最新（$($closesNums.Count) 个）。"

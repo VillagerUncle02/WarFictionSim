@@ -107,6 +107,7 @@ speckit.implement-loop.run    # 本扩展：实现 -> 门禁 -> CI -> PR -> PR �
 - **门禁脚本**：解析顺序——配置 `gates.script` > 项目 `<repo>/scripts/gates.ps1`；都没有时，AI 参照 `templates/gates-template.ps1` 样板现场编写，经用户确认后执行并随分支提交。
 - **换了语言/工具怎么办**：不需要改扩展——门禁脚本缺失时 AI 按样板现场写；已有脚本但没覆盖的命令（Makefile、Bun、Zig 等），AI 检查项目后自行补充执行并记入审计记录。**扩展不再枚举语言/工具。**
 - **PR 合并后 issue 没自动关？**：已修复——开 PR 时 `open-pr.ps1` 自动收集 tasks.md 中全部 `[X]` 任务并按 issue 标题映射真实编号生成 `Closes #`；阶段提交后与 AI PR 审查前会自动运行 `sync-pr-closes.ps1` 保持正文最新，防止"PR 先开、任务后追加"导致漏关。
+- **正文里人工写的 `Closes #` 会被删吗？**：不会——v1.1.1 起脚本生成的 Closes 放在 `<!-- implement-loop:closes:start/end -->` 标记区内，同步只替换标记区，人工关联的 `Closes #` 行（如"本 PR 还修复了非任务 issue"）会保留；旧格式正文首次同步会一次性迁移并提示人工审查。
 - **新仓库首个 feature 的 CI 起不来？**：workflow 尚未合入默认分支时 `gh workflow run` 会 404——前置检查会探测默认分支上是否存在 workflow，不存在则自动降级为"先开 PR、用 pull_request 触发 CI"（见 run.md 第 8 步降级路径）。
 - **wait-ci 报 gh 认证失败但主进程 gh 正常？**：已修复——认证预检改为当前进程直调，Start-Job 轮询显式传入 `GH_TOKEN`；失败时按提示区分"无凭据"与"token 无效/keyring 失效"。
 - **skills 模式命令引用**：本扩展命令体不依赖 `__SPECKIT_COMMAND_*__` 占位符（该占位符在 Codex/ZCode 等 skills 模式下暂不解析），核心命令按中性名称描述并在正文给出对应技能名。
