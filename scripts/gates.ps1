@@ -63,8 +63,10 @@ if (-not $Quick) {
         }
     }
     if ((Test-Path "WarFictionSim.sln") -and $sdk10) {
-        dotnet format WarFictionSim.sln --verify-no-changes
-        if ($LASTEXITCODE -ne 0) { throw "dotnet format 失败" }
+        dotnet format style WarFictionSim.sln --verify-no-changes
+        if ($LASTEXITCODE -ne 0) { throw "dotnet format style 失败" }
+        dotnet format analyzers WarFictionSim.sln --verify-no-changes
+        if ($LASTEXITCODE -ne 0) { throw "dotnet format analyzers 失败" }
     } elseif (Test-Path "WarFictionSim.sln") {
         Write-Host "跳过 dotnet format（本机未安装 .NET 10 SDK）"
     }
