@@ -13,7 +13,8 @@
 // - 加载校验顺序：magic → 版本 → header JSON → blob JSON → 哈希 →
 //   元数据交叉校验（header/blob/句柄三者一致）→ 组装新状态 → 一次性提交。
 //   T020 决策日志与编号游标随 blob 恢复；旧存档缺失字段时按空日志/0 游标
-//   兼容（非破坏性演进，不递增 format_version）。
+//   兼容（非破坏性演进，不递增 format_version）；恢复后校验
+//   log.empty() == (counter == 0)，不一致按损坏数据拒绝。
 //   任何失败都返回错误码且不改写句柄（强保证；宪法第 17 条禁止静默恢复）。
 // - 写入用"临时文件 + 替换"避免半写存档；失败时清理临时文件。
 // - 迁移链：version < 当前版本时经 migrate_state 逐级迁移；v1 为第一版，
@@ -391,6 +392,11 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         next.decision_log = RestoreDecisionLog(parsed);
         if (parsed.contains("ai_decision_counter")) {
             next.ai_decision_counter = RequireField<std::uint64_t>(parsed, "ai_decision_counter");
+        }
+        // 决策日志与编号游标必须同生共死：每次记录都递增游标，因此
+        // 日志非空 ⇔ 游标 > 0；不一致说明存档被篡改/损坏（宪法 17）。
+        if (next.decision_log.empty() != (next.ai_decision_counter == 0U)) {
+            return WFS_SIM_RESULT_INVALID_DATA;
         }
         state = std::move(next);
         return WFS_SIM_RESULT_OK;

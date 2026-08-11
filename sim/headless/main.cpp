@@ -37,6 +37,10 @@ struct CliOptions {
     std::string ai_backend = wfs::sim::kAiBackendNone;
     std::optional<std::uint64_t> ticks;
     bool hash = false;
+    bool has_hash = false;        // --hash 显式出现（save 子命令拒绝）。
+    bool has_ticks = false;       // --ticks 显式出现（save 子命令拒绝）。
+    bool has_script = false;      // --script 显式出现（run/save 子命令拒绝）。
+    bool has_ai_backend = false;  // --ai-backend 显式出现（inject/save 子命令拒绝）。
     bool help = false;
 };
 
@@ -69,6 +73,16 @@ save:
 }
 
 bool ParseUint64(const std::string& text, std::uint64_t& value) {
+    // 拒绝空串与 '-' 开头：stoull 会把 "-1" 回绕成 UINT64_MAX（--ticks -1
+    // 会让驱动死循环），全数字预检从根上消除该路径。
+    if (text.empty() || text[0] == '-') {
+        return false;
+    }
+    for (const char digit : text) {
+        if (digit < '0' || digit > '9') {
+            return false;
+        }
+    }
     try {
         std::size_t consumed = 0U;
         value = std::stoull(text, &consumed, kParseBase);
@@ -119,6 +133,7 @@ bool ParseArgs(int argc, char** argv, CliOptions& options, std::string& error) {
         }
         if (key == "--hash") {
             options.hash = true;
+            options.has_hash = true;
             continue;
         }
         const bool known_value_flag = key == "--scenario" || key == "--seed" || key == "--threads" ||
@@ -160,6 +175,7 @@ bool ParseArgs(int argc, char** argv, CliOptions& options, std::string& error) {
                 return false;
             }
             options.ticks = parsed;
+            options.has_ticks = true;
             continue;
         }
         if (key == "--out") {
@@ -168,11 +184,35 @@ bool ParseArgs(int argc, char** argv, CliOptions& options, std::string& error) {
         }
         if (key == "--script") {
             options.script = value;
+            options.has_script = true;
             continue;
         }
         if (key == "--ai-backend") {
             options.ai_backend = value;
+            options.has_ai_backend = true;
             continue;
+        }
+    }
+    return true;
+}
+
+// 子命令旗标匹配校验：不适用于当前子命令的旗标显式报错（宪法 17：
+// 不静默忽略用户输入）。
+bool ValidateSubcommandFlags(const CliOptions& options, std::string& error) {
+    if (options.subcommand == "run") {
+        if (options.has_script) {
+            error = "run 不支持 --script（命令脚本注入请使用 inject 子命令）";
+            return false;
+        }
+    } else if (options.subcommand == "inject") {
+        if (options.has_ai_backend) {
+            error = "inject 不支持 --ai-backend（脚本 AI 请在 run 子命令中使用）";
+            return false;
+        }
+    } else if (options.subcommand == "save") {
+        if (options.has_ai_backend || options.has_ticks || options.has_hash || options.has_script) {
+            error = "save 不支持 --ai-backend/--ticks/--hash/--script";
+            return false;
         }
     }
     return true;
@@ -196,6 +236,81 @@ bool WriteEventsJsonl(const std::filesystem::path& path, const std::vector<wfs::
     return static_cast<bool>(out);
 }
 
+int RunSubcommand(const CliOptions& options) {
+    const std::uint64_t seed = options.seed.value_or(0U);
+    const int threads = options.threads.value_or(4);
+    const std::uint64_t ticks = options.ticks.value_or(1200U);
+    wfs::sim::HeadlessRunOptions run_options;
+    run_options.scenario_path = options.scenario;
+    run_options.seed = seed;
+    run_options.threads = threads;
+    run_options.ticks = ticks;
+    run_options.ai_backend = options.ai_backend;
+    const wfs::sim::HeadlessRunResult result = wfs::sim::run_headless(run_options);
+    if (!result.ok()) {
+        std::cerr << "sim_headless run: " << result.error << "\n";
+        return 1;
+    }
+    if (!options.out.empty() && !WriteEventsJsonl(options.out, result.events)) {
+        std::cerr << "sim_headless run: 无法写入事件输出: " << options.out.string() << "\n";
+        return 1;
+    }
+    // 先落盘事件文件，成功后再输出哈希：失败不产生部分 stdout。
+    if (options.hash) {
+        std::cout << result.state_hash << '\n';
+    }
+    return 0;
+}
+
+int InjectSubcommand(const CliOptions& options) {
+    const std::uint64_t seed = options.seed.value_or(0U);
+    const int threads = options.threads.value_or(4);
+    const std::uint64_t ticks = options.ticks.value_or(1200U);
+    if (options.script.empty()) {
+        std::cerr << "sim_headless: inject 需要 --script\n\n" << Usage();
+        return 2;
+    }
+    wfs::sim::HeadlessInjectOptions inject_options;
+    inject_options.scenario_path = options.scenario;
+    inject_options.seed = seed;
+    inject_options.threads = threads;
+    inject_options.ticks = ticks;
+    inject_options.script_path = options.script;
+    const wfs::sim::HeadlessInjectResult result = wfs::sim::inject_headless(inject_options);
+    if (!result.ok()) {
+        std::cerr << "sim_headless inject: " << result.error << "\n";
+        return 1;
+    }
+    if (!options.out.empty() && !WriteEventsJsonl(options.out, result.events)) {
+        std::cerr << "sim_headless inject: 无法写入事件输出: " << options.out.string() << "\n";
+        return 1;
+    }
+    if (options.hash) {
+        std::cout << result.state_hash << '\n';
+    }
+    return 0;
+}
+
+int SaveSubcommand(const CliOptions& options) {
+    const std::uint64_t seed = options.seed.value_or(0U);
+    const int threads = options.threads.value_or(4);
+    if (options.out.empty()) {
+        std::cerr << "sim_headless: save 需要 --out\n\n" << Usage();
+        return 2;
+    }
+    wfs::sim::HeadlessSaveOptions save_options;
+    save_options.scenario_path = options.scenario;
+    save_options.seed = seed;
+    save_options.threads = threads;
+    save_options.out_path = options.out;
+    const wfs::sim::HeadlessSaveResult result = wfs::sim::save_headless(save_options);
+    if (!result.ok()) {
+        std::cerr << "sim_headless save: " << result.error << "\n";
+        return 1;
+    }
+    return 0;
+}
+
 }  // namespace
 
 // main 顶层 try/catch(...) 已兜底全部异常，仅错误处理路径自身的 IO 分配
@@ -217,75 +332,20 @@ int main(int argc, char** argv) {
             std::cerr << "sim_headless: 缺少 --scenario\n\n" << Usage();
             return 2;
         }
-
-        const std::uint64_t seed = options.seed.value_or(0U);
-        const int threads = options.threads.value_or(4);
-        const std::uint64_t ticks = options.ticks.value_or(1200U);
+        if (!ValidateSubcommandFlags(options, error)) {
+            std::cerr << "sim_headless: " << error << "\n\n" << Usage();
+            return 2;
+        }
 
         if (options.subcommand == "run") {
-            wfs::sim::HeadlessRunOptions run_options;
-            run_options.scenario_path = options.scenario;
-            run_options.seed = seed;
-            run_options.threads = threads;
-            run_options.ticks = ticks;
-            run_options.ai_backend = options.ai_backend;
-            const wfs::sim::HeadlessRunResult result = wfs::sim::run_headless(run_options);
-            if (!result.ok()) {
-                std::cerr << "sim_headless run: " << result.error << "\n";
-                return 1;
-            }
-            if (options.hash) {
-                std::cout << result.state_hash << '\n';
-            }
-            if (!options.out.empty() && !WriteEventsJsonl(options.out, result.events)) {
-                std::cerr << "sim_headless run: 无法写入事件输出: " << options.out.string() << "\n";
-                return 1;
-            }
-            return 0;
+            return RunSubcommand(options);
         }
 
         if (options.subcommand == "inject") {
-            if (options.script.empty()) {
-                std::cerr << "sim_headless: inject 需要 --script\n\n" << Usage();
-                return 2;
-            }
-            wfs::sim::HeadlessInjectOptions inject_options;
-            inject_options.scenario_path = options.scenario;
-            inject_options.seed = seed;
-            inject_options.threads = threads;
-            inject_options.ticks = ticks;
-            inject_options.script_path = options.script;
-            const wfs::sim::HeadlessInjectResult result = wfs::sim::inject_headless(inject_options);
-            if (!result.ok()) {
-                std::cerr << "sim_headless inject: " << result.error << "\n";
-                return 1;
-            }
-            if (options.hash) {
-                std::cout << result.state_hash << '\n';
-            }
-            if (!options.out.empty() && !WriteEventsJsonl(options.out, result.events)) {
-                std::cerr << "sim_headless inject: 无法写入事件输出: " << options.out.string() << "\n";
-                return 1;
-            }
-            return 0;
+            return InjectSubcommand(options);
         }
 
-        // save。
-        if (options.out.empty()) {
-            std::cerr << "sim_headless: save 需要 --out\n\n" << Usage();
-            return 2;
-        }
-        wfs::sim::HeadlessSaveOptions save_options;
-        save_options.scenario_path = options.scenario;
-        save_options.seed = seed;
-        save_options.threads = threads;
-        save_options.out_path = options.out;
-        const wfs::sim::HeadlessSaveResult result = wfs::sim::save_headless(save_options);
-        if (!result.ok()) {
-            std::cerr << "sim_headless save: " << result.error << "\n";
-            return 1;
-        }
-        return 0;
+        return SaveSubcommand(options);
     } catch (const std::exception& exception) {
         std::cerr << "sim_headless: 内部错误: " << exception.what() << "\n";
         return 1;

@@ -28,7 +28,10 @@ namespace wfs::sim {
 struct HeadlessRunOptions {
     std::filesystem::path scenario_path;
     std::uint64_t seed = 0U;
-    int threads = 4;                          // 只影响性能，不影响状态哈希（宪法 7）。
+    // 只影响性能，不影响状态哈希（宪法 7）。注意：T018 分区并行框架当前
+    // 尚未接入战斗计算路径，threads 仅作配置保留；战斗系统接入后本字段
+    // 才真正驱动并行确定性门禁（T022 黄金测试注释同步说明）。
+    int threads = 4;
     std::uint64_t ticks = 1200U;              // 默认运行时长（20 Hz 下 60 游戏秒）。
     std::string ai_backend = kAiBackendNone;  // kAiBackendScript / kAiBackendCloud / kAiBackendNone。
 };

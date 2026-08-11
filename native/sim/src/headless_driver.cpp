@@ -111,6 +111,9 @@ HeadlessRunResult run_headless(const HeadlessRunOptions& options) {
         std::unique_ptr<IAiBackend> backend = create_script_backend();
         const std::vector<std::string> nodes = script_decision_nodes(state.scenario);
         for (const std::string& node : nodes) {
+            // 决策策略：当前仅在 run_start 时每节点触发一次（无事件驱动、无
+            // 频率上限）；T080 将接入关键事件触发（FR-036）与每节点频率上限
+            // （FR-052），并在此填充 last_decision_tick / rate_limit_interval_ticks。
             const AiDecisionInput input{node, "run_start", state.clock.tick(), build_ai_input_summary(state),
                                         build_ai_events_json(state)};
             const AiDecision decision = backend->decide(input);

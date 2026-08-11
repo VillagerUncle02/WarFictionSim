@@ -40,6 +40,7 @@ function Read-Jsonl([string]$Path) {
     }
     $messages = @()
     $lineIndex = 0
+    $prevSeq = -1
     foreach ($line in (Get-Content -LiteralPath $Path)) {
         if ($line.Trim().Length -eq 0) { continue }
         try {
@@ -52,6 +53,11 @@ function Read-Jsonl([string]$Path) {
                 Fail "JSONL 第 $lineIndex 行缺少字段 ${key}: $line"
             }
         }
+        $seq = [long]$obj.seq
+        if ($seq -le $prevSeq) {
+            Fail "JSONL 第 $lineIndex 行 seq 非严格升序: $seq（前序 $prevSeq）"
+        }
+        $prevSeq = $seq
         $messages += [string]$obj.message
         $lineIndex++
     }
@@ -112,6 +118,23 @@ $r = Invoke-Cli @()
 if ($r.Code -eq 0) { Fail "缺少子命令应失败" }
 $r = Invoke-Cli @('run', '--scenario', (Join-Path $tempDir 'missing.json'), '--seed', '42')
 if ($r.Code -eq 0) { Fail "场景不存在应失败" }
+
+# 8. 负数/非法数值：--ticks -1 与 --seed -1 必须拒绝（stoull 回绕防护）。
+$r = Invoke-Cli @('run', '--scenario', $Scenario, '--seed', '42', '--ticks', '-1')
+if ($r.Code -eq 0) { Fail "--ticks -1 应失败" }
+$r = Invoke-Cli @('run', '--scenario', $Scenario, '--seed', '-1')
+if ($r.Code -eq 0) { Fail "--seed -1 应失败" }
+
+# 9. 子命令旗标不匹配：run --script / inject --ai-backend / save --hash|--ticks
+#    必须显式报错而非静默忽略（宪法 17）。
+$r = Invoke-Cli @('run', '--scenario', $Scenario, '--script', $Script)
+if ($r.Code -eq 0) { Fail "run 不支持 --script 应失败" }
+$r = Invoke-Cli @('inject', '--scenario', $Scenario, '--script', $Script, '--ai-backend', 'script')
+if ($r.Code -eq 0) { Fail "inject 不支持 --ai-backend 应失败" }
+$r = Invoke-Cli @('save', '--scenario', $Scenario, '--out', (Join-Path $tempDir 'flag.wfs'), '--hash')
+if ($r.Code -eq 0) { Fail "save 不支持 --hash 应失败" }
+$r = Invoke-Cli @('save', '--scenario', $Scenario, '--out', (Join-Path $tempDir 'flag2.wfs'), '--ticks', '10')
+if ($r.Code -eq 0) { Fail "save 不支持 --ticks 应失败" }
 
 Remove-Item -LiteralPath $tempDir -Recurse -Force
 Write-Host 'CLI TESTS PASSED'

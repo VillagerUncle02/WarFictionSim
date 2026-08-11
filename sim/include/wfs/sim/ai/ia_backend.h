@@ -13,6 +13,9 @@
 //   供决策点记录与回放（宪法第 10 条/CHK052：SC-001 的 AI 输出序列含到达时序）。
 // - 后端标识为稳定字符串：script / cloud / none，与无头 CLI --ai-backend
 //   取值一致（T019）；云端后端由 T080 实现，本文件只定义抽象。
+// - 事件触发与频率上限（FR-036/052）由驱动层（T080 触发引擎）落实：
+//   本接口预留 last_decision_tick / rate_limit_interval_ticks 输入字段，
+//   headless 驱动当前仅 run_start 触发（见 headless_driver.cpp 注释）。
 
 #pragma once
 
@@ -35,6 +38,10 @@ struct AiDecisionInput {
     GameTick game_tick = 0U;         // 决策请求时的游戏 tick（不读现实时钟）。
     std::string state_summary_json;  // 状态快照摘要（确定性 JSON，不含线程数）。
     std::string events_json;         // 决策点可见事件（JSON 数组，seq 升序）。
+    // FR-052 预留：本节点上次决策 tick（0 = 尚无）；T080 触发引擎填充。
+    GameTick last_decision_tick = 0U;
+    // FR-052 预留：本节点决策最小间隔（tick；0 = 未配置）。
+    std::uint64_t rate_limit_interval_ticks = 0U;
 };
 
 // 一次 AI 决策的输出：只允许是命令 JSON（或明确错误）。

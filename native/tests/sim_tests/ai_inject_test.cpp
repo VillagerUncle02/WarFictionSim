@@ -313,3 +313,19 @@ TEST(WfsAiInjectTest, AutoDecisionIdIsMonotonic) {
     EXPECT_EQ(second.decision_id, "ai-1");
     EXPECT_NE(first.decision_id, second.decision_id);
 }
+
+TEST(WfsAiInjectTest, DuplicateExplicitDecisionIdRejectedWithoutLogEntry) {
+    SimState state = MakeState();
+    const AiInjectResult first = inject_ai_decision(state, ValidCommandJson(), Meta("decision-dup"), CommandSchema());
+    ASSERT_TRUE(first.accepted) << (first.errors.empty() ? "" : first.errors.front().message);
+
+    const AiInjectResult second = inject_ai_decision(state, ValidCommandJson(), Meta("decision-dup"), CommandSchema());
+    ASSERT_FALSE(second.accepted);
+    ASSERT_FALSE(second.errors.empty());
+    EXPECT_EQ(second.errors.front().code, "DUPLICATE_DECISION_ID");
+    // 日志保持唯一：重复标识不追加记录、不递增游标、不重复入队。
+    EXPECT_EQ(state.decision_log.size(), 1U);
+    EXPECT_EQ(state.ai_decision_counter, 1U);
+    EXPECT_EQ(state.queue.size(), 1U);
+    EXPECT_TRUE(HasEvent(state.event_log, "AI_DECISION_REJECTED"));
+}

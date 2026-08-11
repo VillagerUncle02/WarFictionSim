@@ -440,6 +440,40 @@ TEST(WfsSaveTest, LoadRejectsEventLogExceedingCapacity) {
     EXPECT_EQ(wfs_sim_load_save(handle.get(), crafted.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
 }
 
+TEST(WfsSaveTest, LoadRejectsDecisionCounterMismatch) {
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "decision-counter.wfs";
+    Handle handle;
+    ASSERT_NE(handle.get(), nullptr);
+    EXPECT_EQ(wfs_sim_save(handle.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    const SavedLayout layout = ParseLayout(ReadFile(path));
+    nlohmann::json header = nlohmann::json::parse(layout.header);
+    nlohmann::json blob = nlohmann::json::parse(layout.blob);
+    // 决策日志非空但编号游标为 0：合法状态不可能出现（每次记录都递增游标），
+    // 必须拒绝（宪法 17：损坏数据显式报错）。
+    blob["ai_decision_counter"] = 0;
+    blob["decision_log"] =
+        nlohmann::json{{"entries", nlohmann::json::array({
+                                       nlohmann::json{{"decision_id", "d1"},
+                                                      {"node_id", "n1"},
+                                                      {"trigger", "t"},
+                                                      {"arrival_tick", 0},
+                                                      {"arrival_seq", 0},
+                                                      {"state_hash", ""},
+                                                      {"input_json", "{}"},
+                                                      {"events_json", "[]"},
+                                                      {"output_json", "{}"},
+                                                      {"validation_ok", true},
+                                                      {"validation_errors", nlohmann::json::array()}},
+                                   })}};
+    const std::string new_blob = blob.dump();
+    header["state_size_bytes"] = new_blob.size();
+    const std::filesystem::path crafted =
+        dir.Write("decision-counter-fixed.wfs", BuildSaveBytes(layout.version, header.dump(), new_blob));
+    EXPECT_EQ(wfs_sim_load_save(handle.get(), crafted.string().c_str()), WFS_SIM_RESULT_INVALID_DATA);
+}
+
 TEST(WfsSaveTest, LoadRestoresMaxEventLogSeqWithoutWrapping) {
     TempDir dir;
     const std::filesystem::path path = dir.path() / "max-seq.wfs";

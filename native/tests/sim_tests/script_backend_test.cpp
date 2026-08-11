@@ -159,6 +159,33 @@ TEST(WfsScriptBackendTest, ScenarioWithoutZonesReturnsExplicitError) {
     EXPECT_FALSE(decision.error.empty());
 }
 
+TEST(WfsScriptBackendTest, MalformedZonesReturnExplicitError) {
+    SimState state = MakeState();
+    nlohmann::json summary = nlohmann::json::parse(build_ai_input_summary(state));
+    summary["zones"] = nlohmann::json::array({nlohmann::json{{"id", "zone-hill"}}});
+    auto backend = create_script_backend();
+    ASSERT_NE(backend, nullptr);
+
+    const AiDecisionInput input{"enemy-command", "run_start", 0U, summary.dump(), "[]"};
+    const AiDecision decision = backend->decide(input);
+    ASSERT_FALSE(decision.ok());
+    EXPECT_FALSE(decision.error.empty());
+}
+
+TEST(WfsScriptBackendTest, UnitWithoutIdReturnsExplicitError) {
+    SimState state = MakeState();
+    nlohmann::json summary = nlohmann::json::parse(build_ai_input_summary(state));
+    summary["units"] = nlohmann::json::array(
+        {nlohmann::json{{"type", "infantry_squad"}, {"node_id", "enemy-command"}, {"x", 1.0}, {"y", 1.0}}});
+    auto backend = create_script_backend();
+    ASSERT_NE(backend, nullptr);
+
+    const AiDecisionInput input{"enemy-command", "run_start", 0U, summary.dump(), "[]"};
+    const AiDecision decision = backend->decide(input);
+    ASSERT_FALSE(decision.ok());
+    EXPECT_FALSE(decision.error.empty());
+}
+
 TEST(WfsScriptBackendTest, DecisionNodesExcludePlayerAndDeduplicate) {
     const auto load = load_scenario(SampleScenario());
     ASSERT_TRUE(load.ok());

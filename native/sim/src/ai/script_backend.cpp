@@ -32,43 +32,56 @@ class ScriptBackend final : public IAiBackend {
     std::string name() const override { return kAiBackendScript; }
 
     AiDecision decide(const AiDecisionInput& input) override {
-        nlohmann::json summary;
         try {
-            summary = nlohmann::json::parse(input.state_summary_json);
-        } catch (const nlohmann::json::exception&) {
-            return AiDecision{{}, "脚本 AI：决策输入不是合法 JSON"};
-        }
+            const nlohmann::json summary = nlohmann::json::parse(input.state_summary_json);
+            if (!summary.is_object()) {
+                return AiDecision{{}, "脚本 AI：决策输入不是 JSON 对象"};
+            }
+            const nlohmann::json& zones = summary.value("zones", nlohmann::json::array());
+            if (!zones.is_array() || zones.empty()) {
+                return AiDecision{{}, "脚本 AI：场景未定义区域，无法生成命令"};
+            }
+            if (!zones.front().is_string()) {
+                return AiDecision{{}, "脚本 AI：区域列表必须为字符串数组"};
+            }
+            const std::string zone = zones.front().get<std::string>();
 
-        const nlohmann::json& zones = summary.value("zones", nlohmann::json::array());
-        if (zones.empty()) {
-            return AiDecision{{}, "脚本 AI：场景未定义区域，无法生成命令"};
-        }
-        const std::string zone = zones.front().get<std::string>();
-
-        const nlohmann::json& units = summary.value("units", nlohmann::json::array());
-        std::string unit_id;
-        for (const nlohmann::json& unit : units) {
-            if (unit.value("node_id", std::string{}) == input.node_id) {
+            const nlohmann::json& units = summary.value("units", nlohmann::json::array());
+            if (!units.is_array()) {
+                return AiDecision{{}, "脚本 AI：单位列表必须是数组"};
+            }
+            std::string unit_id;
+            for (const nlohmann::json& unit : units) {
+                if (!unit.is_object() || unit.value("node_id", std::string{}) != input.node_id) {
+                    continue;
+                }
+                if (!unit.contains("id") || !unit.at("id").is_string()) {
+                    return AiDecision{{}, "脚本 AI：节点 " + input.node_id + " 的单位缺少字符串 id"};
+                }
                 unit_id = unit.at("id").get<std::string>();
                 break;
             }
-        }
-        if (unit_id.empty()) {
-            return AiDecision{{}, "脚本 AI：节点 " + input.node_id + " 无可用单位"};
-        }
+            if (unit_id.empty()) {
+                return AiDecision{{}, "脚本 AI：节点 " + input.node_id + " 无可用单位"};
+            }
 
-        const nlohmann::json command{
-            {"schema_version", 1},
-            {"type", "SECURE_ZONE"},
-            {"target", nlohmann::json{{"kind", "unit"}, {"ref", unit_id}}},
-            {"completion", nlohmann::json{{"condition", "secure_zone"},
-                                          {"params", nlohmann::json{{"zone", zone}, {"duration_ticks", 1200}}}}},
-            {"intent", "脚本 AI 兜底：控制区域 " + zone},
-            {"behavior", nlohmann::json{{"engagement", "balanced"}}},
-            {"priority", 1},
-            {"deadline", nlohmann::json{{"game_time", 3600}}},
-        };
-        return AiDecision{command.dump(), {}};
+            const nlohmann::json command{
+                {"schema_version", 1},
+                {"type", "SECURE_ZONE"},
+                {"target", nlohmann::json{{"kind", "unit"}, {"ref", unit_id}}},
+                {"completion", nlohmann::json{{"condition", "secure_zone"},
+                                              {"params", nlohmann::json{{"zone", zone}, {"duration_ticks", 1200}}}}},
+                {"intent", "脚本 AI 兜底：控制区域 " + zone},
+                {"behavior", nlohmann::json{{"engagement", "balanced"}}},
+                {"priority", 1},
+                {"deadline", nlohmann::json{{"game_time", 3600}}},
+            };
+            return AiDecision{command.dump(), {}};
+        } catch (const nlohmann::json::exception& exception) {
+            // 结构非法（如 zones 为对象数组、units 缺 id）显式报错而非抛出，
+            // 由调用方记录并跳过注入（宪法 9/17）。
+            return AiDecision{{}, "脚本 AI：决策输入结构非法: " + std::string(exception.what())};
+        }
     }
 };
 

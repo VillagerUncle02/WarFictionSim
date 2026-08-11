@@ -88,6 +88,21 @@ AiInjectResult inject_ai_decision(SimState& state, const std::string& command_js
     result.decision_id =
         meta.decision_id.empty() ? "ai-" + std::to_string(state.ai_decision_counter) : meta.decision_id;
 
+    // 显式 decision_id 必须全局唯一（CHK052 回放标识）：重复拒绝且不追加
+    // 记录/不递增游标，保持决策日志唯一（宪法 10/17）。
+    if (!meta.decision_id.empty()) {
+        for (const AiDecisionRecord& record : state.decision_log.entries()) {
+            if (record.decision_id == result.decision_id) {
+                result.errors.push_back(
+                    ValidationError{"DUPLICATE_DECISION_ID", "决策标识已存在: " + result.decision_id});
+                state.event_log.append(
+                    state.clock.tick(), EventCategory::kCommand, EventSeverity::kWarning,
+                    "AI_DECISION_REJECTED decision_id=" + result.decision_id + " code=DUPLICATE_DECISION_ID");
+                return result;
+            }
+        }
+    }
+
     // 决策点快照：全部在注入前采集（宪法 10：记录"决策点"而非"入队后"）。
     const std::string state_hash = compute_state_hash_hex(state);
     const std::string input_json = build_ai_input_summary(state);

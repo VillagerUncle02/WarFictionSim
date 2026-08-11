@@ -133,7 +133,12 @@ std::string RunCliHash(const std::vector<std::string>& extra_args) {
     if (!started) {
         return {};
     }
-    WaitForSingleObject(process.hProcess, INFINITE);
+    // 子进程卡死防护：超时后终止进程并返回空串（测试失败），避免 CI 挂死。
+    constexpr DWORD kCliWaitTimeoutMs = 60'000U;
+    if (WaitForSingleObject(process.hProcess, kCliWaitTimeoutMs) != WAIT_OBJECT_0) {
+        TerminateProcess(process.hProcess, 1U);
+        WaitForSingleObject(process.hProcess, INFINITE);
+    }
     DWORD exit_code = 1U;
     GetExitCodeProcess(process.hProcess, &exit_code);
     CloseHandle(process.hProcess);
@@ -177,6 +182,9 @@ TEST(WfsGoldenTest, SameInputTwiceProducesSameCliHash) {
 }
 
 TEST(WfsGoldenTest, ThreadCountDoesNotAffectCliHash) {
+    // 注意：T018 分区并行框架尚未接入战斗计算路径，threads 目前只作为配置
+    // 元数据（不进状态哈希），因此本门禁当前验证的是"同状态跨线程一致"；
+    // 战斗系统接入 T018 并行结算后，本测试才真正覆盖并行确定性（1 vs N）。
     const std::string single = RunCliHash({"--threads", "1", "--ticks", "600", "--ai-backend", "script"});
     const std::string quad = RunCliHash({"--threads", "4", "--ticks", "600", "--ai-backend", "script"});
     EXPECT_TRUE(IsHex64(single));
