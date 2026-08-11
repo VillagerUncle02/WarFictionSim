@@ -1,0 +1,69 @@
+# speckit-implement-loop 项目配置模板
+#
+# 使用方式：复制本文件到
+#   .specify/extensions/implement-loop/implement-loop-config.yml
+# 并按需修改；也可使用同目录下的 implement-loop-config.local.yml
+# （不提交到版本库）覆盖同一份配置。
+#
+# 格式说明：本扩展使用扁平的 dotted-key YAML 子集（键名含 "." 表示层级），
+# 每行一个 `key: value`，支持引号字符串、true/false、数字、逗号分隔列表。
+# 所有键均有默认值，模板仅列出常用项。
+#
+# 自动探测说明：以下键留空/未列出时，扩展会尝试从项目自动探测
+# （宪法/仓库/agents）；探测不到的保留"作者项目准则"默认值
+# （标注 * 的键）。换项目时若默认角色不适用，请在本文件显式配置。
+
+# 交互、审计记录、PR 说明使用的语言：zh-CN（默认）| en
+language: "zh-CN"
+
+# feature 目录（相对仓库根）。留空时自动读取 .specify/feature.json；
+# 若不存在 feature.json，则自动扫描 specs/*/tasks.md（唯一时自动选中，否则报错）。
+feature.directory: ""
+
+execution.assignments_file: "agent-assignments.yml"
+execution.parallel: true
+# CI/流水线/构建/依赖锁定类任务统一交给该角色 subagent。
+# 留空时由使用扩展的 AI 在运行时解析（分配文件/平台可用角色），不预设角色名。
+# execution.devops_agent: "DevOps Automator"
+
+branch.prefix: "feature/"
+# 留空自动探测 origin/HEAD 的默认分支，失败回退 main
+# branch.base: "main"
+branch.chained: true
+
+# 留空自动探测：优先 ci.yml，其次 .github/workflows 下唯一 workflow；
+# 多个且无 ci.yml 时需显式配置
+# ci.workflow_file: "ci.yml"
+# 留空自动读取 workflow 文件 name: 字段，失败回退 "CI"
+# ci.workflow_name: "CI"
+ci.wait_timeout_seconds: 1800
+# 前置检查要求 workflow 的 on.push 覆盖功能分支（而非仅 main），
+# 否则 PR 前的"推送->CI 反馈"循环无法启动。
+ci.require_push_trigger: true
+
+# 门禁脚本：配置本项 > 项目 <repo>/scripts/gates.ps1；
+# 两者都没有时，由使用扩展的 AI 参照 templates/gates-template.ps1 样板
+# 现场编写 <repo>/scripts/gates.ps1，经用户确认后执行并提交（见 run.md"运行时自适应"）。
+# gates.script: ""
+gates.quick_on_demand: true
+
+# 审计记录目录（相对仓库根）
+notes.reviews_dir: "notes/reviews"
+
+# 审查角色：留空时由使用扩展的 AI 在运行时解析（分配文件/平台可用角色），
+# 不预设角色名；无法确定时询问用户。
+# review.code_reviewer: "Code Reviewer"
+# CI 类 PR 的交叉意见角色：留空由 AI 运行时解析。
+# review.devops_opinion: "DevOps Automator"
+review.max_rounds: 5
+review.convergence_warn_rounds: 4
+# 第二意见（独立只读交叉审查），命中以下任意关键词时启用
+review.second_opinion: false
+review.second_opinion_triggers: "确定性核心, 并发, 跨语言边界, 安全"
+
+# 前置检查要求每个任务 ID 都有对应 issue（配合 speckit.taskstoissues；
+# * 作者项目准则：任务先转 issue。不使用 issue 的项目可改为 false）
+github.require_issues: true
+github.issue_title_pattern: '^T\d{3}'
+# PR 正文模板；留空用内置模板。占位符：{issues} {closes} {generator}
+github.pr_body_template: ""

@@ -16,6 +16,24 @@
       },
       "registered_skills": [],
       "installed_at": "2026-08-02T11:38:27.998230+00:00"
+    },
+    "implement-loop": {
+      "version": "1.1.1",
+      "source": "local",
+      "manifest_hash": "sha256:af6b86c13413a8a698fe0999a9f3c24c1b8454b269251948f512d2958450e211",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "codex": [
+          "speckit.implement-loop.run",
+          "speckit.implement-loop.gates",
+          "speckit.implement-loop.ci-wait",
+          "speckit.implement-loop.pr-review",
+          "speckit.implement-loop.next"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-08-11T03:59:09.303716+00:00"
     }
   }
 }

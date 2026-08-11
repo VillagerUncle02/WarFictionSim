@@ -1,0 +1,4 @@
+# 开发期文件（不随扩展安装）
+.git/
+*.md.tmp
+local-test/

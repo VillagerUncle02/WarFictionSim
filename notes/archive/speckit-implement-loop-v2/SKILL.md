@@ -1,6 +1,6 @@
 ---
 name: "speckit-implement-loop"
-description: "运行自动化实现循环：开分支 → 按已确认的 agent 分配执行任务 → 门禁 → AI 审查/修复循环 → 提交 → 推送触发 GitHub Actions CI → 获取 CI 反馈并修复至无异常 → 开 PR。分配确认、PR 审批与合并保持人工。"
+description: "运行自动化实现循环：开分支（链式）→ 按已确认的 agent 分配执行任务（DevOps 类任务由 DevOps Automator subagent 执行）→ 门禁 → AI 审查/修复循环 → 提交 → 推送触发 GitHub Actions CI → 获取 CI 反馈并修复至无异常 → 开 PR → AI 审查 PR（结论回填 PR Comment，不批准不合并）→ 通过后自动进入下一功能。分配确认、PR 审批与合并保持人工。"
 ---
 
 # Implement Loop（实现循环自动化）
@@ -29,6 +29,14 @@ description: "运行自动化实现循环：开分支 → 按已确认的 agent 
 - 同名分支已存在时检出并同步 `origin/main`；
 - 禁止直接推送 main（宪法第 3 条）。
 
+### 链式分支队列与合并顺序（v2）
+
+- **链式**：下一个分支基于上一分支 tip 创建（`git checkout -b feature/<next> <current-tip>`），天然包含前序改动；
+- **单活动分支**：同一时间只有 1 个分支在实现，其余为"AI 审查通过、等人工合并"的 PR；
+- **合并必须按序**（PR#N 先于 PR#N+1）：CI 增加"前序 PR 未合并 → 本分支 CI 标红并提示"（scripts/check-pr-order.ps1，见 ci.yml check-pr-order job）；
+- **合并后自动 rebase**：前序合并后用 scripts/merge-rebase-next.ps1 对后续分支 rebase origin/main 并重新推送 + CI；有冲突则停下中文报告人工；
+- **PR diff**：GitHub 按 base=main 自动重算，前序合并后本 PR 只显示自己的提交，审查无干扰。
+
 ## 任务执行
 
 按 `tasks.md` 的 Phase 顺序（Setup → Foundational → US1… → Polish）执行，对每个任务：
@@ -36,6 +44,7 @@ description: "运行自动化实现循环：开分支 → 按已确认的 agent 
 - 读取 `agent-assignments.yml` 中该任务的 agent；
 - **命名 agent**（如 Backend Architect、Desktop App Engineer、DevOps Automator、Multi-Agent Systems Architect、Prompt Engineer、Technical Writer、UI Designer、Software Architect）：以该角色 spawn 执行，**中文提示词**包含：任务 ID、完整描述、相关契约/数据模型引用、精确文件路径、依赖上下文；
 - **`default`**：在当前上下文内直接实现；
+- **DevOps 类任务**（CI/流水线/构建/依赖锁定，如 T002/T003/T005/T006/T094）：执行交给 DevOps Automator subagent，不并入自动化流程环节；
 - 测试任务先写并确认 FAIL（RED），再实现（宪法第 2 条）；
 - 同文件任务串行；不同文件且标 `[P]` 的可并行；
 - 完成后在 `tasks.md` 将该任务标记为 `[X]`，用中文汇报进度。
@@ -77,7 +86,7 @@ description: "运行自动化实现循环：开分支 → 按已确认的 agent 
 
 附加规则：
 
-- **收敛检测**：连续 2 轮 🔴/🟡 数量不下降或同类问题重复 → 审计记录标注"收敛异常提醒"，建议换更高推理档位 / 缩小 diff 范围 / 人工介入；
+- **收敛检测**：连续 4 轮 🔴/🟡 数量不下降或同类问题重复 → 审计记录标注"收敛异常提醒"，建议换更高推理档位 / 缩小 diff 范围 / 人工介入；
 - **轮次提醒**：超过 5 轮 → 审计记录标注"轮次过多提醒"，继续直到通过；
 - **第二意见（可选增强）**：变更涉及确定性核心、并发、跨语言边界或安全时，用 `codex exec review` 只读模式（`--sandbox read-only`，独立模型）交叉审查，结果并入审计记录；日常变更不启用；
 - **审计记录**：每轮写入 `notes/reviews/<branch>-r<N>.md`（中文，格式见下），并随逻辑组一起提交入库。
@@ -133,7 +142,7 @@ powershell -File scripts/wait-ci.ps1 -Branch <branch> [-TimeoutSeconds 1800]
 
 4. 收敛与轮次提醒（与 AI 审查循环同一规则）：
 
-   - 连续 2 轮 CI 失败未下降或同类问题重复 → 审计记录标注"CI 收敛异常提醒"，建议人工介入；
+   - 连续 4 轮 CI 失败未下降或同类问题重复 → 审计记录标注"CI 收敛异常提醒"，建议人工介入；
    - 超过 5 轮 → 审计记录标注"CI 轮次过多提醒"，继续直到通过。
 
 5. 审计记录：每轮 CI 结果写入 `notes/reviews/<branch>-ci.md`（时间、run id、结论、失败步骤、修复 commit 列表），随逻辑组提交入库。
@@ -149,11 +158,22 @@ powershell -File scripts/open-pr.ps1 -Title "<feat: 说明>" -Issue "<issue 编�
 - PR 标题与说明使用中文；
 - PR 正文必须包含 `Closes #<issue>`（issue 编号来自前置检查的映射）。
 
+## AI PR 审查（开 PR 后，不批准合并）
+
+- **审查对象**：整个 PR diff + 与 spec/plan/tasks 一致性 + 宪法合规（确定性/AI 边界/数据驱动/无头可测/代码风格）+ 门禁与 CI 证据 + PR 说明完整性；
+- **执行者**：Code Reviewer（CI/流水线类 PR 可请 DevOps Automator 出具交叉意见，仅意见不并入流程）；
+- **结论**：PASS / FAIL + findings（级别、file:line、修复方向）；
+- **审计文件**：notes/reviews/<branch>-pr-review.md（改动范围、关键决策、门禁/CI 证据、审查结论、遗留 TODO）；
+- **PR Comment 回填**：`gh pr comment <pr> --body-file notes/reviews/<branch>-pr-review.md`（可选对 findings 用行内 review comment 定位 file:line），人工远程打开 GitHub 即可审查；**AI 绝不点 Approve、绝不 merge**；
+- **FAIL** → findings 交回实现 agent，同分支新增提交修复 → 推送 → CI → 重新 PR 审查，直到 PASS（沿用收敛/轮次提醒）；
+- **"回退"语义**：默认 Fix-in-place（同分支继续修）；仅方向性错误才 Rebuild（丢弃分支、从稳定基点重建），Rebuild 需人工确认。
+
 ## 停止点（人工闸门）
 
-- 创建 PR 后**立即停止**，用中文向用户报告：分支、PR 链接、完成任务范围、门禁结果、审查轮数与结论、审计记录路径；
+- **每个 PR 仍等待人工 Approve + Merge**；AI 审查与 CI 只提供证据，不替代人工；
 - **绝不自动 merge、绝不直接推送 main**（宪法第 3 条）；
-- 等待用户 Approve + Merge；合并后 PR 的 `Closes #` 自动关闭对应 issue。
+- **AI PR 审查 PASS 且 CI 绿后**：记录审查（notes/reviews/<branch>-pr-review.md + PR Comment），然后**自动开始下一功能**（按链式分支队列创建 feature/<next>，回到流程开头）；
+- 合并后 PR 的 `Closes #` 自动关闭对应 issue；随后对后续分支执行 scripts/merge-rebase-next.ps1。
 
 ## 汇报模板
 
@@ -165,6 +185,7 @@ powershell -File scripts/open-pr.ps1 -Title "<feat: 说明>" -Issue "<issue 编�
 - 门禁：通过（构建/测试/格式）
 - CI：通过（N 轮，失败 M 次已修复）或"未触发"说明
 - AI 审查：N 轮，🔴/🟡 问题 M 个（已修复 / 待确认）
-- 审计记录：notes/reviews/<branch>-r*.md、<branch>-ci.md
-- 下一步：等待人工 Approve + Merge
+- PR 审查：PASS/FAIL（N 轮），PR Comment：<url>
+- 审计记录：notes/reviews/<branch>-r*.md、<branch>-ci.md、<branch>-pr-review.md
+- 下一步：等待人工 Approve + Merge（AI 审查已通过，可继续下一功能）
 ```

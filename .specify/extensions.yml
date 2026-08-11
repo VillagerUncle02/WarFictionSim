@@ -1,5 +1,6 @@
 installed:
 - agent-assign
+- implement-loop
 settings:
   auto_execute_hooks: true
 hooks:
@@ -11,4 +12,14 @@ hooks:
     priority: 10
     prompt: Assign agents to the generated tasks?
     description: Automatically assign specialized agents to tasks after generation
+    condition: null
+  after_taskstoissues:
+  - extension: implement-loop
+    command: speckit.implement-loop.run
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Issues created. Start the automated implement loop now? (agent assignments
+      must be confirmed first)
+    description: Optionally start the implement loop after issues are created
     condition: null

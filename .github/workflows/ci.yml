@@ -39,6 +39,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check-pr-order:
+    name: 前序 PR 已合并检查（链式队列）
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: 运行前序 PR 顺序检查
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./scripts/check-pr-order.ps1 -Repo ${{ github.repository }} -PRNumber ${{ github.event.pull_request.number }}
   build-test:
     name: Build & Test (Windows)
     # 固定镜像而非 windows-latest：latest 会滚动升级导致构建环境漂移，

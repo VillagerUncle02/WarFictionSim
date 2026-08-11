@@ -1,0 +1,64 @@
+schema_version: "1.0"
+
+extension:
+  id: "implement-loop"
+  name: "Implement Loop"
+  version: "1.1.1"
+  description: "Reusable automation loop on top of spec-kit: chained feature branches, agent-assigned task execution, gates, AI review/fix cycles, CI feedback, PR creation and AI PR review with human gates preserved"
+  author: "VillagerUncle02"
+  license: "MIT"
+
+requires:
+  speckit_version: ">=0.12.0"
+  tools:
+    - name: "git"
+      required: true
+    - name: "gh"
+      required: true
+      version: ">=2.40.0"
+    - name: "pwsh"
+      required: true
+  commands:
+    - "speckit.tasks"
+    - "speckit.taskstoissues"
+
+provides:
+  commands:
+    - name: "speckit.implement-loop.run"
+      file: "commands/run.md"
+      description: "Run the full implementation loop: branch -> tasks -> gates -> AI review/fix -> commit -> CI -> PR -> AI PR review -> next feature (human gates preserved)"
+    - name: "speckit.implement-loop.gates"
+      file: "commands/gates.md"
+      description: "Run project gates (full by default, or --quick)"
+    - name: "speckit.implement-loop.ci-wait"
+      file: "commands/ci-wait.md"
+      description: "Push the current branch and wait for GitHub Actions CI feedback"
+    - name: "speckit.implement-loop.pr-review"
+      file: "commands/pr-review.md"
+      description: "AI-review an open PR against spec/plan/tasks/constitution and backfill the review comment"
+    - name: "speckit.implement-loop.next"
+      file: "commands/next.md"
+      description: "Create the next chained feature branch after the current PR passes AI review"
+  config:
+    - name: "implement-loop-config.yml"
+      template: "config/implement-loop.config.template.yml"
+      description: "Project-level configuration for the implement-loop extension (flat dotted-key YAML subset)"
+      required: false
+  templates:
+    - name: "implement-loop-gates-template"
+      file: "templates/gates-template.ps1"
+      description: "Minimal gates script template the AI adapts per project at runtime"
+
+hooks:
+  after_taskstoissues:
+    command: "speckit.implement-loop.run"
+    optional: true
+    prompt: "Issues created. Start the automated implement loop now? (agent assignments must be confirmed first)"
+    description: "Optionally start the implement loop after issues are created"
+
+tags:
+  - "automation"
+  - "implementation"
+  - "workflow"
+  - "github"
+  - "code-review"
