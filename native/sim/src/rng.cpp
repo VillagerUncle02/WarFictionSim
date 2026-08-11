@@ -7,11 +7,23 @@
 // 有界取值采用 PCG 标准的无偏拒绝采样（threshold 拒绝法），避免取模偏差
 // 破坏后续随机消费顺序的确定性。
 
+#include <stdexcept>
+
 #include "wfs/sim/rng.h"
 
 #include "wfs/sim/detail/pcg32.hpp"
 
-namespace wfs_sim {
+namespace wfs::sim {
+
+namespace {
+
+void ValidateStream(std::uint64_t stream) {
+    if ((stream & 1u) == 0u) {
+        throw std::invalid_argument("wfs::sim::Rng: State.stream must be an odd internal increment");
+    }
+}
+
+}  // namespace
 
 Rng::Rng() : Rng(0u, 0u) {}
 
@@ -19,17 +31,21 @@ Rng::Rng(std::uint64_t seed, std::uint64_t stream) {
     reset(seed, stream);
 }
 
-Rng::Rng(const State& state) : state_(state.state), stream_(state.stream) {}
-
-std::uint32_t Rng::next() {
-    detail::Pcg32Random pcg{state_, stream_};
-    const std::uint32_t value = detail::pcg32_random_r(pcg);
-    state_ = pcg.state;
-    stream_ = pcg.inc;
-    return value;
+Rng::Rng(const State& state) {
+    ValidateStream(state.stream);
+    state_ = state.state;
+    stream_ = state.stream;
 }
 
-std::uint32_t Rng::next_bounded(std::uint32_t bound) {
+std::uint32_t Rng::next() noexcept {
+    const std::uint64_t oldstate = state_;
+    state_ = oldstate * 6364136223846793005ULL + stream_;
+    const std::uint32_t xorshifted = static_cast<std::uint32_t>(((oldstate >> 18u) ^ oldstate) >> 27u);
+    const std::uint32_t rot = static_cast<std::uint32_t>(oldstate >> 59u);
+    return (xorshifted >> rot) | (xorshifted << ((0u - rot) & 31u));
+}
+
+std::uint32_t Rng::next_bounded(std::uint32_t bound) noexcept {
     if (bound == 0u) {
         return 0u;
     }
@@ -46,7 +62,8 @@ Rng::State Rng::state() const noexcept {
     return State{state_, stream_};
 }
 
-void Rng::restore(const State& state) noexcept {
+void Rng::restore(const State& state) {
+    ValidateStream(state.stream);
     state_ = state.state;
     stream_ = state.stream;
 }
@@ -58,4 +75,4 @@ void Rng::reset(std::uint64_t seed, std::uint64_t stream) {
     stream_ = pcg.inc;
 }
 
-}  // namespace wfs_sim
+}  // namespace wfs::sim

@@ -6,6 +6,8 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
 
 #include <gtest/gtest.h>
 
@@ -15,7 +17,7 @@ namespace {
 
 using std::uint32_t;
 using std::uint64_t;
-using wfs_sim::Rng;
+using wfs::sim::Rng;
 
 constexpr std::array<uint32_t, 8> kGoldenSeed42Stream0 = {
     565663470u, 3244226384u, 2504567229u, 903561869u, 4026996297u, 2722332799u, 3032858066u, 272411090u,
@@ -92,6 +94,32 @@ TEST(WfsRngTest, BoundedValuesStayInRangeAndAreDeterministic) {
     EXPECT_EQ(first_values[5], 99u);
 }
 
+TEST(WfsRngTest, LargeBoundsTriggerRejectionAndStayDeterministic) {
+    constexpr std::array<uint32_t, 2> kBounds = {
+        std::numeric_limits<uint32_t>::max(),
+        0x80000001u,  // 2^31 + 1：threshold 接近 2^31，必然触发拒绝分支
+    };
+    for (const uint32_t bound : kBounds) {
+        Rng first(42u, 0u);
+        Rng second(42u, 0u);
+        for (int i = 0; i < 16; ++i) {
+            const uint32_t first_value = first.next_bounded(bound);
+            const uint32_t second_value = second.next_bounded(bound);
+            EXPECT_LT(first_value, bound);
+            EXPECT_EQ(first_value, second_value);
+        }
+    }
+
+    // 黄金样例：seed=42/stream=0、bound=2^31+1 前 4 个有界值（拒绝分支可复现）。
+    // threshold = (0u - bound) % bound = 2^31-1，首个原始值 565663470 被拒绝，
+    // 因此第一个有界值为第二个原始值 3244226384 % 2^31+1 = 1096742735。
+    Rng large_bound(42u, 0u);
+    EXPECT_EQ(large_bound.next_bounded(0x80000001u), 1096742735u);
+    EXPECT_EQ(large_bound.next_bounded(0x80000001u), 357083580u);
+    EXPECT_EQ(large_bound.next_bounded(0x80000001u), 1879512648u);
+    EXPECT_EQ(large_bound.next_bounded(0x80000001u), 574849150u);
+}
+
 TEST(WfsRngTest, SingleBoundAlwaysZero) {
     Rng rng(42u, 0u);
     for (int i = 0; i < 8; ++i) {
@@ -103,6 +131,27 @@ TEST(WfsRngTest, ZeroBoundDoesNotConsumeState) {
     Rng rng(42u, 0u);
     const Rng::State before = rng.state();
     EXPECT_EQ(rng.next_bounded(0u), 0u);
+    EXPECT_EQ(rng.state().state, before.state);
+    EXPECT_EQ(rng.state().stream, before.stream);
+}
+
+TEST(WfsRngTest, ResetMatchesFreshConstruction) {
+    Rng reset(7u, 9u);
+    (void)reset.next();
+    (void)reset.next();
+    reset.reset(42u, 7u);
+
+    ExpectEqual(FirstEight(reset), FirstEight(Rng(42u, 7u)));
+}
+
+TEST(WfsRngTest, StateRestoreRejectsEvenStream) {
+    Rng rng(42u, 0u);
+    EXPECT_THROW(rng.restore(Rng::State{0u, 2u}), std::invalid_argument);
+    EXPECT_THROW(Rng(Rng::State{0u, 4u}), std::invalid_argument);
+
+    // 校验失败不得改变当前 RNG 状态。
+    const Rng::State before = rng.state();
+    EXPECT_THROW(rng.restore(Rng::State{0u, 6u}), std::invalid_argument);
     EXPECT_EQ(rng.state().state, before.state);
     EXPECT_EQ(rng.state().stream, before.stream);
 }

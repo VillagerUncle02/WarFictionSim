@@ -10,8 +10,7 @@
 //   **不保证**逐位一致，调用方不得跨平台依赖其位模式。
 // - NaN/Inf 遵循 C11 与 IEEE-754 语义（例如 sqrt(-1) 为 NaN、sqrt(inf) 为 inf）。
 
-#ifndef WFS_CORE_MATH_H
-#define WFS_CORE_MATH_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,5 +31,3 @@ double wfs_math_atan2(double y, double x);
 #ifdef __cplusplus
 }
 #endif
-
-#endif  // WFS_CORE_MATH_H

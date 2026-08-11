@@ -3,6 +3,7 @@
 // T008 单元测试：C11 确定性数学库 core_c。
 // 覆盖已知输入输出、NaN/Inf 契约与 IEEE-754 位级参考值；
 // 三角函数的位级一致性以 MSVC CRT + /fp:precise 为契约边界（见 math.h）。
+// 位级黄金值仅在 MSVC CRT + /fp:precise 契约下有效（CI 固定 windows-2022）。
 
 #include <bit>
 #include <cmath>

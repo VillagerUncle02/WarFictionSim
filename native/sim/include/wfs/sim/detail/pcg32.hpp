@@ -33,8 +33,7 @@
 
 #include <cstdint>
 
-namespace wfs_sim {
-namespace detail {
+namespace wfs::sim::detail {
 
 struct Pcg32Random {
     std::uint64_t state;
@@ -57,5 +56,4 @@ inline void pcg32_srandom_r(Pcg32Random& rng, std::uint64_t initstate, std::uint
     pcg32_random_r(rng);
 }
 
-}  // namespace detail
-}  // namespace wfs_sim
+}  // namespace wfs::sim::detail
