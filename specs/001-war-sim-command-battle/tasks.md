@@ -29,13 +29,13 @@ description: "Task list template for feature implementation"
 
 **Purpose**: 项目初始化与基础结构，支撑三语言可复现构建（宪法第 18 条）
 
-- [ ] T001 按 plan.md Project Structure 创建 WarFictionSim 项目骨架（sim/core_c/ui/tools/tests/data/contracts/scripts/docs 目录与根 CMakeLists.txt 占位）
-- [ ] T002 初始化 vcpkg 清单模式依赖锁定（vcpkg.json + baseline：nlohmann-json、GoogleTest、PCG32 头文件库等），在 vcpkg.json 中锁定全部版本
-- [ ] T003 配置 CMake 构建（根 CMakeLists.txt：sim/core_c 目标、MSVC C++20/C11 标志、`/fp:precise` 确定性浮点选项、CTest 集成、Release/Debug 配置）
-- [ ] T004 [P] 创建 C#/.NET 10 LTS 解决方案（ui/、tools/）与 xUnit 测试工程（tests/ui_tests/），配置 CommunityToolkit.Mvvm 与 System.Text.Json
-- [ ] T005 [P] 创建 GitHub Actions CI（.github/workflows/ci.yml：三语言构建、单元测试、格式检查、Windows 打包）
-- [ ] T006 [P] 配置格式化与静态检查（.clang-format、.editorconfig、dotnet format 配置，纳入 CI）
-- [ ] T007 建立 data/ 与 contracts/ 数据契约骨架（data/ 各子目录 schema_version 约定、contracts/schemas/ JSON Schema 目录与 README 说明）
+- [x] T001 按 plan.md Project Structure 创建 WarFictionSim 项目骨架（sim/core_c/ui/tools/tests/data/contracts/scripts/docs 目录与根 CMakeLists.txt 占位）
+- [x] T002 初始化 vcpkg 清单模式依赖锁定（vcpkg.json + baseline：nlohmann-json、GoogleTest、PCG32 头文件库等），在 vcpkg.json 中锁定全部版本
+- [x] T003 配置 CMake 构建（根 CMakeLists.txt：sim/core_c 目标、MSVC C++20/C11 标志、`/fp:precise` 确定性浮点选项、CTest 集成、Release/Debug 配置）
+- [x] T004 [P] 创建 C#/.NET 10 LTS 解决方案（ui/、tools/）与 xUnit 测试工程（tests/ui_tests/），配置 CommunityToolkit.Mvvm 与 System.Text.Json
+- [x] T005 [P] 创建 GitHub Actions CI（.github/workflows/ci.yml：三语言构建、单元测试、格式检查、Windows 打包）
+- [x] T006 [P] 配置格式化与静态检查（.clang-format、.editorconfig、dotnet format 配置，纳入 CI）
+- [x] T007 建立 data/ 与 contracts/ 数据契约骨架（data/ 各子目录 schema_version 约定、contracts/schemas/ JSON Schema 目录与 README 说明）
 
 ---
 

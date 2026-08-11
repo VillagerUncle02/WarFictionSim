@@ -18,22 +18,34 @@ jobs:
           Write-Host "ImageVersion: $env:ImageVersion"
         shell: pwsh
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup .NET SDK (10.0 LTS)
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
       - name: Setup vcpkg (manifest 锁版本)
         shell: pwsh
         run: |
-          if (-not (Test-Path 'C:/vcpkg/scripts/buildsystems/vcpkg.cmake')) {
-            git clone --depth 1 https://github.com/microsoft/vcpkg C:/vcpkg
-            & C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          $vcpkgDir = 'C:/vcpkg'
+          if (-not (Test-Path "$vcpkgDir/.git")) {
+            git clone https://github.com/microsoft/vcpkg $vcpkgDir
+            if ($LASTEXITCODE -ne 0) { throw "vcpkg clone 失败" }
+          } else {
+            git -C $vcpkgDir fetch --depth 1 origin c4d9956c0c10a4742840a5e7d93efa2e0015c865
+            if ($LASTEXITCODE -ne 0) {
+              git -C $vcpkgDir fetch origin master
+              if ($LASTEXITCODE -ne 0) { throw "vcpkg fetch baseline 失败" }
+            }
+          }
+          git -C $vcpkgDir checkout c4d9956c0c10a4742840a5e7d93efa2e0015c865 --force
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg checkout baseline 失败" }
+          if (-not (Test-Path "$vcpkgDir/vcpkg.exe")) {
+            & $vcpkgDir/bootstrap-vcpkg.bat -disableMetrics
             if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap 失败" }
           }
-          Write-Host "vcpkg ready: C:/vcpkg"
+          Write-Host "vcpkg ready: $vcpkgDir @ c4d9956"
 
       - name: Configure & build Release
         run: |
