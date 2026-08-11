@@ -6,6 +6,7 @@
 // 玩家命令与 AI 决策共用同一队列，顺序完全由 (tick, seq) 决定。
 
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -123,10 +124,37 @@ TEST(WfsQueueTest, DuplicateSeqRejectedWithoutStateChange) {
     EXPECT_THROW(queue.enqueue(4u, 7u, "duplicate-other-tick"), std::invalid_argument);
 
     EXPECT_EQ(queue.size(), 1u);
+    EXPECT_EQ(queue.next_seq(), 8u);  // 显式 seq 7 成功后游标为 8；失败不推进。
     const QueuedEvent& front = queue.front();
     EXPECT_EQ(front.tick, 3u);
     EXPECT_EQ(front.seq, 7u);
     EXPECT_EQ(front.payload, "original");
+}
+
+TEST(WfsQueueTest, AutoEnqueueThrowsWhenExplicitMaxOccupiesExhaustedCursor) {
+    EventQueue queue;
+    // 先把 auto 游标推进到 UINT64_MAX（显式 MAX-1 后游标饱和到 MAX）。
+    queue.enqueue(0u, std::numeric_limits<uint64_t>::max() - 1u, "near-max");
+    // 再显式占用 MAX：游标停在 MAX 且已被占用，auto 必须抛异常且状态不变。
+    queue.enqueue(0u, std::numeric_limits<uint64_t>::max(), "max");
+    EXPECT_THROW(queue.enqueue(0u, "auto"), std::overflow_error);
+
+    EXPECT_EQ(queue.size(), 2u);
+    EXPECT_EQ(queue.next_seq(), std::numeric_limits<uint64_t>::max());
+    EXPECT_EQ(queue.front().seq, std::numeric_limits<uint64_t>::max() - 1u);
+    EXPECT_EQ(queue.front().payload, "near-max");
+}
+
+TEST(WfsQueueTest, AutoEnqueueThrowsAfterAssigningMaxSeq) {
+    EventQueue queue;
+    queue.enqueue(0u, std::numeric_limits<uint64_t>::max() - 1u, "near-max");
+    const uint64_t max_seq = queue.enqueue(0u, "auto-max");
+    EXPECT_EQ(max_seq, std::numeric_limits<uint64_t>::max());
+
+    // 游标饱和在 MAX 且已占用：再次 auto 抛异常。
+    EXPECT_THROW(queue.enqueue(0u, "auto-after-max"), std::overflow_error);
+    EXPECT_EQ(queue.size(), 2u);
+    EXPECT_EQ(queue.next_seq(), std::numeric_limits<uint64_t>::max());
 }
 
 TEST(WfsQueueTest, ExplicitAndAutoSeqShareUniqueness) {

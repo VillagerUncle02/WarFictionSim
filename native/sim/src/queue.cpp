@@ -36,12 +36,19 @@ bool EventQueue::empty() const noexcept {
 std::uint64_t EventQueue::enqueue(GameTick tick, std::string payload) {
     // 确定性递增直到空闲：显式 seq 占用 0 时 auto 自动从下一个空闲值继续，
     // 不会因重复报错锁死；查找基于现有存储（seqs_），不依赖调用方约定。
+    // 序列号耗尽（游标停在 UINT64_MAX 且该值已被占用）时抛 std::overflow_error，
+    // 绝不回绕。
     while (seqs_.contains(next_seq_)) {
+        if (next_seq_ == std::numeric_limits<std::uint64_t>::max()) {
+            throw std::overflow_error("wfs::sim::EventQueue: auto sequence number space exhausted");
+        }
         ++next_seq_;
     }
     const std::uint64_t seq = next_seq_;
     insert(tick, seq, std::move(payload));
-    ++next_seq_;
+    if (next_seq_ != std::numeric_limits<std::uint64_t>::max()) {
+        ++next_seq_;
+    }
     return seq;
 }
 

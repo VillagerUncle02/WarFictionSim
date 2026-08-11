@@ -51,6 +51,10 @@ if (WIN32)
     # 基于 TEST_LIST 变量（sim_tests_TESTS）统一重设 ENVIRONMENT_MODIFICATION。
     gtest_discover_tests(sim_tests)
     set(_sim_tests_env_include "${CMAKE_CURRENT_BINARY_DIR}/sim_tests_env.cmake")
+    # configure 时预写占位文件：未构建先跑 ctest -N 时避免 include 缺失报错；
+    # 构建后由 POST_BUILD（patch_test_env.cmake）覆盖为真实属性内容。
+    file(WRITE "${_sim_tests_env_include}"
+        "# Placeholder: overwritten by POST_BUILD (patch_test_env.cmake). Build before running ctest.\n")
     add_custom_command(TARGET sim_tests POST_BUILD
         COMMAND ${CMAKE_COMMAND}
             -D "TEST_INCLUDE_OUT=${_sim_tests_env_include}"
