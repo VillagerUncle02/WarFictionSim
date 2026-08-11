@@ -1,5 +1,6 @@
 # sim —— C++20 确定性模拟核心（宪法第 15 条：无头可测）
-# T009：转换为 STATIC 并加入统一确定性 RNG（PCG32）源码；继续链接 core_c。
+# T009–T011：STATIC 确定性核心源码（统一 RNG / 游戏时钟 / 事件命令队列）；
+# 继续链接 core_c（T008）。
 add_library(sim STATIC
     src/rng.cpp
     src/clock.cpp

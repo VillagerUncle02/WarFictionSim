@@ -51,6 +51,9 @@ void GameClock::reset(GameTick tick) {
     tick_ = tick;
 }
 
+// tick_ 为无符号整数，累加溢出按无符号回绕处理（定义行为）但无业务语义：
+// 20 Hz 下 tick 计数约 292 亿年、total_us 约 58 万年才会回绕，
+// 远超出任何实际模拟时长。
 void GameClock::advance(GameTick ticks) {
     tick_ += ticks;
 }

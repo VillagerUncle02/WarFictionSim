@@ -70,6 +70,47 @@ TEST(WfsClockTest, InvalidTickRateRejected) {
     EXPECT_THROW(GameClock(1'000'001u), std::invalid_argument);
 }
 
+TEST(WfsClockTest, BoundaryTickRatesAccepted) {
+    GameClock one_hz(1u);
+    EXPECT_EQ(one_hz.tick_hz(), 1u);
+    EXPECT_EQ(one_hz.tick_duration_us(), 1'000'000u);
+    one_hz.advance(1u);
+    EXPECT_EQ(one_hz.total_us(), 1'000'000u);
+
+    GameClock max_hz(1'000'000u);
+    EXPECT_EQ(max_hz.tick_hz(), 1'000'000u);
+    EXPECT_EQ(max_hz.tick_duration_us(), 1u);
+    max_hz.advance(250u);
+    EXPECT_EQ(max_hz.total_us(), 250u);
+}
+
+TEST(WfsClockTest, NonDivisibleFrequencyUsesFloor) {
+    GameClock three_hz(3u);
+    EXPECT_EQ(three_hz.tick_hz(), 3u);
+    EXPECT_EQ(three_hz.tick_duration_us(), 333'333u);  // floor(1'000'000 / 3)。
+    three_hz.advance(1u);
+    EXPECT_EQ(three_hz.total_us(), 333'333u);
+    three_hz.advance(2u);
+    EXPECT_EQ(three_hz.total_us(), 999'999u);
+    EXPECT_EQ(three_hz.format(), "D+0 00:00:00.999");
+    three_hz.advance(1u);
+    EXPECT_EQ(three_hz.total_us(), 1'333'332u);
+}
+
+TEST(WfsClockTest, ResetSetsTick) {
+    GameClock clock;
+    clock.advance(40u);
+    clock.reset();
+    EXPECT_EQ(clock.tick(), 0u);
+    EXPECT_EQ(clock.total_us(), 0u);
+
+    clock.advance(7u);
+    clock.reset(100u);
+    EXPECT_EQ(clock.tick(), 100u);
+    EXPECT_EQ(clock.total_us(), 5'000'000u);
+    EXPECT_EQ(clock.format(), "D+0 00:00:05.000");
+}
+
 TEST(WfsClockTest, FormatsGameDateTime) {
     GameClock clock;
     EXPECT_EQ(clock.format(), "D+0 00:00:00.000");

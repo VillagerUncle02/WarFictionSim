@@ -82,7 +82,7 @@ TEST(WfsQueueTest, OutOfOrderInsertionStillSorted) {
     while (!queue.empty()) {
         order += Next(queue).payload;
     }
-    EXPECT_EQ(order, "dbcea");  // (1,0) d → (1,1) b → (5,2) c → (7,3) e → (10,0) a。
+    EXPECT_EQ(order, "dbcea");  // (1,0) d → (1,1) b → (5,3) c → (7,4) e → (10,2) a。
 }
 
 TEST(WfsQueueTest, AutoAssignedSeqIsMonotonicAndOrdered) {
@@ -139,6 +139,18 @@ TEST(WfsQueueTest, ExplicitAndAutoSeqShareUniqueness) {
     EXPECT_EQ(queue.size(), 2u);
 }
 
+TEST(WfsQueueTest, AutoSeqSkipsExplicitZero) {
+    EventQueue queue;
+    queue.enqueue(0u, 0u, "explicit-zero");
+    const uint64_t auto_seq = queue.enqueue(0u, "auto");
+    EXPECT_EQ(auto_seq, 1u);
+
+    // 弹出顺序仍按 (tick, seq)：explicit(0,0) 先于 auto(0,1)。
+    EXPECT_EQ(Next(queue).payload, "explicit-zero");
+    EXPECT_EQ(Next(queue).payload, "auto");
+    EXPECT_TRUE(queue.empty());
+}
+
 TEST(WfsQueueTest, PopRemovesFrontEvent) {
     EventQueue queue;
     queue.enqueue(1u, 0u, "a");
@@ -149,7 +161,7 @@ TEST(WfsQueueTest, PopRemovesFrontEvent) {
     EXPECT_TRUE(queue.empty());
 }
 
-TEST(WfsQueueTest, TryPopOnlyMatchesRequestedTick) {
+TEST(WfsQueueTest, TryPopPopsOnlyEligibleTicks) {
     EventQueue queue;
     queue.enqueue(2u, 0u, "at2");
     queue.enqueue(5u, 1u, "at5");
@@ -160,10 +172,22 @@ TEST(WfsQueueTest, TryPopOnlyMatchesRequestedTick) {
     EXPECT_EQ(out.seq, 0u);
     EXPECT_EQ(out.payload, "at2");
 
-    // 最早事件 tick=5：请求其他 tick 不得弹出。
+    // 最早事件 tick=5：请求 tick 早于事件不得弹出。
     EXPECT_FALSE(queue.try_pop(3u, out));
     EXPECT_FALSE(queue.try_pop(4u, out));
     EXPECT_TRUE(queue.try_pop(5u, out));
     EXPECT_EQ(out.payload, "at5");
+    EXPECT_TRUE(queue.empty());
+}
+
+TEST(WfsQueueTest, TryPopCatchUpWhenRequestedTickAhead) {
+    EventQueue queue;
+    queue.enqueue(3u, 0u, "at3");
+
+    QueuedEvent out;
+    EXPECT_TRUE(queue.try_pop(5u, out));  // 请求 tick 超前：补发，不丢命令。
+    EXPECT_EQ(out.tick, 3u);
+    EXPECT_EQ(out.seq, 0u);
+    EXPECT_EQ(out.payload, "at3");
     EXPECT_TRUE(queue.empty());
 }
