@@ -85,8 +85,8 @@ std::string build_ai_events_json(const SimState& state, std::size_t limit) {
 AiInjectResult inject_ai_decision(SimState& state, const std::string& command_json, const AiDecisionMeta& meta,
                                   const std::filesystem::path& schema_path) {
     AiInjectResult result;
-    result.decision_id = meta.decision_id.empty() ? "ai-" + std::to_string(state.ai_decision_counter)
-                                                  : meta.decision_id;
+    result.decision_id =
+        meta.decision_id.empty() ? "ai-" + std::to_string(state.ai_decision_counter) : meta.decision_id;
 
     // 决策点快照：全部在注入前采集（宪法 10：记录"决策点"而非"入队后"）。
     const std::string state_hash = compute_state_hash_hex(state);
@@ -107,9 +107,8 @@ AiInjectResult inject_ai_decision(SimState& state, const std::string& command_js
         result.arrival_seq = state.queue.enqueue(arrival_tick, command_json);
         result.accepted = true;
         state.event_log.append(arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
-                               "AI_DECISION_ACCEPTED decision_id=" + result.decision_id +
-                                   " tick=" + std::to_string(arrival_tick) +
-                                   " seq=" + std::to_string(result.arrival_seq));
+                               "AI_DECISION_ACCEPTED decision_id=" + result.decision_id + " tick=" +
+                                   std::to_string(arrival_tick) + " seq=" + std::to_string(result.arrival_seq));
     } else {
         const std::string code = validation.errors.empty() ? "UNKNOWN" : validation.errors.front().code;
         state.event_log.append(arrival_tick, EventCategory::kCommand, EventSeverity::kWarning,

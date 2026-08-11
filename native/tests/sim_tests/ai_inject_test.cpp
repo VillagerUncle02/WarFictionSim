@@ -137,8 +137,7 @@ TEST(WfsAiInjectTest, ValidDecisionAcceptedValidatedAndQueued) {
     const std::string summary_before = build_ai_input_summary(state);
     const std::string events_before = build_ai_events_json(state);
 
-    const AiInjectResult result =
-        inject_ai_decision(state, ValidCommandJson(), Meta("decision-1"), CommandSchema());
+    const AiInjectResult result = inject_ai_decision(state, ValidCommandJson(), Meta("decision-1"), CommandSchema());
     ASSERT_TRUE(result.accepted) << (result.errors.empty() ? "" : result.errors.front().message);
     EXPECT_EQ(result.arrival_tick, 0U);
     EXPECT_EQ(result.decision_id, "decision-1");
@@ -203,7 +202,8 @@ TEST(WfsAiInjectTest, SemanticInvalidDecisionRejectedWithNodeAuthority) {
         "priority": 1,
         "deadline": {"game_time": 3600}
     })";
-    const AiInjectResult result = inject_ai_decision(state, unauthorized, Meta("decision-unauthorized"), CommandSchema());
+    const AiInjectResult result =
+        inject_ai_decision(state, unauthorized, Meta("decision-unauthorized"), CommandSchema());
     ASSERT_FALSE(result.accepted);
     EXPECT_EQ(state.queue.size(), 0U);
     ASSERT_FALSE(result.errors.empty());

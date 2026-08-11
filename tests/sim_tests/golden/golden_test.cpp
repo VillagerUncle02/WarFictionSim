@@ -106,8 +106,8 @@ bool IsHex64(const std::string& hash) {
 // 缺陷，且子进程环境不能依赖 shell 展开），非 Windows 退回 system + 重定向。
 std::string RunCliHash(const std::vector<std::string>& extra_args) {
     static int counter = 0;
-    const std::filesystem::path out = std::filesystem::temp_directory_path() /
-                                      ("wfs-golden-" + std::to_string(++counter) + ".txt");
+    const std::filesystem::path out =
+        std::filesystem::temp_directory_path() / ("wfs-golden-" + std::to_string(++counter) + ".txt");
     std::string command = "\"" + Exe() + "\" run --scenario \"" + SampleScenario().string() + "\" --seed 42 --hash";
     for (const std::string& arg : extra_args) {
         command += " \"" + arg + "\"";
@@ -127,9 +127,8 @@ std::string RunCliHash(const std::vector<std::string>& extra_args) {
     startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
     PROCESS_INFORMATION process{};
     std::wstring command_line = Utf8ToWide(command);
-    const BOOL started =
-        CreateProcessW(nullptr, command_line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr,
-                       &startup, &process);
+    const BOOL started = CreateProcessW(nullptr, command_line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
+                                        nullptr, &startup, &process);
     CloseHandle(output_file);
     if (!started) {
         return {};

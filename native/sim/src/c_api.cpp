@@ -39,9 +39,7 @@ struct wfs_sim_handle : wfs::sim::SimState {
     wfs_sim_handle() = default;
 };
 
-namespace {
-
-}  // namespace
+namespace {}  // namespace
 
 extern "C" {
 

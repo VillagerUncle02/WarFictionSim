@@ -30,11 +30,11 @@ inline constexpr const char* kAiBackendNone = "none";
 
 // 一次 AI 决策的输入：确定性纯数据（宪法第 10 条：决策点记录输入）。
 struct AiDecisionInput {
-    std::string node_id;           // 请求决策的指挥节点（每节点单一 AI 归属）。
-    std::string trigger;           // 触发原因（事件名，如 run_start）。
-    GameTick game_tick = 0U;       // 决策请求时的游戏 tick（不读现实时钟）。
+    std::string node_id;             // 请求决策的指挥节点（每节点单一 AI 归属）。
+    std::string trigger;             // 触发原因（事件名，如 run_start）。
+    GameTick game_tick = 0U;         // 决策请求时的游戏 tick（不读现实时钟）。
     std::string state_summary_json;  // 状态快照摘要（确定性 JSON，不含线程数）。
-    std::string events_json;       // 决策点可见事件（JSON 数组，seq 升序）。
+    std::string events_json;         // 决策点可见事件（JSON 数组，seq 升序）。
 };
 
 // 一次 AI 决策的输出：只允许是命令 JSON（或明确错误）。

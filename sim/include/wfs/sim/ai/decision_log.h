@@ -29,16 +29,16 @@ namespace wfs::sim {
 
 // 单个 AI 决策点记录（宪法 10：状态快照摘要 + 输入 + 返回 + 校验结果）。
 struct AiDecisionRecord {
-    std::string decision_id;      // 决策唯一标识（注入方提供或自动生成）。
-    std::string node_id;          // 决策所属指挥节点（空 = 未知/未指定）。
-    std::string trigger;          // 触发原因（事件名）。
-    GameTick arrival_tick = 0U;   // 决策到达（入队）时的游戏 tick。
-    std::uint64_t arrival_seq = 0U;  // 队列单调序列号；0 = 拒绝未入队。
-    std::string state_hash;       // 决策点状态哈希（注入前，T016）。
-    std::string input_json;       // 状态快照摘要（发给 AI 的输入）。
-    std::string events_json;      // 决策点可见事件（JSON 数组）。
-    std::string output_json;      // AI 返回的命令 JSON（含被拒绝的输出）。
-    bool validation_ok = false;   // T014 双重校验是否通过。
+    std::string decision_id;                         // 决策唯一标识（注入方提供或自动生成）。
+    std::string node_id;                             // 决策所属指挥节点（空 = 未知/未指定）。
+    std::string trigger;                             // 触发原因（事件名）。
+    GameTick arrival_tick = 0U;                      // 决策到达（入队）时的游戏 tick。
+    std::uint64_t arrival_seq = 0U;                  // 队列单调序列号；0 = 拒绝未入队。
+    std::string state_hash;                          // 决策点状态哈希（注入前，T016）。
+    std::string input_json;                          // 状态快照摘要（发给 AI 的输入）。
+    std::string events_json;                         // 决策点可见事件（JSON 数组）。
+    std::string output_json;                         // AI 返回的命令 JSON（含被拒绝的输出）。
+    bool validation_ok = false;                      // T014 双重校验是否通过。
     std::vector<ValidationError> validation_errors;  // 校验错误（确定性顺序）。
 
     bool operator==(const AiDecisionRecord&) const = default;

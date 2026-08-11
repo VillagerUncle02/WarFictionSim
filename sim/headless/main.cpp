@@ -24,6 +24,9 @@
 
 namespace {
 
+// 命令行整数解析基数（十进制；具名常量避免 magic number）。
+constexpr int kParseBase = 10;
+
 struct CliOptions {
     std::string subcommand;
     std::filesystem::path scenario;
@@ -68,7 +71,7 @@ save:
 bool ParseUint64(const std::string& text, std::uint64_t& value) {
     try {
         std::size_t consumed = 0U;
-        value = std::stoull(text, &consumed, 10);
+        value = std::stoull(text, &consumed, kParseBase);
         return consumed == text.size();
     } catch (...) {
         return false;
@@ -78,13 +81,26 @@ bool ParseUint64(const std::string& text, std::uint64_t& value) {
 bool ParseInt(const std::string& text, int& value) {
     try {
         std::size_t consumed = 0U;
-        value = std::stoi(text, &consumed, 10);
+        value = std::stoi(text, &consumed, kParseBase);
         return consumed == text.size();
     } catch (...) {
         return false;
     }
 }
 
+// 取下一个参数值；缺失时设置 error 并返回 nullptr。
+const char* NextValue(int argc, char** argv, int& index, const std::string& key, std::string& error) {
+    if (index + 1 >= argc) {
+        error = "缺少参数值: " + key;
+        return nullptr;
+    }
+    ++index;
+    return argv[index];
+}
+
+// 平坦的旗标分发解析器（每个旗标一个分支），拆分反而降低可读性；
+// 复杂度来自参数种类而非嵌套。
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 bool ParseArgs(int argc, char** argv, CliOptions& options, std::string& error) {
     if (argc < 2) {
         error = "缺少子命令（run/inject/save）";
@@ -97,63 +113,66 @@ bool ParseArgs(int argc, char** argv, CliOptions& options, std::string& error) {
     }
     for (int i = 2; i < argc; ++i) {
         const std::string key = argv[i];
-        const auto next_value = [&](const std::string& name) -> const char* {
-            if (i + 1 >= argc) {
-                error = "缺少参数值: " + name;
-                return nullptr;
-            }
-            return argv[++i];
-        };
         if (key == "--help" || key == "-h") {
             options.help = true;
-        } else if (key == "--hash") {
+            continue;
+        }
+        if (key == "--hash") {
             options.hash = true;
-        } else if (key == "--scenario") {
-            const char* value = next_value(key);
-            if (value == nullptr) return false;
+            continue;
+        }
+        const bool known_value_flag = key == "--scenario" || key == "--seed" || key == "--threads" ||
+                                      key == "--ticks" || key == "--out" || key == "--script" || key == "--ai-backend";
+        if (!known_value_flag) {
+            error = "未知参数: " + key;
+            return false;
+        }
+        const char* value = NextValue(argc, argv, i, key, error);
+        if (value == nullptr) {
+            return false;
+        }
+        if (key == "--scenario") {
             options.scenario = value;
-        } else if (key == "--seed") {
-            const char* value = next_value(key);
-            if (value == nullptr) return false;
+            continue;
+        }
+        if (key == "--seed") {
             std::uint64_t parsed = 0U;
             if (!ParseUint64(value, parsed)) {
                 error = "非法 --seed 值: " + std::string(value);
                 return false;
             }
             options.seed = parsed;
-        } else if (key == "--threads") {
-            const char* value = next_value(key);
-            if (value == nullptr) return false;
+            continue;
+        }
+        if (key == "--threads") {
             int parsed = 0;
             if (!ParseInt(value, parsed)) {
                 error = "非法 --threads 值: " + std::string(value);
                 return false;
             }
             options.threads = parsed;
-        } else if (key == "--ticks") {
-            const char* value = next_value(key);
-            if (value == nullptr) return false;
+            continue;
+        }
+        if (key == "--ticks") {
             std::uint64_t parsed = 0U;
             if (!ParseUint64(value, parsed)) {
                 error = "非法 --ticks 值: " + std::string(value);
                 return false;
             }
             options.ticks = parsed;
-        } else if (key == "--out") {
-            const char* value = next_value(key);
-            if (value == nullptr) return false;
+            continue;
+        }
+        if (key == "--out") {
             options.out = value;
-        } else if (key == "--script") {
-            const char* value = next_value(key);
-            if (value == nullptr) return false;
+            continue;
+        }
+        if (key == "--script") {
             options.script = value;
-        } else if (key == "--ai-backend") {
-            const char* value = next_value(key);
-            if (value == nullptr) return false;
+            continue;
+        }
+        if (key == "--ai-backend") {
             options.ai_backend = value;
-        } else {
-            error = "未知参数: " + key;
-            return false;
+            continue;
         }
     }
     return true;
@@ -179,6 +198,9 @@ bool WriteEventsJsonl(const std::filesystem::path& path, const std::vector<wfs::
 
 }  // namespace
 
+// main 顶层 try/catch(...) 已兜底全部异常，仅错误处理路径自身的 IO 分配
+// 可能再抛（不影响退出码语义）。
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char** argv) {
     try {
         CliOptions options;
@@ -266,6 +288,9 @@ int main(int argc, char** argv) {
         return 0;
     } catch (const std::exception& exception) {
         std::cerr << "sim_headless: 内部错误: " << exception.what() << "\n";
+        return 1;
+    } catch (...) {
+        std::cerr << "sim_headless: 未知内部错误\n";
         return 1;
     }
 }

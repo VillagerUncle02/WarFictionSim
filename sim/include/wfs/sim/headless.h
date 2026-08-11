@@ -28,8 +28,8 @@ namespace wfs::sim {
 struct HeadlessRunOptions {
     std::filesystem::path scenario_path;
     std::uint64_t seed = 0U;
-    int threads = 4;  // 只影响性能，不影响状态哈希（宪法 7）。
-    std::uint64_t ticks = 1200U;  // 默认运行时长（20 Hz 下 60 游戏秒）。
+    int threads = 4;                          // 只影响性能，不影响状态哈希（宪法 7）。
+    std::uint64_t ticks = 1200U;              // 默认运行时长（20 Hz 下 60 游戏秒）。
     std::string ai_backend = kAiBackendNone;  // kAiBackendScript / kAiBackendCloud / kAiBackendNone。
 };
 
@@ -37,8 +37,8 @@ struct HeadlessRunResult {
     bool ok() const noexcept { return error.empty(); }
 
     std::string error;
-    std::string state_hash;  // 最终状态 SHA-256（64 小写 hex，T016）。
-    std::vector<SimEvent> events;            // 事件日志（seq 升序）。
+    std::string state_hash;                   // 最终状态 SHA-256（64 小写 hex，T016）。
+    std::vector<SimEvent> events;             // 事件日志（seq 升序）。
     std::vector<AiDecisionRecord> decisions;  // 决策日志（注入顺序）。
 };
 

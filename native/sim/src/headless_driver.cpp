@@ -34,9 +34,15 @@ namespace wfs::sim {
 
 namespace {
 
+// 加载初始状态的运行配置（seed/threads 与场景路径解耦，避免相邻参数误判）。
+struct LoadConfig {
+    std::uint64_t seed = 0U;
+    int threads = 1;
+};
+
 // 加载场景并构造初始 SimState；失败时 error 非空并返回 nullopt（SimState
 // 因 EventLog explicit 构造器不可默认构造，错误路径不构造状态对象）。
-std::optional<SimState> LoadState(const std::filesystem::path& scenario_path, std::uint64_t seed, int threads,
+std::optional<SimState> LoadState(const std::filesystem::path& scenario_path, const LoadConfig& config,
                                   std::string& error) {
     const ScenarioLoadResult load = load_scenario(scenario_path);
     if (!load.ok()) {
@@ -47,9 +53,9 @@ std::optional<SimState> LoadState(const std::filesystem::path& scenario_path, st
     SimState state;
     state.scenario = load.scenario;
     state.clock = GameClock(load.scenario.tick_hz);
-    state.rng = Rng(seed, 0U);
-    state.seed = seed;
-    state.threads = threads;
+    state.rng = Rng(config.seed, 0U);
+    state.seed = config.seed;
+    state.threads = config.threads;
     state.scenario_path = scenario_path;
     return state;
 }
@@ -87,7 +93,8 @@ HeadlessRunResult run_headless(const HeadlessRunOptions& options) {
     }
 
     std::string load_error;
-    std::optional<SimState> loaded = LoadState(options.scenario_path, options.seed, options.threads, load_error);
+    std::optional<SimState> loaded =
+        LoadState(options.scenario_path, LoadConfig{options.seed, options.threads}, load_error);
     if (!loaded.has_value()) {
         result.error = std::move(load_error);
         return result;
@@ -111,8 +118,7 @@ HeadlessRunResult run_headless(const HeadlessRunOptions& options) {
                 result.error = "脚本 AI 决策失败（node=" + node + "）: " + decision.error;
                 return result;
             }
-            const AiDecisionMeta meta{"script-" + node + "-" + std::to_string(state.clock.tick()), node,
-                                      "run_start"};
+            const AiDecisionMeta meta{"script-" + node + "-" + std::to_string(state.clock.tick()), node, "run_start"};
             const AiInjectResult injected = inject_ai_decision(state, decision.command_json, meta, schema_path);
             if (!injected.accepted) {
                 result.error = "脚本 AI 决策被校验拒绝（node=" + node + "）: " + FirstError(injected.errors);
@@ -139,7 +145,8 @@ HeadlessInjectResult inject_headless(const HeadlessInjectOptions& options) {
     }
 
     std::string load_error;
-    std::optional<SimState> loaded = LoadState(options.scenario_path, options.seed, options.threads, load_error);
+    std::optional<SimState> loaded =
+        LoadState(options.scenario_path, LoadConfig{options.seed, options.threads}, load_error);
     if (!loaded.has_value()) {
         result.error = std::move(load_error);
         return result;
@@ -196,7 +203,8 @@ HeadlessSaveResult save_headless(const HeadlessSaveOptions& options) {
     }
 
     std::string load_error;
-    std::optional<SimState> loaded = LoadState(options.scenario_path, options.seed, options.threads, load_error);
+    std::optional<SimState> loaded =
+        LoadState(options.scenario_path, LoadConfig{options.seed, options.threads}, load_error);
     if (!loaded.has_value()) {
         result.error = std::move(load_error);
         return result;

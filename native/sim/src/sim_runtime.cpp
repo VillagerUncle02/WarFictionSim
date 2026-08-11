@@ -27,9 +27,9 @@ void step_sim_state(SimState& state) {
     QueuedEvent event;
     while (state.queue.try_pop(state.clock.tick(), event)) {
         ++state.processed_events;
-        state.event_log.append(state.clock.tick(), EventCategory::kCommand, EventSeverity::kInfo,
-                               "COMMAND_PROCESSED seq=" + std::to_string(event.seq) +
-                                   " tick=" + std::to_string(state.clock.tick()));
+        state.event_log.append(
+            state.clock.tick(), EventCategory::kCommand, EventSeverity::kInfo,
+            "COMMAND_PROCESSED seq=" + std::to_string(event.seq) + " tick=" + std::to_string(state.clock.tick()));
     }
 }
 
@@ -45,9 +45,9 @@ PlayerCommandResult inject_player_command(SimState& state, const std::string& co
     result.arrival_tick = state.clock.tick();
     result.arrival_seq = state.queue.enqueue(result.arrival_tick, command_json);
     result.accepted = true;
-    state.event_log.append(result.arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
-                           "COMMAND_QUEUED seq=" + std::to_string(result.arrival_seq) +
-                               " tick=" + std::to_string(result.arrival_tick));
+    state.event_log.append(
+        result.arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
+        "COMMAND_QUEUED seq=" + std::to_string(result.arrival_seq) + " tick=" + std::to_string(result.arrival_tick));
     return result;
 }
 
