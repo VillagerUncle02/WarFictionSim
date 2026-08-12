@@ -162,15 +162,19 @@ jobs:
           }
           if (Get-Command clang-tidy -ErrorAction SilentlyContinue) {
             $repoRoot = (Get-Location).Path
+            # Windows 路径需转正斜杠并转义正则元字符，否则 \a/\W 等会被当作
+            # 正则转义，header-filter 失效导致 clang-tidy 全量分析系统头（海量噪音）。
+            $repoRootFwd = $repoRoot -replace '\\', '/'
+            $headerFilter = [regex]::Escape($repoRootFwd) + '/(native/sim|native/core_c)/'
             $cppSrc = @(Get-ChildItem native/sim -Recurse -Include *.cpp,*.cc,*.cxx -ErrorAction SilentlyContinue | ForEach-Object FullName)
             $cSrc = @(Get-ChildItem native/core_c -Recurse -Include *.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
             # Ninja + clang-cl 已产出 compile_commands.json：直接按编译数据库分析
             if ($cppSrc.Count -gt 0) {
-              clang-tidy $cppSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$repoRoot/(native/sim|native/core_c)/" --quiet
+              clang-tidy $cppSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$headerFilter" --quiet
               if ($LASTEXITCODE -ne 0) { throw "clang-tidy 发现代码问题" }
             }
             if ($cSrc.Count -gt 0) {
-              clang-tidy $cSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$repoRoot/(native/sim|native/core_c)/" --quiet
+              clang-tidy $cSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$headerFilter" --quiet
               if ($LASTEXITCODE -ne 0) { throw "clang-tidy 发现代码问题" }
             }
             if ($cppSrc.Count -eq 0 -and $cSrc.Count -eq 0) {
