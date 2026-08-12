@@ -29,7 +29,7 @@
 ## 常用命令
 
 ```powershell
-$env:VCPKG_ROOT = 'C:\Users\ASUS\vcpkg'   # 本机 vcpkg 位置；CI 固定为 C:/vcpkg
+$env:VCPKG_ROOT = 'C:\path\to\vcpkg'      # 示例：替换为本机 vcpkg 位置；CI 固定为 C:/vcpkg
 
 cd native
 cmake --preset clang-cl-debug             # 配置（自动安装 manifest 依赖）

@@ -48,7 +48,7 @@ specs/        功能规格（spec / plan / tasks）
 
 ```powershell
 # 先设置 vcpkg 根目录（本机示例）
-$env:VCPKG_ROOT = 'C:\Users\ASUS\vcpkg'
+$env:VCPKG_ROOT = 'C:\path\to\vcpkg'
 
 cd native
 cmake --preset clang-cl-debug     # 或 clang-cl-release
