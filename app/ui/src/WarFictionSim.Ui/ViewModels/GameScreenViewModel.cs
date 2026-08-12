@@ -18,8 +18,11 @@ namespace WarFictionSim.Ui.ViewModels;
 /// <summary>战斗主屏（地图 + 命令面板 + 时间控制 + 事件日志）。</summary>
 public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
 {
+    private static readonly TimeSpan StateHashRefreshInterval = TimeSpan.FromSeconds(1);
+
     private readonly ISimClient _client;
     private readonly IReadOnlyList<string> _zoneIds;
+    private readonly TimeProvider _timeProvider;
     private bool _disposed;
     private string _tickDisplay = "tick 0";
     private string _stateHash = string.Empty;
@@ -27,13 +30,16 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
     private string? _lastStepError;
     private CommandContext? _commandContext;
     private ulong _commandContextTick;
+    private DateTimeOffset _lastHashTime = DateTimeOffset.MinValue;
 
     /// <summary>初始化战斗主屏。</summary>
     /// <param name="client">已创建（并已读档）的模拟客户端。</param>
     /// <param name="scenario">场景静态元数据（地图尺寸/区域列表）。</param>
-    public GameScreenViewModel(ISimClient client, ScenarioCatalogEntry scenario)
+    /// <param name="timeProvider">现实时间源（测试注入；默认系统时钟）。</param>
+    public GameScreenViewModel(ISimClient client, ScenarioCatalogEntry scenario, TimeProvider? timeProvider = null)
     {
         _client = client;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _zoneIds = scenario.Zones;
         ScenarioName = scenario.Name;
         BattleMap = new BattleMapViewModel(scenario.MapWidthKm, scenario.MapHeightKm);
@@ -131,7 +137,7 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         CommandPanel.ApplyContext(context);
         EventLog.ApplySummary(snapshot.EventLog, snapshot.Tick);
         TickDisplay = $"tick {snapshot.Tick}";
-        StateHash = _client.GetStateHash();
+        UpdateStateHash();
     }
 
     /// <summary>把命令 JSON 注入核心；核心拒绝时回填面板错误。</summary>
@@ -192,6 +198,20 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         }
 
         CommandPanel.SetExecutors(friendlyIds);
+    }
+
+    /// <summary>按需更新状态哈希：暂停时每帧展示确定性身份，运行中节流到 1Hz。</summary>
+    private void UpdateStateHash()
+    {
+        // 运行中每 50ms 对全状态序列化 + SHA-256 会与步进线程争锁（8x 档位下
+        // 可能阻塞渲染/步进）：只保留暂停时实时哈希与运行中 1Hz 节流展示。
+        if (!TimeControls.IsPaused && _timeProvider.GetUtcNow() - _lastHashTime < StateHashRefreshInterval)
+        {
+            return;
+        }
+
+        StateHash = _client.GetStateHash();
+        _lastHashTime = _timeProvider.GetUtcNow();
     }
 
     private CommandContext BuildCommandContext(SimulationSnapshot snapshot)

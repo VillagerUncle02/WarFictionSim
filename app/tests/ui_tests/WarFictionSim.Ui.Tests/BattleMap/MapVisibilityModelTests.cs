@@ -132,20 +132,104 @@ public class MapVisibilityModelTests
         Assert.Contains("过期", marker.SourceLabel, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void EchelonSource_ShowsEchelonLabel()
+    [Theory]
+    [InlineData("sync", "同级经上级同步")]
+    [InlineData("relay", "上级转发")]
+    public void SyncRelaySources_ShowChineseLabels(string kind, string expectedLabel)
     {
         UnitState enemy = SnapshotFactory.Unit("enemy-1", "node-enemy", "side-b", 1, 1);
         var intel = new Dictionary<string, IntelRecordState>
         {
             ["node-player:enemy-1"] = new IntelRecordState(
                 "node-player", "enemy-1", IntelTier.T1, 100, 500, 1000,
-                new IntelSourceState("echelon", "", "brigade-intel", 100), 1, 1, 0, 0),
+                new IntelSourceState(kind, "peer-1", "brigade-intel", 100), 1, 1, 0, 0),
         };
         SimulationSnapshot snapshot = SnapshotFactory.Create(150, [enemy], intel);
 
         UnitMarkerData marker = Assert.Single(MapVisibilityModel.Resolve(snapshot));
 
-        Assert.Contains("brigade-intel", marker.SourceLabel, StringComparison.Ordinal);
+        Assert.Contains(expectedLabel, marker.SourceLabel, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnknownSourceKind_ShowsOriginalText()
+    {
+        UnitState enemy = SnapshotFactory.Unit("enemy-1", "node-enemy", "side-b", 1, 1);
+        var intel = new Dictionary<string, IntelRecordState>
+        {
+            ["node-player:enemy-1"] = new IntelRecordState(
+                "node-player", "enemy-1", IntelTier.T1, 100, 500, 1000,
+                new IntelSourceState("carrier-pigeon", "", "node-x", 100), 1, 1, 0, 0),
+        };
+        SimulationSnapshot snapshot = SnapshotFactory.Create(150, [enemy], intel);
+
+        UnitMarkerData marker = Assert.Single(MapVisibilityModel.Resolve(snapshot));
+
+        Assert.Equal("来源：carrier-pigeon", marker.SourceLabel);
+    }
+
+    [Fact]
+    public void T1Intel_WithObservedCount_ShowsCount()
+    {
+        UnitState enemy = SnapshotFactory.Unit("enemy-1", "node-enemy", "side-b", 1, 1);
+        var intel = new Dictionary<string, IntelRecordState>
+        {
+            ["node-player:enemy-1"] = SnapshotFactory.Intel(
+                "enemy-1", IntelTier.T1, 100, 500, 1, 1, observedCount: 9),
+        };
+        SimulationSnapshot snapshot = SnapshotFactory.Create(150, [enemy], intel);
+
+        UnitMarkerData marker = Assert.Single(MapVisibilityModel.Resolve(snapshot));
+
+        Assert.Contains("9", marker.DisplayName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void T2Intel_WithTypeName_ShowsTypeName()
+    {
+        UnitState enemy = SnapshotFactory.Unit("enemy-1", "node-enemy", "side-b", 1, 1);
+        var intel = new Dictionary<string, IntelRecordState>
+        {
+            ["node-player:enemy-1"] = SnapshotFactory.Intel(
+                "enemy-1", IntelTier.T2, 100, 500, 1, 1, typeName: "BRDM-2"),
+        };
+        SimulationSnapshot snapshot = SnapshotFactory.Create(150, [enemy], intel);
+
+        UnitMarkerData marker = Assert.Single(MapVisibilityModel.Resolve(snapshot));
+
+        Assert.Equal("BRDM-2", marker.DisplayName);
+    }
+
+    [Fact]
+    public void T3Intel_WithTypeAndComposition_ShowsBoth()
+    {
+        UnitState enemy = SnapshotFactory.Unit("enemy-1", "node-enemy", "side-b", 1, 1);
+        var intel = new Dictionary<string, IntelRecordState>
+        {
+            ["node-player:enemy-1"] = SnapshotFactory.Intel(
+                "enemy-1", IntelTier.T3, 100, 500, 1, 1, typeName: "T-72", composition: "车组3+载员8"),
+        };
+        SimulationSnapshot snapshot = SnapshotFactory.Create(150, [enemy], intel);
+
+        UnitMarkerData marker = Assert.Single(MapVisibilityModel.Resolve(snapshot));
+
+        Assert.Contains("T-72", marker.DisplayName, StringComparison.Ordinal);
+        Assert.Contains("车组3+载员8", marker.DisplayName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Intel_WithoutObservationFields_FallsBackToAvailableInfo()
+    {
+        UnitState enemy = SnapshotFactory.Unit("enemy-1", "node-enemy", "side-b", 1, 1);
+        var intel = new Dictionary<string, IntelRecordState>
+        {
+            ["node-player:enemy-1"] = SnapshotFactory.Intel("enemy-1", IntelTier.T1, 100, 500, 1, 1),
+        };
+        SimulationSnapshot snapshot = SnapshotFactory.Create(150, [enemy], intel);
+
+        UnitMarkerData marker = Assert.Single(MapVisibilityModel.Resolve(snapshot));
+
+        // 快照暂缺档位化观察字段：显示可得信息（不明步兵单位），不编造数量。
+        Assert.Equal("不明步兵单位", marker.DisplayName);
     }
 }

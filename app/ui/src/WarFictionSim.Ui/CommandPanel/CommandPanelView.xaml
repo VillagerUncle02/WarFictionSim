@@ -51,20 +51,20 @@
                     <DockPanel Margin="0,6,0,0">
                         <TextBlock DockPanel.Dock="Left" Text="目标点 X/Y" VerticalAlignment="Center" Width="76"/>
                         <StackPanel Orientation="Horizontal">
-                            <TextBox Width="68" Text="{Binding Draft.PointX}" Margin="0,0,4,0"
+                            <TextBox Width="68" Text="{Binding PointXText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0"
                                      AutomationProperties.Name="目标点横坐标"/>
-                            <TextBox Width="68" Text="{Binding Draft.PointY}"
+                            <TextBox Width="68" Text="{Binding PointYText, UpdateSourceTrigger=PropertyChanged}"
                                      AutomationProperties.Name="目标点纵坐标"/>
                         </StackPanel>
                     </DockPanel>
                     <DockPanel Margin="0,6,0,0">
                         <TextBlock DockPanel.Dock="Left" Text="驻留/巡逻/构筑(tick)" VerticalAlignment="Center" Width="76"/>
                         <StackPanel Orientation="Horizontal">
-                            <TextBox Width="64" Text="{Binding Draft.DurationTicks}" Margin="0,0,4,0"
+                            <TextBox Width="64" Text="{Binding DurationTicksText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0"
                                      AutomationProperties.Name="驻留时长"/>
-                            <TextBox Width="64" Text="{Binding Draft.CycleTicks}" Margin="0,0,4,0"
+                            <TextBox Width="64" Text="{Binding CycleTicksText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0"
                                      AutomationProperties.Name="巡逻周期"/>
-                            <TextBox Width="64" Text="{Binding Draft.ConstructionTicks}"
+                            <TextBox Width="64" Text="{Binding ConstructionTicksText, UpdateSourceTrigger=PropertyChanged}"
                                      AutomationProperties.Name="构筑时长"/>
                         </StackPanel>
                     </DockPanel>
@@ -105,9 +105,9 @@
             <GroupBox Header="优先级与时限" Margin="0,10,0,0">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Left" Text="优先级" VerticalAlignment="Center" Width="76"/>
-                    <TextBox Text="{Binding Draft.Priority}" AutomationProperties.Name="优先级"/>
+                    <TextBox Text="{Binding PriorityText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="优先级"/>
                     <TextBlock DockPanel.Dock="Right" Text="时限(tick)" VerticalAlignment="Center"/>
-                    <TextBox Width="100" Text="{Binding Draft.DeadlineTick}" Margin="6,0,0,0"
+                    <TextBox Width="100" Text="{Binding DeadlineTickText, UpdateSourceTrigger=PropertyChanged}" Margin="6,0,0,0"
                              AutomationProperties.Name="时限"/>
                 </DockPanel>
             </GroupBox>

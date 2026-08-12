@@ -159,6 +159,39 @@ public class SnapshotReaderTests
     }
 
     [Fact]
+    public void Parse_IntelRecord_ReadsOptionalObservationFields()
+    {
+        const string fields =
+            """
+            "observed_count": 9, "type_name": "BRDM-2", "composition": "车组2+载员7",
+            """;
+        string json = SnapshotJson.Replace(
+            "\"last_seen_tick\": 100,",
+            fields + "\"last_seen_tick\": 100,",
+            StringComparison.Ordinal);
+
+        SimulationSnapshot snapshot = SnapshotReader.Parse(json);
+        IntelRecordState record =
+            Assert.Single(snapshot.IntelRecords.Values, r => r.TargetUnitId == "tutorial-enemy-squad-1");
+
+        Assert.Equal((ulong)9, record.ObservedCount);
+        Assert.Equal("BRDM-2", record.TypeName);
+        Assert.Equal("车组2+载员7", record.Composition);
+    }
+
+    [Fact]
+    public void Parse_IntelRecord_WithoutObservationFields_AreNull()
+    {
+        SimulationSnapshot snapshot = SnapshotReader.Parse(SnapshotJson);
+        IntelRecordState record =
+            Assert.Single(snapshot.IntelRecords.Values, r => r.TargetUnitId == "tutorial-enemy-squad-1");
+
+        Assert.Null(record.ObservedCount);
+        Assert.Null(record.TypeName);
+        Assert.Null(record.Composition);
+    }
+
+    [Fact]
     public void Parse_FromUtf8Bytes_MatchesStringParse()
     {
         byte[] bytes = Encoding.UTF8.GetBytes(SnapshotJson);

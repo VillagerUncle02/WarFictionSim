@@ -3,9 +3,13 @@
 // 流程：点选/框选执行单位 → 选类型（自动带出默认完成条件）→ 填完成条件
 // 参数/优先级/时限 → 三级校验（错误阻断提交、警告/建议内嵌展示）→ 序列化
 // JSON → 提交事件交给应用壳注入核心；核心拒绝（最终权威）回填为错误条目。
+// 数值输入走字符串包装属性：非法输入以 NUMERIC_INPUT_INVALID 错误内嵌提示
+// （FR-045 不静默、不打断操作），草稿只在解析成功后更新。
 // 全键盘可操作由视图的 Tab 顺序、焦点可见样式与访问键保证。
 
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WarFictionSim.Ui.Interop;
@@ -17,6 +21,7 @@ public sealed partial class CommandPanelViewModel : ObservableObject
 {
     private CommandContext? _context;
     private bool _canSubmit;
+    private readonly Dictionary<string, CommandValidationIssue> _inputIssues = new(StringComparer.Ordinal);
 
     /// <summary>初始化命令面板。</summary>
     public CommandPanelViewModel()
@@ -29,8 +34,9 @@ public sealed partial class CommandPanelViewModel : ObservableObject
         SetTypeCommand = new RelayCommand<string?>(SetType);
         SubmitCommand = new RelayCommand(Submit, () => CanSubmit);
 
-        // 草稿任何字段变化都触发重校验（三级提示实时内嵌，不打断操作）。
-        Draft.PropertyChanged += (_, _) => Revalidate();
+        // 草稿任何字段变化都触发重校验（三级提示实时内嵌，不打断操作），
+        // 并把数值字段变化反射回文本包装属性（供文本框回显）。
+        Draft.PropertyChanged += OnDraftPropertyChanged;
         // 执行单位集合增删（点选/框选派生）同样触发重校验，不靠每帧 ApplyContext 掩盖。
         Draft.ExecutorIds.CollectionChanged += (_, _) => Revalidate();
     }
@@ -68,6 +74,55 @@ public sealed partial class CommandPanelViewModel : ObservableObject
 
     /// <summary>提交命令。</summary>
     public IRelayCommand SubmitCommand { get; }
+
+    /// <summary>目标点横坐标输入文本（非法输入内嵌提示，不静默）。</summary>
+    public string PointXText
+    {
+        get => FormatNumber(Draft.PointX);
+        set => SetOptionalDouble(value, "POINT_X", "目标点横坐标", v => Draft.PointX = v);
+    }
+
+    /// <summary>目标点纵坐标输入文本。</summary>
+    public string PointYText
+    {
+        get => FormatNumber(Draft.PointY);
+        set => SetOptionalDouble(value, "POINT_Y", "目标点纵坐标", v => Draft.PointY = v);
+    }
+
+    /// <summary>驻留时长输入文本（tick）。</summary>
+    public string DurationTicksText
+    {
+        get => FormatNumber(Draft.DurationTicks);
+        set => SetOptionalInt64(value, "DURATION_TICKS", "驻留时长", v => Draft.DurationTicks = v);
+    }
+
+    /// <summary>巡逻周期输入文本（tick）。</summary>
+    public string CycleTicksText
+    {
+        get => FormatNumber(Draft.CycleTicks);
+        set => SetOptionalInt64(value, "CYCLE_TICKS", "巡逻周期", v => Draft.CycleTicks = v);
+    }
+
+    /// <summary>构筑时长输入文本（tick）。</summary>
+    public string ConstructionTicksText
+    {
+        get => FormatNumber(Draft.ConstructionTicks);
+        set => SetOptionalInt64(value, "CONSTRUCTION_TICKS", "构筑时长", v => Draft.ConstructionTicks = v);
+    }
+
+    /// <summary>优先级输入文本（空视为 0；负数由三级校验阻断）。</summary>
+    public string PriorityText
+    {
+        get => FormatNumber(Draft.Priority);
+        set => SetInt64(value, "PRIORITY", "优先级", v => Draft.Priority = v);
+    }
+
+    /// <summary>时限输入文本（tick；空视为 0 = 未设置并触发警告）。</summary>
+    public string DeadlineTickText
+    {
+        get => FormatNumber(Draft.DeadlineTick);
+        set => SetUInt64(value, "DEADLINE_TICK", "时限", v => Draft.DeadlineTick = v);
+    }
 
     /// <summary>应用校验上下文（进入战斗时由应用壳用快照 + 场景元数据合成）。</summary>
     /// <param name="context">校验上下文。</param>
@@ -203,9 +258,36 @@ public sealed partial class CommandPanelViewModel : ObservableObject
 
     private void Submit() => TrySubmit(out _);
 
+    private void OnDraftPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        string? textProperty = e.PropertyName switch
+        {
+            nameof(CommandDraft.PointX) => nameof(PointXText),
+            nameof(CommandDraft.PointY) => nameof(PointYText),
+            nameof(CommandDraft.DurationTicks) => nameof(DurationTicksText),
+            nameof(CommandDraft.CycleTicks) => nameof(CycleTicksText),
+            nameof(CommandDraft.ConstructionTicks) => nameof(ConstructionTicksText),
+            nameof(CommandDraft.Priority) => nameof(PriorityText),
+            nameof(CommandDraft.DeadlineTick) => nameof(DeadlineTickText),
+            _ => null,
+        };
+        if (textProperty is not null)
+        {
+            OnPropertyChanged(textProperty);
+        }
+
+        Revalidate();
+    }
+
     private void Revalidate()
     {
         Issues.Clear();
+        foreach (CommandValidationIssue issue in _inputIssues.Values)
+        {
+            Issues.Add(issue);
+        }
+
+        bool hasInputErrors = _inputIssues.Values.Any(issue => issue.Severity == CommandIssueSeverity.Error);
         if (_context is null)
         {
             CanSubmit = false;
@@ -219,7 +301,113 @@ public sealed partial class CommandPanelViewModel : ObservableObject
             Issues.Add(issue);
         }
 
-        CanSubmit = !result.HasErrors;
+        CanSubmit = !result.HasErrors && !hasInputErrors;
         SubmitCommand.NotifyCanExecuteChanged();
+    }
+
+    private static string FormatNumber(double? value) => value?.ToString("R", CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static string FormatNumber(long? value) => value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static string FormatNumber(long value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static string FormatNumber(ulong value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private void SetOptionalDouble(string? text, string fieldKey, string label, Action<double?> apply)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ClearInputIssue(fieldKey);
+            apply(null);
+            return;
+        }
+
+        if (double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double value) &&
+            double.IsFinite(value))
+        {
+            ClearInputIssue(fieldKey);
+            apply(value);
+            return;
+        }
+
+        SetInputIssue(fieldKey, $"“{text}”不是有效数值（{label}），请输入数字，如 2.5。");
+    }
+
+    private void SetOptionalInt64(string? text, string fieldKey, string label, Action<long?> apply)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ClearInputIssue(fieldKey);
+            apply(null);
+            return;
+        }
+
+        if (long.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out long value))
+        {
+            ClearInputIssue(fieldKey);
+            apply(value);
+            return;
+        }
+
+        SetInputIssue(fieldKey, $"“{text}”不是有效整数（{label}，单位 tick）。");
+    }
+
+    private void SetInt64(string? text, string fieldKey, string label, Action<long> apply)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ClearInputIssue(fieldKey);
+            apply(0);
+            return;
+        }
+
+        if (long.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out long value))
+        {
+            ClearInputIssue(fieldKey);
+            apply(value);
+            return;
+        }
+
+        SetInputIssue(fieldKey, $"“{text}”不是有效整数（{label}）。");
+    }
+
+    private void SetUInt64(string? text, string fieldKey, string label, Action<ulong> apply)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ClearInputIssue(fieldKey);
+            apply(0);
+            return;
+        }
+
+        if (ulong.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out ulong value))
+        {
+            ClearInputIssue(fieldKey);
+            apply(value);
+            return;
+        }
+
+        SetInputIssue(fieldKey, $"“{text}”不是有效非负整数（{label}，单位 tick）。");
+    }
+
+    private void SetInputIssue(string fieldKey, string message)
+    {
+        if (_inputIssues.TryGetValue(fieldKey, out CommandValidationIssue? existing) &&
+            existing.Message == message)
+        {
+            return;
+        }
+
+        _inputIssues[fieldKey] = new CommandValidationIssue(
+            CommandIssueSeverity.Error, "NUMERIC_INPUT_INVALID", message);
+        Revalidate();
+    }
+
+    private void ClearInputIssue(string fieldKey)
+    {
+        if (_inputIssues.Remove(fieldKey))
+        {
+            Revalidate();
+        }
     }
 }

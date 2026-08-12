@@ -134,4 +134,21 @@ public class CommandJsonBuilderTests
             json,
             StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Build_NegativePriority_Throws()
+    {
+        var draft = new CommandDraft
+        {
+            Type = "MOVE",
+            Condition = "reach_point",
+            Priority = -1,
+            DeadlineTick = 1000,
+        };
+        draft.ExecutorIds.Add("squad-a");
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => CommandJsonBuilder.Build(draft));
+
+        Assert.Contains("优先级", exception.Message, StringComparison.Ordinal);
+    }
 }

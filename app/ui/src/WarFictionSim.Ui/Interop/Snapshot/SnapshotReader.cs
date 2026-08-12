@@ -170,7 +170,10 @@ public static class SnapshotReader
             RequireDouble(element, "last_known_x", path),
             RequireDouble(element, "last_known_y", path),
             RequireDouble(element, "last_motion_dx", path),
-            RequireDouble(element, "last_motion_dy", path));
+            RequireDouble(element, "last_motion_dy", path),
+            TryGetOptionalUInt64(element, "observed_count", path),
+            TryGetOptionalString(element, "type_name", path),
+            TryGetOptionalString(element, "composition", path));
     }
 
     private static ObjectiveState ParseObjective(JsonElement element, string path) =>
@@ -297,6 +300,36 @@ public static class SnapshotReader
         }
 
         return value.GetBoolean();
+    }
+
+    private static ulong? TryGetOptionalUInt64(JsonElement element, string name, string path)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value))
+        {
+            return null;
+        }
+
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetUInt64(out ulong result))
+        {
+            throw new SnapshotParseException($"快照解析失败（{path}.{name}）：字段类型必须为非负整数。");
+        }
+
+        return result;
+    }
+
+    private static string? TryGetOptionalString(JsonElement element, string name, string path)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value))
+        {
+            return null;
+        }
+
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            throw new SnapshotParseException($"快照解析失败（{path}.{name}）：字段类型必须为字符串。");
+        }
+
+        return value.GetString() ?? throw new SnapshotParseException($"快照解析失败（{path}.{name}）：字符串为空。");
     }
 }
 

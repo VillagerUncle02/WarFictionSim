@@ -14,13 +14,15 @@ public class MainMenuViewModelTests
         string id,
         CombatScale scale = CombatScale.Platoon,
         bool tutorial = false,
-        string? saveSlot = null) =>
+        string? saveSlot = null,
+        string playerNodeId = "node-player",
+        IReadOnlyList<string>? commandNodeIds = null) =>
         new()
         {
             Id = id,
             Name = id,
             Path = $"{id}.json",
-            PlayerNodeId = "node-player",
+            PlayerNodeId = playerNodeId,
             IsTutorial = tutorial,
             SaveSlot = saveSlot,
             Scale = scale,
@@ -29,7 +31,7 @@ public class MainMenuViewModelTests
             MapWidthKm = 5.0,
             MapHeightKm = 5.0,
             Zones = ["zone-a"],
-            CommandNodeIds = ["node-player"],
+            CommandNodeIds = commandNodeIds ?? [playerNodeId],
         };
 
     private static ScenarioCatalog Catalog(params ScenarioCatalogEntry[] entries) =>
@@ -97,9 +99,45 @@ public class MainMenuViewModelTests
         Assert.NotNull(request);
         Assert.Equal(entry, request!.Scenario);
         Assert.Equal((ulong)42, request.Seed);
-        Assert.Equal("node-player", request.PlayerNodeId);
         Assert.Null(request.SavePath);
         Assert.False(viewModel.HasError);
+    }
+
+    [Fact]
+    public void FixedPlayerNode_IsSelectedFromScenario_AndSelectionIsLocked()
+    {
+        var entry = Scenario("platoon-a", commandNodeIds: ["node-player", "node-b"]);
+        var viewModel = new MainMenuViewModel(Catalog(entry));
+
+        Assert.True(viewModel.IsPlayerNodeFixed);
+        Assert.False(viewModel.CanChooseNode);
+        Assert.Equal("node-player", viewModel.SelectedNodeId);
+        Assert.Contains("node-player", viewModel.PlayerNodeNote, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NoPlayerNode_AllowsListingNodes_WithV1Note()
+    {
+        var entry = Scenario("platoon-a", playerNodeId: "", commandNodeIds: ["node-a", "node-b"]);
+        var viewModel = new MainMenuViewModel(Catalog(entry));
+
+        Assert.False(viewModel.IsPlayerNodeFixed);
+        Assert.True(viewModel.CanChooseNode);
+        Assert.Equal(2, viewModel.AvailableNodes.Count);
+        Assert.Contains("v1", viewModel.PlayerNodeNote, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StartNewGame_WithFixedNodeMismatch_SetsError()
+    {
+        var entry = Scenario("platoon-a", commandNodeIds: ["node-player", "node-b"]);
+        var viewModel = new MainMenuViewModel(Catalog(entry));
+        viewModel.SelectedNodeId = "node-b";
+
+        viewModel.StartNewGameCommand.Execute(null);
+
+        Assert.True(viewModel.HasError);
+        Assert.Contains("场景数据指定", viewModel.ErrorMessage, StringComparison.Ordinal);
     }
 
     [Fact]

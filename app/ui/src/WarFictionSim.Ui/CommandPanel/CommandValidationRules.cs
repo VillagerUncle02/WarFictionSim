@@ -88,6 +88,13 @@ public static class CommandValidationRules
             }
         }
 
+        // ---- 语义检查 5：优先级必须 ≥ 0（command.schema.json priority minimum:0；
+        // 负值通过面板预检会被核心以 SCHEMA_INVALID 拒绝，按 FR-045 应在此阻断）。 ----
+        if (draft.Priority < 0)
+        {
+            issues.Add(Error("PRIORITY_NEGATIVE", "优先级不能为负数（最低为 0，数值越小优先级越高）。"));
+        }
+
         // ---- 表现层警告：时限风险（native Schema 只要求 ≥0，不判语义）。 ----
         if (draft.DeadlineTick == 0)
         {

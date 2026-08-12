@@ -137,6 +137,21 @@ public class CommandValidationRulesTests
     }
 
     [Fact]
+    public void Validate_NegativePriority_IsBlockingError()
+    {
+        CommandDraft draft = ValidDraft();
+        draft.ExecutorIds.Add("squad-a");
+        draft.ZoneId = "zone-hill";
+        draft.Priority = -1;
+
+        CommandValidationResult result = CommandValidationRules.Validate(draft, Context());
+
+        Assert.Contains(
+            result.Issues,
+            issue => issue.Code == "PRIORITY_NEGATIVE" && issue.Severity == CommandIssueSeverity.Error);
+    }
+
+    [Fact]
     public void Validate_DeadlineInPast_IsWarningNotError()
     {
         CommandDraft draft = ValidDraft();

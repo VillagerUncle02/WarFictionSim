@@ -2,7 +2,9 @@
 //
 // 字段镜像 native/sim/src/intel.cpp IntelRecord/IntelSource 的 to_json 输出；
 // 识别档位（T1–T3）、来源标注、最后已知位置与最后动向是兵牌地图（T040）
-// 的直接数据源，解析为强类型枚举便于迷雾层判定。
+// 的直接数据源，解析为强类型枚举便于迷雾层判定。observed_count/type_name/
+// composition 为可选档位化观察字段（FR-034 信息内容；核心当前尚未输出，
+// 见 MapVisibilityModel 的 TODO——缺字段时 UI 只显示可得信息，不编造）。
 
 namespace WarFictionSim.Ui.Interop;
 
@@ -41,4 +43,7 @@ public sealed record IntelRecordState(
     double LastKnownX,
     double LastKnownY,
     double LastMotionDx,
-    double LastMotionDy);
+    double LastMotionDy,
+    ulong? ObservedCount = null,
+    string? TypeName = null,
+    string? Composition = null);

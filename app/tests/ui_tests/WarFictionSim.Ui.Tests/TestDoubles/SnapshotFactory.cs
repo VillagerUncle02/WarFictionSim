@@ -103,7 +103,10 @@ public static class SnapshotFactory
         string sourceKind = "direct",
         string sourceUnitId = "friendly-1",
         double motionDx = 0,
-        double motionDy = 0) =>
+        double motionDy = 0,
+        ulong? observedCount = null,
+        string? typeName = null,
+        string? composition = null) =>
         new(
             "node-player",
             targetUnitId,
@@ -115,5 +118,8 @@ public static class SnapshotFactory
             x,
             y,
             motionDx,
-            motionDy);
+            motionDy,
+            observedCount,
+            typeName,
+            composition);
 }

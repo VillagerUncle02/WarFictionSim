@@ -26,6 +26,11 @@ public static class CommandJsonBuilder
             throw new ArgumentException("命令类型与完成条件缺失，不能序列化（应先经三级校验）。");
         }
 
+        if (draft.Priority < 0)
+        {
+            throw new ArgumentException("优先级不能为负数（schema 要求 ≥0），应先经三级校验。", nameof(draft));
+        }
+
         using var stream = new MemoryStream();
         // 中文按 UTF-8 原样输出（不转义为 \uXXXX）：与核心 nlohmann::json dump
         // 的行为一致，便于玩家与 AI 阅读命令正文，也便于黄金字符串比对。

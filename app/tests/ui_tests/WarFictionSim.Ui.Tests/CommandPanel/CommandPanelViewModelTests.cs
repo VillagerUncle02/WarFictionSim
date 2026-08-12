@@ -149,4 +149,45 @@ public class CommandPanelViewModelTests
             issue => issue.Severity == CommandIssueSeverity.Error && issue.Code == "NATIVE_REJECTED");
         Assert.False(viewModel.CanSubmit);
     }
+
+    [Fact]
+    public void InvalidNumericInput_ShowsInlineErrorAndKeepsDraft()
+    {
+        var viewModel = new CommandPanelViewModel();
+        viewModel.ApplyContext(Context());
+
+        viewModel.PointXText = "abc";
+
+        Assert.Contains(
+            viewModel.Issues,
+            issue => issue.Code == "NUMERIC_INPUT_INVALID" && issue.Message.Contains("目标点横坐标", StringComparison.Ordinal));
+        Assert.Null(viewModel.Draft.PointX);
+        Assert.False(viewModel.CanSubmit);
+    }
+
+    [Fact]
+    public void ValidNumericInput_UpdatesDraftAndClearsIssue()
+    {
+        var viewModel = new CommandPanelViewModel();
+        viewModel.ApplyContext(Context());
+        viewModel.PointXText = "abc";
+
+        viewModel.PointXText = "2.5";
+
+        Assert.Equal(2.5, viewModel.Draft.PointX);
+        Assert.DoesNotContain(viewModel.Issues, issue => issue.Code == "NUMERIC_INPUT_INVALID");
+    }
+
+    [Fact]
+    public void NonNumericPriority_ShowsInlineError()
+    {
+        var viewModel = new CommandPanelViewModel();
+        viewModel.ApplyContext(Context());
+
+        viewModel.PriorityText = "高";
+
+        Assert.Contains(
+            viewModel.Issues,
+            issue => issue.Code == "NUMERIC_INPUT_INVALID" && issue.Message.Contains("优先级", StringComparison.Ordinal));
+    }
 }

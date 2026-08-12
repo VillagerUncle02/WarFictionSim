@@ -60,9 +60,10 @@ public static class MapVisibilityModel
     public static string ResolveSourceLabel(IntelSourceState source) => source.Kind switch
     {
         "direct" => $"直属发现：{source.UnitId}",
+        // 核心稳定词汇 direct|sync|relay|expired（native/sim/include/wfs/sim/intel.h）。
+        "sync" => $"同级经上级同步：{source.UnitId}",
+        "relay" => $"上级转发：{source.NodeId}",
         "expired" => "来源已过期",
-        "echelon" => $"上级转发：{source.NodeId}",
-        "peer" => $"同级转报：{source.NodeId}",
         _ => $"来源：{source.Kind}",
     };
 
@@ -117,11 +118,7 @@ public static class MapVisibilityModel
 
         // 最后目视早于当前 tick：显示为"最后已知状态"并附最后动向（FR-035）。
         bool stale = intel.LastSeenTick < snapshot.Tick;
-        string displayName = intel.Tier switch
-        {
-            IntelTier.T1 => unit.IsVehicle ? "不明载具" : "不明步兵单位",
-            _ => unit.Type,
-        };
+        string displayName = BuildDisplayName(intel, unit);
         marker = new UnitMarkerData(
             unit.Id,
             unit.Type,
@@ -138,5 +135,28 @@ public static class MapVisibilityModel
             Moving: stale,
             IsVehicle: unit.IsVehicle);
         return true;
+    }
+
+    /// <summary>按识别档位渲染显示名（FR-034：T1 数量、T2 类型、T3 型号/构成）。</summary>
+    /// <param name="intel">情报记录。</param>
+    /// <param name="unit">目标单位运行期状态（仅用于档位化字段缺失时的可得信息兜底）。</param>
+    /// <returns>识别档位裁剪后的显示名。</returns>
+    private static string BuildDisplayName(IntelRecordState intel, UnitState unit)
+    {
+        // TODO(F5/核心 T058 后置)：native intel_records 快照尚未输出
+        // observed_count/type_name/composition 档位化字段，当前只能显示
+        // 可得信息（不明步兵/载具、数据目录 type id），核心补齐字段后
+        // 下方分支自动生效；不编造数量/类型/构成。
+        return intel.Tier switch
+        {
+            IntelTier.T1 when intel.ObservedCount is { } count =>
+                unit.IsVehicle ? $"不明载具（约 {count} 辆）" : $"不明步兵（约 {count} 人）",
+            IntelTier.T1 => unit.IsVehicle ? "不明载具" : "不明步兵单位",
+            IntelTier.T2 => intel.TypeName ?? unit.Type,
+            IntelTier.T3 => intel.TypeName is { } type && intel.Composition is { } composition
+                ? $"{type}（{composition}）"
+                : intel.TypeName ?? intel.Composition ?? unit.Type,
+            _ => unit.Type,
+        };
     }
 }

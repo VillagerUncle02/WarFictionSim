@@ -87,6 +87,20 @@ public sealed partial class MainMenuViewModel : ObservableObject
         set => SetProperty(ref _selectedNodeId, value);
     }
 
+    /// <summary>当前场景是否由数据固定扮演节点（v1：C ABI 无节点覆盖参数）。</summary>
+    public bool IsPlayerNodeFixed =>
+        _selectedScenario is not null && !string.IsNullOrEmpty(_selectedScenario.PlayerNodeId);
+
+    /// <summary>是否允许玩家改选扮演节点（固定节点时禁用下拉）。</summary>
+    public bool CanChooseNode => !IsPlayerNodeFixed;
+
+    /// <summary>扮演节点选择说明（固定节点说明来源；未固定说明 v1 由场景决定）。</summary>
+    public string PlayerNodeNote => _selectedScenario is null
+        ? string.Empty
+        : IsPlayerNodeFixed
+            ? $"v1 扮演节点由场景数据指定：{_selectedScenario.PlayerNodeId}，无法更换。"
+            : "v1 版本扮演节点最终由场景数据决定，此选择暂不生效。";
+
     /// <summary>并行度（1–64；只影响性能，不影响状态哈希）。</summary>
     public int Threads
     {
@@ -134,6 +148,9 @@ public sealed partial class MainMenuViewModel : ObservableObject
         if (value is null)
         {
             SelectedNodeId = null;
+            OnPropertyChanged(nameof(IsPlayerNodeFixed));
+            OnPropertyChanged(nameof(CanChooseNode));
+            OnPropertyChanged(nameof(PlayerNodeNote));
             return;
         }
 
@@ -142,8 +159,14 @@ public sealed partial class MainMenuViewModel : ObservableObject
             AvailableNodes.Add(nodeId);
         }
 
-        // 默认选中第一个可扮演节点，减少一步操作（SC-011 上手性）。
-        SelectedNodeId = AvailableNodes.Count > 0 ? AvailableNodes[0] : null;
+        // 固定节点：直接选中场景 player_node_id（v1 不可更换）；否则默认选第一个
+        // 可扮演节点供展示（最终仍由场景数据决定）。
+        SelectedNodeId = IsPlayerNodeFixed
+            ? value.PlayerNodeId
+            : AvailableNodes.Count > 0 ? AvailableNodes[0] : null;
+        OnPropertyChanged(nameof(IsPlayerNodeFixed));
+        OnPropertyChanged(nameof(CanChooseNode));
+        OnPropertyChanged(nameof(PlayerNodeNote));
     }
 
     private void RefreshVisibleScenarios()
@@ -168,7 +191,7 @@ public sealed partial class MainMenuViewModel : ObservableObject
             return;
         }
 
-        RaiseStart(new GameStartRequest(scenario!, scenario!.Seed, Threads, SelectedNodeId!, null));
+        RaiseStart(new GameStartRequest(scenario!, scenario!.Seed, Threads, null));
     }
 
     private void StartTutorial()
@@ -186,8 +209,7 @@ public sealed partial class MainMenuViewModel : ObservableObject
             return;
         }
 
-        string nodeId = tutorial.CommandNodeIds.FirstOrDefault() ?? tutorial.PlayerNodeId;
-        RaiseStart(new GameStartRequest(tutorial, tutorial.Seed, Threads, nodeId, null));
+        RaiseStart(new GameStartRequest(tutorial, tutorial.Seed, Threads, null));
     }
 
     private void LoadSave(string? savePath)
@@ -231,8 +253,7 @@ public sealed partial class MainMenuViewModel : ObservableObject
             return;
         }
 
-        string nodeId = scenario.CommandNodeIds.FirstOrDefault() ?? scenario.PlayerNodeId;
-        RaiseStart(new GameStartRequest(scenario, header.Seed, Threads, nodeId, savePath));
+        RaiseStart(new GameStartRequest(scenario, header.Seed, Threads, savePath));
     }
 
     private bool TryResolveSelection(out ScenarioCatalogEntry? scenario, out string? error)
@@ -244,9 +265,11 @@ public sealed partial class MainMenuViewModel : ObservableObject
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(SelectedNodeId))
+        if (scenario is not null &&
+            !string.IsNullOrEmpty(scenario.PlayerNodeId) &&
+            SelectedNodeId != scenario.PlayerNodeId)
         {
-            error = "请选择扮演的指挥节点。";
+            error = $"该场景 v1 扮演节点由场景数据指定为 {scenario.PlayerNodeId}，无法更换。";
             return false;
         }
 

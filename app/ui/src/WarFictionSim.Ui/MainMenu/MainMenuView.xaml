@@ -38,9 +38,14 @@
 
         <StackPanel Grid.Column="1">
             <GroupBox Header="扮演节点">
-                <ComboBox ItemsSource="{Binding AvailableNodes}"
-                          SelectedItem="{Binding SelectedNodeId}"
-                          AutomationProperties.Name="扮演节点"/>
+                <StackPanel>
+                    <ComboBox ItemsSource="{Binding AvailableNodes}"
+                              SelectedItem="{Binding SelectedNodeId}"
+                              IsEnabled="{Binding CanChooseNode}"
+                              AutomationProperties.Name="扮演节点"/>
+                    <TextBlock Text="{Binding PlayerNodeNote}" Foreground="#8A6D00"
+                               TextWrapping="Wrap" Margin="0,4,0,0" FontSize="11"/>
+                </StackPanel>
             </GroupBox>
             <GroupBox Header="并行度（只影响性能）" Margin="0,12,0,0">
                 <ComboBox SelectedValuePath="Content"

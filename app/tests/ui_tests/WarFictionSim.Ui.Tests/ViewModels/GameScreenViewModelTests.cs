@@ -149,4 +149,44 @@ public class GameScreenViewModelTests
 
         Assert.True(client.Disposed);
     }
+
+    [Fact]
+    public void StateHash_IsThrottledWhenRunning()
+    {
+        (FakeSimClient client, SimulationSnapshot snapshot) = SnapshotWithUnits();
+        var timeProvider = new MutableTimeProvider();
+        var viewModel = new GameScreenViewModel(client, Scenario(), timeProvider);
+
+        viewModel.ApplySnapshot(snapshot);
+        viewModel.ApplySnapshot(snapshot);
+
+        Assert.Equal(1, client.StateHashCallCount);
+
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        viewModel.ApplySnapshot(snapshot);
+
+        Assert.Equal(2, client.StateHashCallCount);
+    }
+
+    [Fact]
+    public void StateHash_IsComputedEachFrameWhenPaused()
+    {
+        (FakeSimClient client, SimulationSnapshot snapshot) = SnapshotWithUnits();
+        var viewModel = new GameScreenViewModel(client, Scenario());
+        viewModel.TimeControls.Pause();
+
+        viewModel.ApplySnapshot(snapshot);
+        viewModel.ApplySnapshot(snapshot);
+
+        Assert.Equal(2, client.StateHashCallCount);
+    }
+
+    private sealed class MutableTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan delta) => _now = _now.Add(delta);
+    }
 }
