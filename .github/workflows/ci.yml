@@ -170,12 +170,22 @@ jobs:
             $cSrc = @(Get-ChildItem native/core_c -Recurse -Include *.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
             # Ninja + clang-cl 已产出 compile_commands.json：直接按编译数据库分析
             if ($cppSrc.Count -gt 0) {
-              clang-tidy $cppSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$headerFilter" --quiet
-              if ($LASTEXITCODE -ne 0) { throw "clang-tidy 发现代码问题" }
+              # 输出重定向到临时日志：不同 clang-tidy 版本会打印海量"已抑制"的
+              # 系统头诊断计数，污染 CI 日志；仅在失败时回显尾部定位真实问题。
+              $tidyLogCpp = Join-Path $env:RUNNER_TEMP 'clang-tidy-cpp.log'
+              clang-tidy $cppSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$headerFilter" --quiet *> $tidyLogCpp
+              if ($LASTEXITCODE -ne 0) {
+                if (Test-Path $tidyLogCpp) { Get-Content $tidyLogCpp | Select-Object -Last 80 }
+                throw "clang-tidy 发现代码问题"
+              }
             }
             if ($cSrc.Count -gt 0) {
-              clang-tidy $cSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$headerFilter" --quiet
-              if ($LASTEXITCODE -ne 0) { throw "clang-tidy 发现代码问题" }
+              $tidyLogC = Join-Path $env:RUNNER_TEMP 'clang-tidy-c.log'
+              clang-tidy $cSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$headerFilter" --quiet *> $tidyLogC
+              if ($LASTEXITCODE -ne 0) {
+                if (Test-Path $tidyLogC) { Get-Content $tidyLogC | Select-Object -Last 80 }
+                throw "clang-tidy 发现代码问题"
+              }
             }
             if ($cppSrc.Count -eq 0 -and $cSrc.Count -eq 0) {
               Write-Host "暂无 C/C++ 源码，跳过 clang-tidy"
