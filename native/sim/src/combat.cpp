@@ -438,26 +438,17 @@ SuppressionResult resolve_suppression(const SuppressionInput& input, const Comba
     return SuppressionResult{added, Clamp01(input.current_suppression + added)};
 }
 
+// 旧 CombatConfig 适配重载（T032 后权威实现位于 contact.cpp）：把战斗配置
+// 中的 contact_loss_* 字段映射到 ContactConfig，保证既有调用方（黄金测试/
+// 外部 API）与统一失联实现使用同一公式与 RNG 语义。
 ContactLossResult resolve_contact_loss(const ContactLossInput& input, const CombatConfig& config, Rng& rng) {
-    ContactLossResult result;
-    if (!input.hit) {
-        return result;
-    }
-    const double damage_probability = config.contact_loss_damage_probability * Clamp01(input.damage_ratio);
-    const double suppression_probability =
-        input.suppression >= config.contact_loss_suppression_threshold
-            ? (config.contact_loss_suppression_probability * Clamp01(input.suppression))
-            : 0.0;
-    result.probability = Clamp01(damage_probability + suppression_probability);
-    const std::uint32_t roll = rng.next_bounded(kProbabilityScale);
-    if (roll < static_cast<std::uint32_t>(result.probability * static_cast<double>(kProbabilityScale))) {
-        result.lost = true;
-        const std::uint64_t span = config.contact_loss_max_ticks - config.contact_loss_min_ticks;
-        result.duration_ticks = config.contact_loss_min_ticks +
-                                static_cast<std::uint64_t>(rng.next_bounded(
-                                    static_cast<std::uint32_t>(std::min<std::uint64_t>(span, kMaxBoundedSpan))));
-    }
-    return result;
+    ContactConfig contact;
+    contact.suppression_threshold = config.contact_loss_suppression_threshold;
+    contact.damage_probability = config.contact_loss_damage_probability;
+    contact.suppression_probability = config.contact_loss_suppression_probability;
+    contact.min_ticks = config.contact_loss_min_ticks;
+    contact.max_ticks = config.contact_loss_max_ticks;
+    return wfs::sim::resolve_contact_loss(input, contact, rng);
 }
 
 TargetSelectionResult select_target(const TargetSelectionInput& input, const CombatConfig& config) {
@@ -593,11 +584,6 @@ void to_json(nlohmann::json& json, const AreaEngagementResult& result) {
 
 void to_json(nlohmann::json& json, const SuppressionResult& result) {
     json = nlohmann::json{{"added", result.added}, {"total", result.total}};
-}
-
-void to_json(nlohmann::json& json, const ContactLossResult& result) {
-    json = nlohmann::json{
-        {"lost", result.lost}, {"probability", result.probability}, {"duration_ticks", result.duration_ticks}};
 }
 
 void to_json(nlohmann::json& json, const TargetCandidate& candidate) {
@@ -770,13 +756,7 @@ void step_combat(SimState& state) {
         if (unit.suppression > 0.0) {
             unit.suppression = std::max(0.0, unit.suppression - config.suppression_recovery_per_tick);
         }
-        if (unit.out_of_contact && unit.contact_ticks_remaining > 0U) {
-            --unit.contact_ticks_remaining;
-            if (unit.contact_ticks_remaining == 0U) {
-                unit.out_of_contact = false;
-                LogCombat(state, EventSeverity::kInfo, "CONTACT_RESTORED unit=" + unit.id);
-            }
-        }
+        // 失联恢复由 T032 step_contact 独立结算（FR-065：恢复各自独立进行）。
     }
 
     const double environment_accuracy =
@@ -976,8 +956,11 @@ void step_combat(SimState& state) {
 
             // 失联结算（FR-065）：重损伤或压制达阈值有概率失联。
             const ContactLossResult contact = resolve_contact_loss(
-                ContactLossInput{target_mut->suppression, damage_ratio, hit.hit}, config, state.rng);
+                ContactLossInput{target_mut->suppression, damage_ratio, hit.hit}, state.contact_config, state.rng);
             if (contact.lost && !target_mut->out_of_contact) {
+                // 失联瞬间冻结最后已知状态（FR-065：位置/状态转为最后已知）。
+                const LastKnownState snapshot = capture_last_known(*target_mut);
+                apply_last_known(*target_mut, snapshot);
                 target_mut->out_of_contact = true;
                 target_mut->contact_ticks_remaining = contact.duration_ticks;
                 LogCombat(state, EventSeverity::kWarning,

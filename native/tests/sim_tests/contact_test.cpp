@@ -97,10 +97,8 @@ TEST(WfsContactTest, ContactLossDeterministicAndBounded) {
     const ContactConfig config = AlwaysLostConfig();
     Rng first(7U, 0U);
     Rng second(7U, 0U);
-    const ContactLossResult a =
-        wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 0.4, true}, config, first);
-    const ContactLossResult b =
-        wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 0.4, true}, config, second);
+    const ContactLossResult a = wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 0.4, true}, config, first);
+    const ContactLossResult b = wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 0.4, true}, config, second);
     EXPECT_EQ(nlohmann::json(a).dump(), nlohmann::json(b).dump()) << "同种子失联结算必须逐字段一致";
     ASSERT_TRUE(a.lost);
     EXPECT_GE(a.duration_ticks, config.min_ticks);
@@ -110,8 +108,7 @@ TEST(WfsContactTest, ContactLossDeterministicAndBounded) {
 TEST(WfsContactTest, ContactLossRequiresHit) {
     const ContactConfig config = AlwaysLostConfig();
     Rng rng(7U, 0U);
-    const ContactLossResult result =
-        wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 0.4, false}, config, rng);
+    const ContactLossResult result = wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 0.4, false}, config, rng);
     EXPECT_FALSE(result.lost);
     EXPECT_DOUBLE_EQ(result.probability, 0.0);
 }
@@ -194,4 +191,3 @@ TEST(WfsContactTest, StepSimIntegratesContactRecovery) {
     step_sim_state(state);
     EXPECT_FALSE(FindUnit(state, "squad-a")->out_of_contact) << "step_sim_state 必须执行失联恢复";
 }
-

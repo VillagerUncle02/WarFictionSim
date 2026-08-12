@@ -231,13 +231,23 @@ void step_movement(SimState& state) {
             continue;  // 切换期间禁止移动。
         }
 
-        // 移动任务启动（UNIT_MOVING）：仅当任务为 reach_point 且队形就绪。
-        if (unit.mission_active && unit.mission_condition == "reach_point" && !unit.moving && !unit.out_of_contact) {
+        // 移动任务启动（UNIT_MOVING）：reach_point 任务或失败后处置/侦察
+        // 阶段撤退（retreating）且队形就绪；T034 统一负责任务完成判定。
+        const bool mission_move =
+            unit.mission_active && unit.mission_condition == "reach_point" && !unit.moving && !unit.out_of_contact;
+        const bool retreat_move = unit.retreating && !unit.moving && !unit.out_of_contact;
+        if (mission_move || retreat_move) {
             unit.moving = true;
-            LogMovement(state, EventSeverity::kInfo,
-                        "UNIT_MOVING unit=" + unit.id + " target=(" + std::to_string(unit.target_x) + "," +
-                            std::to_string(unit.target_y) +
-                            ") formation=" + std::string(model::to_string(unit.formation)));
+            if (retreat_move && !mission_move) {
+                LogMovement(state, EventSeverity::kWarning,
+                            "UNIT_RETREATING unit=" + unit.id + " target=(" + std::to_string(unit.target_x) + "," +
+                                std::to_string(unit.target_y) + ")");
+            } else {
+                LogMovement(state, EventSeverity::kInfo,
+                            "UNIT_MOVING unit=" + unit.id + " target=(" + std::to_string(unit.target_x) + "," +
+                                std::to_string(unit.target_y) +
+                                ") formation=" + std::string(model::to_string(unit.formation)));
+            }
         }
         if (!unit.moving) {
             continue;
@@ -266,13 +276,9 @@ void step_movement(SimState& state) {
         const double distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
         if (distance <= config.arrival_tolerance_km) {
             unit.moving = false;
-            if (unit.mission_active && unit.mission_condition == "reach_point") {
-                LogMovement(state, EventSeverity::kInfo,
-                            "MISSION_COMPLETED unit=" + unit.id + " command=" + unit.mission_command_id +
-                                " type=" + unit.mission_type);
-                state.command_chain.MarkCompleted(unit.mission_command_id);
-                unit.mission_active = false;
-                unit.mission_command_id.clear();
+            if (unit.retreating) {
+                unit.retreating = false;
+                LogMovement(state, EventSeverity::kInfo, "RETREAT_COMPLETE unit=" + unit.id);
             }
             unit.stuck = false;
             continue;
@@ -285,13 +291,9 @@ void step_movement(SimState& state) {
             unit.x = unit.target_x;
             unit.y = unit.target_y;
             unit.moving = false;
-            if (unit.mission_active && unit.mission_condition == "reach_point") {
-                LogMovement(state, EventSeverity::kInfo,
-                            "MISSION_COMPLETED unit=" + unit.id + " command=" + unit.mission_command_id +
-                                " type=" + unit.mission_type);
-                state.command_chain.MarkCompleted(unit.mission_command_id);
-                unit.mission_active = false;
-                unit.mission_command_id.clear();
+            if (unit.retreating) {
+                unit.retreating = false;
+                LogMovement(state, EventSeverity::kInfo, "RETREAT_COMPLETE unit=" + unit.id);
             }
             unit.stuck = false;
         }

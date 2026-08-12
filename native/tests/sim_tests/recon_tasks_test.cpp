@@ -110,8 +110,9 @@ TEST(WfsReconTasksTest, HiddenReconFailsWhenDetected) {
 
     step_recon_tasks(state);
     EXPECT_TRUE(HasEvent(state.event_log, "RECON_DETECTED unit=squad-a type=HIDDEN_RECON"));
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_FAILED unit=squad-a command=cmd-recon type=HIDDEN_RECON "
-                                          "reason=RECON_DETECTED"));
+    EXPECT_TRUE(HasEvent(state.event_log,
+                         "MISSION_FAILED unit=squad-a command=cmd-recon type=HIDDEN_RECON "
+                         "reason=RECON_DETECTED"));
     EXPECT_FALSE(FindUnit(state, "squad-a")->mission_active);
 }
 
@@ -121,8 +122,7 @@ TEST(WfsReconTasksTest, InfiltrateReconThreePhaseDetermination) {
     ASSERT_NE(unit, nullptr);
     state.recon_config.infiltrate_hold_ticks = 2U;
     SetReconMission(*unit, "INFILTRATE_RECON",
-                    nlohmann::json{{"point", {{"x", 1.2}, {"y", 1.2}}},
-                                   {"exit_point", {{"x", 0.9}, {"y", 0.9}}}});
+                    nlohmann::json{{"point", {{"x", 1.2}, {"y", 1.2}}}, {"exit_point", {{"x", 0.9}, {"y", 0.9}}}});
 
     // 阶段 0：接近目标。
     step_recon_tasks(state);
@@ -147,8 +147,9 @@ TEST(WfsReconTasksTest, InfiltrateReconThreePhaseDetermination) {
     unit->x = 0.9;
     unit->y = 0.9;
     step_recon_tasks(state);
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a command=cmd-recon type=INFILTRATE_RECON "
-                                          "reason=INFILTRATE_RETURN"));
+    EXPECT_TRUE(HasEvent(state.event_log,
+                         "MISSION_COMPLETED unit=squad-a command=cmd-recon type=INFILTRATE_RECON "
+                         "reason=INFILTRATE_RETURN"));
     EXPECT_FALSE(FindUnit(state, "squad-a")->mission_active);
 }
 
@@ -170,8 +171,7 @@ TEST(WfsReconTasksTest, ObservationPostCyclesAndRegistersIntel) {
     EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a command=cmd-recon type=OBSERVATION_POST"));
     EXPECT_TRUE(HasEvent(state.event_log, "MISSION_LOOP_RESTARTED unit=squad-a command=cmd-recon"));
     EXPECT_TRUE(FindUnit(state, "squad-a")->mission_active);
-    const wfs::sim::IntelRecord* record =
-        wfs::sim::find_intel(state, "platoon-alpha", "squad-c");
+    const wfs::sim::IntelRecord* record = wfs::sim::find_intel(state, "platoon-alpha", "squad-c");
     ASSERT_NE(record, nullptr) << "观察哨必须向情报板登记敌方情报";
     EXPECT_EQ(record->source.unit_id, "squad-a");
 }
@@ -185,8 +185,9 @@ TEST(WfsReconTasksTest, FireReconCompletesAfterRoundsAndFailsWhenPinned) {
     for (std::uint32_t i = 0U; i < 3U; ++i) {
         step_recon_tasks(state);
     }
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a command=cmd-recon type=FIRE_RECON "
-                                          "reason=FIRE_RECON_ROUNDS"));
+    EXPECT_TRUE(HasEvent(state.event_log,
+                         "MISSION_COMPLETED unit=squad-a command=cmd-recon type=FIRE_RECON "
+                         "reason=FIRE_RECON_ROUNDS"));
     EXPECT_FALSE(FindUnit(state, "squad-a")->mission_active);
 
     SimState pinned = MakeState();
@@ -195,10 +196,10 @@ TEST(WfsReconTasksTest, FireReconCompletesAfterRoundsAndFailsWhenPinned) {
     pinned_unit->suppression = 1.0;
     SetReconMission(*pinned_unit, "FIRE_RECON", nlohmann::json{{"point", {{"x", 1.0}, {"y", 1.0}}}});
     step_recon_tasks(pinned);
-    EXPECT_TRUE(HasEvent(pinned.event_log, "MISSION_FAILED unit=squad-a command=cmd-recon type=FIRE_RECON "
-                                           "reason=FIRE_RECON_PINNED"));
-    EXPECT_TRUE(HasEvent(pinned.event_log, "AUTO_SUPPORT_REQUEST node=platoon-alpha unit=squad-a")) 
+    EXPECT_TRUE(HasEvent(pinned.event_log,
+                         "MISSION_FAILED unit=squad-a command=cmd-recon type=FIRE_RECON "
+                         "reason=FIRE_RECON_PINNED"));
+    EXPECT_TRUE(HasEvent(pinned.event_log, "AUTO_SUPPORT_REQUEST node=platoon-alpha unit=squad-a"))
         << "火力侦察被拖住必须自动上报并请求支援";
     EXPECT_FALSE(FindUnit(pinned, "squad-a")->mission_active);
 }
-

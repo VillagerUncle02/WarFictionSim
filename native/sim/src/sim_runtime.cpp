@@ -23,10 +23,15 @@
 
 #include "wfs/sim/combat.h"
 #include "wfs/sim/command_validation.h"
+#include "wfs/sim/contact.h"
 #include "wfs/sim/event_log.h"
+#include "wfs/sim/intel.h"
+#include "wfs/sim/mission_exec.h"
 #include "wfs/sim/model/combat.h"
 #include "wfs/sim/movement.h"
+#include "wfs/sim/outcome.h"
 #include "wfs/sim/queue.h"
+#include "wfs/sim/recon_tasks.h"
 
 namespace wfs::sim {
 
@@ -199,6 +204,19 @@ void initialize_runtime_state(SimState& state) {
     state.command_delay_config = CommandDelayConfig::FromScenario(state.scenario.raw);
     state.movement_config = MovementConfig::FromScenario(state.scenario.raw);
     state.combat_config = CombatConfig::FromScenario(state.scenario.raw);
+    // T032–T036：失联/情报/任务/侦察/胜负配置与初始状态（数据驱动派生）。
+    state.contact_config = ContactConfig::FromScenario(state.scenario.raw);
+    state.intel_config = IntelConfig::FromScenario(state.scenario.raw);
+    state.mission_config = MissionExecConfig::FromScenario(state.scenario.raw);
+    state.recon_config = ReconConfig::FromScenario(state.scenario.raw);
+    state.outcome_config = OutcomeConfig::FromScenario(state.scenario.raw);
+    state.intel_records.clear();
+    state.objective_states.clear();
+    for (const ScenarioObjective& objective : state.scenario.objectives) {
+        state.objective_states.push_back(ObjectiveRuntimeState{objective.id, objective.kind, objective.target_ref,
+                                                               objective.duration_ticks, 0U, false});
+    }
+    state.outcome = OutcomeState{};
     state.terrain_cells = terrain_cells_from_scenario(state.scenario.raw);
 
     DataLibraryLoadResult library;
@@ -231,6 +249,11 @@ void step_sim_state(SimState& state) {
     state.command_chain.ProcessDue(state);
     step_movement(state);
     step_combat(state);
+    step_contact(state);      // T032：失联恢复（独立于战斗结算）。
+    step_intel(state);        // T033：迷雾/情报观察与记忆过期。
+    step_recon_tasks(state);  // T035：侦察类任务判定。
+    step_missions(state);     // T034：任务完成/失败/循环/上报。
+    step_outcome(state);      // T036：胜负判定（最后执行，失败优先）。
 }
 
 PlayerCommandResult inject_player_command(SimState& state, const std::string& command_json,

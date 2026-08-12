@@ -111,9 +111,11 @@ class CommandChain {
     // 任务完成后由机动/任务系统回调（MISSION_COMPLETED）。
     void MarkCompleted(const std::string& command_id);
     // 任务超时/失败处置入口（当前组仅登记事件，完整判定为 T034）。
-    void MarkTimedOut(SimState& state, const std::string& command_id);
+    static void MarkTimedOut(SimState& state, const std::string& command_id);
 
     const ChainCommand* Find(const std::string& command_id) const;
+    // 可变查找（T034 超时处置等需要修改命令状态；未找到返回 nullptr）。
+    ChainCommand* FindMutable(const std::string& command_id);
     std::vector<ChainCommand> CommandsInIssueOrder() const { return commands_; }
     std::size_t size() const noexcept { return commands_.size(); }
     bool empty() const noexcept { return commands_.empty(); }
@@ -121,8 +123,6 @@ class CommandChain {
     void Clear() noexcept { commands_.clear(); }
 
    private:
-    ChainCommand* FindMutable(const std::string& command_id);
-
     friend void from_json(const nlohmann::json& json, CommandChain& chain);
 
     std::vector<ChainCommand> commands_;  // 下达顺序（= seq 升序），确定性。

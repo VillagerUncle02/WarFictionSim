@@ -31,6 +31,7 @@
 
 #include "sim_state.h"
 #include "wfs/sim/event_log.h"
+#include "wfs/sim/mission_exec.h"
 #include "wfs/sim/model/mission.h"
 #include "wfs/sim/movement.h"
 
@@ -97,6 +98,19 @@ void ApplyMission(RuntimeUnitState& unit, const nlohmann::json& payload, const M
     unit.mission_params = payload["completion"].value("params", nlohmann::json::object());
     const nlohmann::json behavior = payload.value("behavior", nlohmann::json::object());
     ApplyAmmoPolicy(unit, behavior);
+    // T034：失败后处置与持续任务循环开关（FR-044）随任务生效写入单位。
+    unit.mission_loops = payload.value("loops", true);
+    if (behavior.is_object()) {
+        unit.failure_action = behavior.value("failure_action", "report");
+        if (behavior.contains("failure_target")) {
+            unit.failure_target = behavior["failure_target"].get<std::string>();
+        } else {
+            unit.failure_target.clear();
+        }
+    } else {
+        unit.failure_action = "report";
+        unit.failure_target.clear();
+    }
 
     const model::Formation target = formation_for_mission(type, behavior);
     unit.requested_formation = target;
@@ -124,6 +138,12 @@ void CancelMission(RuntimeUnitState& unit) {
     unit.stuck = false;
     unit.target_x = 0.0;
     unit.target_y = 0.0;
+    unit.retreating = false;  // 新命令接管：停止旧任务的撤退。
+    unit.mission_loops = false;
+    unit.failure_action = "report";
+    unit.failure_target.clear();
+    unit.recon_progress_ticks = 0U;
+    unit.recon_hold_ticks = 0U;
 }
 
 // 确认接受事件（FR-046）：接收方确认指令；只有仲裁胜者产生确认。
@@ -388,16 +408,9 @@ void CommandChain::MarkCompleted(const std::string& command_id) {
 }
 
 void CommandChain::MarkTimedOut(SimState& state, const std::string& command_id) {
-    ChainCommand* command = FindMutable(command_id);
-    if (command == nullptr) {
-        return;
-    }
-    command->state = CommandState::kCompleted;
-    Log(state, EventCategory::kMission, EventSeverity::kWarning,
-        "MISSION_TIMED_OUT unit=" + command->unit_id + " command=" + command->command_id + " type=" + command->type);
-    if (RuntimeUnitState* unit = FindUnit(state, command->unit_id)) {
-        CancelMission(*unit);
-    }
+    // T034：超时处置（继续/取消/判失败 + 失败后处置 + 上报）统一由任务
+    // 判定系统处理，本模块只做委托，保证单一判定权威（宪法第 7 条）。
+    handle_mission_timeout(state, command_id);
 }
 
 // 到期处理是固定顺序的事务链（收集→单兵条件→优先级裁决→取代→生效→批量

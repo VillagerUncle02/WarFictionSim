@@ -28,6 +28,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "wfs/sim/contact.h"
 #include "wfs/sim/model/combat.h"
 #include "wfs/sim/model/mission.h"
 #include "wfs/sim/rng.h"
@@ -189,19 +190,8 @@ struct SuppressionResult {
 SuppressionResult resolve_suppression(const SuppressionInput& input, const CombatConfig& config);
 
 // ---- 失联（FR-065）----
-
-struct ContactLossInput {
-    double suppression = 0.0;
-    double damage_ratio = 0.0;  // 本次/累计伤害相对摧毁阈值比例。
-    bool hit = true;
-};
-
-struct ContactLossResult {
-    bool lost = false;
-    double probability = 0.0;
-    std::uint64_t duration_ticks = 0U;
-};
-
+// 失联判定统一在 contact.h/contact.cpp（T032）：ContactConfig 为权威配置，
+// 本模块保留 CombatConfig 适配重载以兼容既有黄金测试与调用方。
 ContactLossResult resolve_contact_loss(const ContactLossInput& input, const CombatConfig& config, Rng& rng);
 
 // ---- 目标选择（FR-060）----
@@ -262,7 +252,6 @@ void to_json(nlohmann::json& json, const DamageResult& result);
 void to_json(nlohmann::json& json, const SoldierOutcome& outcome);
 void to_json(nlohmann::json& json, const AreaEngagementResult& result);
 void to_json(nlohmann::json& json, const SuppressionResult& result);
-void to_json(nlohmann::json& json, const ContactLossResult& result);
 void to_json(nlohmann::json& json, const TargetCandidate& candidate);
 void to_json(nlohmann::json& json, const TargetSelectionResult& result);
 void to_json(nlohmann::json& json, const AmmoSelectionResult& result);

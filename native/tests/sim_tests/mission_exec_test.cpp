@@ -91,19 +91,18 @@ TEST(WfsMissionExecTest, SecureZoneCompletesAfterHoldDuration) {
     SimState state = MakeState();
     RuntimeUnitState* unit = FindUnit(state, "squad-a");
     ASSERT_NE(unit, nullptr);
-    SetMission(*unit, "SECURE_ZONE", "secure_zone",
-               nlohmann::json{{"zone", "zone-hill"},
-                              {"zone_x", 1.0},
-                              {"zone_y", 1.0},
-                              {"zone_radius_km", 0.1},
-                              {"duration_ticks", 5}});
+    SetMission(
+        *unit, "SECURE_ZONE", "secure_zone",
+        nlohmann::json{
+            {"zone", "zone-hill"}, {"zone_x", 1.0}, {"zone_y", 1.0}, {"zone_radius_km", 0.1}, {"duration_ticks", 5}});
     for (std::uint64_t i = 0U; i < 5U; ++i) {
         step_missions(state);
     }
     EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a command=cmd-test type=SECURE_ZONE"))
         << "区域驻留时长满足后必须确定性完成";
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_STATUS_REPORT interaction=EXECUTION node=platoon-alpha "
-                                          "unit=squad-a command=cmd-test state=COMPLETED"));
+    EXPECT_TRUE(HasEvent(state.event_log,
+                         "MISSION_STATUS_REPORT interaction=EXECUTION node=platoon-alpha "
+                         "unit=squad-a command=cmd-test state=COMPLETED"));
     EXPECT_FALSE(FindUnit(state, "squad-a")->mission_active);
 }
 
@@ -128,9 +127,11 @@ TEST(WfsMissionExecTest, FailsOnLossThresholdAndReports) {
     }
     SetMission(*unit, "ATTACK", "destroy_unit", nlohmann::json{{"target_unit", "squad-c"}});
     step_missions(state);
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_FAILED unit=squad-a command=cmd-test type=ATTACK reason=LOSS_THRESHOLD"));
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_STATUS_REPORT interaction=EXECUTION node=platoon-alpha "
-                                          "unit=squad-a command=cmd-test state=FAILED"));
+    EXPECT_TRUE(
+        HasEvent(state.event_log, "MISSION_FAILED unit=squad-a command=cmd-test type=ATTACK reason=LOSS_THRESHOLD"));
+    EXPECT_TRUE(HasEvent(state.event_log,
+                         "MISSION_STATUS_REPORT interaction=EXECUTION node=platoon-alpha "
+                         "unit=squad-a command=cmd-test state=FAILED"));
     EXPECT_FALSE(FindUnit(state, "squad-a")->mission_active);
 }
 
@@ -169,8 +170,9 @@ TEST(WfsMissionExecTest, TimeoutResolutionFailAppliesFailureAction) {
     EXPECT_TRUE(FindUnit(state, "squad-a")->retreating) << "失败后处置 withdraw_to 必须启动撤退";
     EXPECT_DOUBLE_EQ(FindUnit(state, "squad-a")->target_x, 2.0);
     EXPECT_DOUBLE_EQ(FindUnit(state, "squad-a")->target_y, 2.0);
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_STATUS_REPORT interaction=EXECUTION node=platoon-alpha "
-                                          "unit=squad-a command=cmd-test state=TIMED_OUT"));
+    EXPECT_TRUE(HasEvent(state.event_log,
+                         "MISSION_STATUS_REPORT interaction=EXECUTION node=platoon-alpha "
+                         "unit=squad-a command=cmd-test state=TIMED_OUT"));
     EXPECT_TRUE(HasEvent(state.event_log, "FAILURE_ACTION_WITHDRAW unit=squad-a"));
 }
 
@@ -187,4 +189,3 @@ TEST(WfsMissionExecTest, TimeoutResolutionContinueExtendsDeadline) {
     EXPECT_TRUE(FindUnit(state, "squad-a")->mission_active);
     EXPECT_GT(FindUnit(state, "squad-a")->mission_deadline_ticks, state.clock.tick());
 }
-

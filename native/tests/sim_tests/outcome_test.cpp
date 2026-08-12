@@ -109,8 +109,8 @@ TEST(WfsOutcomeTest, VictoryWhenAllObjectivesComplete) {
 TEST(WfsOutcomeTest, FailureTakesPriorityOverVictory) {
     SimState state = MakeState(TutorialScenario());
     state.scenario.raw["outcome"] = nlohmann::json{
-        {"zones", nlohmann::json{{"zone-objective-hill",
-                                  nlohmann::json{{"x", 0.35}, {"y", 0.3}, {"radius_km", 0.1}}}}}};
+        {"zones",
+         nlohmann::json{{"zone-objective-hill", nlohmann::json{{"x", 0.35}, {"y", 0.3}, {"radius_km", 0.1}}}}}};
     state.outcome_config = OutcomeConfig::FromScenario(state.scenario.raw);
     ASSERT_EQ(state.objective_states.size(), 1U);
     state.objective_states.front().duration_ticks = 1U;
@@ -131,8 +131,7 @@ TEST(WfsOutcomeTest, TimeLimitRatesPartialCompletion) {
     state.scenario.raw["outcome"]["partial_victory_threshold"] = 0.6;
     state.outcome_config = OutcomeConfig::FromScenario(state.scenario.raw);
     // 两个关键目标：一个完成（unit 目标已摧毁），一个未完成。
-    state.scenario.objectives.push_back(
-        wfs::sim::ScenarioObjective{"obj-2", "unit", "squad-c", 0U});
+    state.scenario.objectives.push_back(wfs::sim::ScenarioObjective{"obj-2", "unit", "squad-c", 0U});
     state.objective_states.push_back(wfs::sim::ObjectiveRuntimeState{"obj-2", "unit", "squad-c", 0U, 0U, false});
     state.objective_states.front().completed = true;
 
@@ -147,8 +146,7 @@ TEST(WfsOutcomeTest, TimeLimitRatesPartialCompletion) {
     partial_victory.scenario.time_limit_ticks = 5U;
     partial_victory.scenario.raw["outcome"]["partial_victory_threshold"] = 0.4;
     partial_victory.outcome_config = OutcomeConfig::FromScenario(partial_victory.scenario.raw);
-    partial_victory.scenario.objectives.push_back(
-        wfs::sim::ScenarioObjective{"obj-2", "unit", "squad-c", 0U});
+    partial_victory.scenario.objectives.push_back(wfs::sim::ScenarioObjective{"obj-2", "unit", "squad-c", 0U});
     partial_victory.objective_states.push_back(
         wfs::sim::ObjectiveRuntimeState{"obj-2", "unit", "squad-c", 0U, 0U, false});
     partial_victory.objective_states.front().completed = true;
@@ -164,8 +162,7 @@ TEST(WfsOutcomeTest, DeploymentTimeoutFallback) {
         {"deployment_enabled", true},
         {"deployment_deadline_ticks", 10U},
         {"deployment_zone", "zone-start"},
-        {"zones", nlohmann::json{{"zone-start",
-                                  nlohmann::json{{"x", 0.2}, {"y", 0.2}, {"radius_km", 0.5}}}}}};
+        {"zones", nlohmann::json{{"zone-start", nlohmann::json{{"x", 0.2}, {"y", 0.2}, {"radius_km", 0.5}}}}}};
     state.outcome_config = OutcomeConfig::FromScenario(state.scenario.raw);
     state.clock.reset(10U);
     step_outcome(state);
@@ -226,8 +223,6 @@ TEST(WfsOutcomeTest, NewSystemStateRoundTripsThroughSave) {
     EXPECT_EQ(wfs::sim::save_to_file(original, path), WFS_SIM_RESULT_OK);
     SimState restored = MakeState(TutorialScenario());
     EXPECT_EQ(wfs::sim::load_save_into(restored, path), WFS_SIM_RESULT_OK);
-    EXPECT_EQ(wfs::sim::serialize_state_json(original).dump(),
-              wfs::sim::serialize_state_json(restored).dump())
+    EXPECT_EQ(wfs::sim::serialize_state_json(original).dump(), wfs::sim::serialize_state_json(restored).dump())
         << "新增确定性状态必须完整存档往返";
 }
-

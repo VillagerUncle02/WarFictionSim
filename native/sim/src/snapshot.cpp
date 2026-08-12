@@ -84,6 +84,10 @@ nlohmann::json build_snapshot_json(const SimState& state) {
              {"commands", state.command_chain.size()},
          }},
         {"units", state.units},
+        // T033/T036：情报与胜负/目标进度摘要（快照只读消费）。
+        {"intel_records", state.intel_records},
+        {"objectives", state.objective_states},
+        {"outcome", state.outcome},
     };
 }
 
@@ -128,6 +132,10 @@ nlohmann::json serialize_state_json(const SimState& state) {
     root["command_chain"] = state.command_chain;
     root["smoke"] = state.smoke_areas;
     root["next_smoke_id"] = state.next_smoke_id;
+    // T033/T036：情报记录/关键目标进度/胜负判定是确定性状态的组成部分。
+    root["intel_records"] = state.intel_records;
+    root["objectives"] = state.objective_states;
+    root["outcome"] = state.outcome;
     return root;
 }
 

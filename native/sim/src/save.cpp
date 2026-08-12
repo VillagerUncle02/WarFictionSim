@@ -434,6 +434,17 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         if (parsed.contains("next_smoke_id")) {
             next.next_smoke_id = parsed.at("next_smoke_id").get<std::uint64_t>();
         }
+        // T033/T036：情报记录/关键目标进度/胜负判定随存档恢复；旧存档缺失
+        // 时保持句柄初始化产生的默认状态（非破坏性演进，宪法第 13 条）。
+        if (parsed.contains("intel_records")) {
+            next.intel_records = parsed.at("intel_records").get<std::map<std::string, wfs::sim::IntelRecord>>();
+        }
+        if (parsed.contains("objectives")) {
+            next.objective_states = parsed.at("objectives").get<std::vector<wfs::sim::ObjectiveRuntimeState>>();
+        }
+        if (parsed.contains("outcome")) {
+            next.outcome = parsed.at("outcome").get<wfs::sim::OutcomeState>();
+        }
         state = std::move(next);
         return WFS_SIM_RESULT_OK;
     } catch (const std::invalid_argument&) {

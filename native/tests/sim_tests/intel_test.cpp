@@ -85,8 +85,8 @@ TEST(WfsIntelTest, ObservationRangeAndRecognitionTiers) {
     EXPECT_EQ(wfs::sim::recognition_tier(close.score, config), RecognitionTier::kT3);
 
     // 超出可视距离：不可见。
-    const ObservationResult far =
-        wfs::sim::resolve_observation(ObservationInput{0.0, 0.0, 1.0, 10.0, 10.0, 0.0, false, false, 1.0, false}, config);
+    const ObservationResult far = wfs::sim::resolve_observation(
+        ObservationInput{0.0, 0.0, 1.0, 10.0, 10.0, 0.0, false, false, 1.0, false}, config);
     EXPECT_FALSE(far.visible);
 
     // 低观察能力 + 高隐蔽：评分低于 T1 阈值，不可见。
@@ -121,7 +121,8 @@ TEST(WfsIntelTest, StepIntelObservesRemembersAndLosesMemory) {
     ASSERT_NE(record, nullptr);
     EXPECT_GE(record->tier, RecognitionTier::kT1);
     EXPECT_EQ(record->source.kind, "direct");
-    EXPECT_EQ(record->source.unit_id, "squad-a");
+    EXPECT_EQ(record->source.node_id, "platoon-alpha");
+    EXPECT_FALSE(record->source.unit_id.empty()) << "直属发现必须标注来源单位";
 
     // 完全脱离视野：记忆保留期内信息仍在。
     enemy->x = 4.5;
@@ -181,4 +182,3 @@ TEST(WfsIntelTest, LastMotionRecordedFromConsecutiveObservations) {
     EXPECT_GT(second->last_motion_dx, 0.9) << "最后动向应记录归一化运动方向（东向）";
     EXPECT_LT(std::abs(second->last_motion_dy), 0.1);
 }
-

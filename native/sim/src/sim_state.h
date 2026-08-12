@@ -20,13 +20,18 @@
 #include "wfs/sim/clock.h"
 #include "wfs/sim/combat.h"
 #include "wfs/sim/command_chain.h"
+#include "wfs/sim/contact.h"
 #include "wfs/sim/event_log.h"
+#include "wfs/sim/intel.h"
 #include "wfs/sim/loader.h"
+#include "wfs/sim/mission_exec.h"
 #include "wfs/sim/model/combat.h"
 #include "wfs/sim/model/mission.h"
 #include "wfs/sim/model/terrain.h"
 #include "wfs/sim/movement.h"
+#include "wfs/sim/outcome.h"
 #include "wfs/sim/queue.h"
+#include "wfs/sim/recon_tasks.h"
 #include "wfs/sim/rng.h"
 
 namespace wfs::sim {
@@ -39,6 +44,9 @@ struct RuntimeUnitState {
     double x = 0.0;  // km。
     double y = 0.0;
     double suppression = 0.0;
+    double last_known_x = 0.0;
+    double last_known_y = 0.0;
+    double last_known_suppression = 0.0;
     double vehicle_damage = 0.0;
     double vehicle_hp = 0.0;
     double target_x = 0.0;
@@ -48,11 +56,16 @@ struct RuntimeUnitState {
     std::uint64_t formation_switch_remaining = 0U;
     std::uint64_t last_fire_tick = 0U;
     std::uint64_t fire_cooldown_ticks = 60U;  // 默认 3s（数据可覆盖）。
+    std::uint64_t recon_progress_ticks = 0U;  // 侦察阶段/进度（T035）。
+    std::uint64_t recon_hold_ticks = 0U;      // 侦察潜伏/观察累计（T034/T035）。
+    std::uint32_t recon_shots_fired = 0U;     // 火力侦察已射击轮数（T035）。
     std::int64_t mission_priority = 0;
     model::Formation formation = model::Formation::kMarch;
+    model::Formation last_known_formation = model::Formation::kMarch;
     model::CoverState cover = model::CoverState::kNone;
     model::AmmoPolicy ammo_policy = model::AmmoPolicy::kAuto;
     model::Formation requested_formation = model::Formation::kMarch;
+    model::ModuleStatus last_known_modules;
     bool out_of_contact = false;
     bool destroyed = false;
     bool is_vehicle = false;
@@ -60,6 +73,11 @@ struct RuntimeUnitState {
     bool mission_active = false;
     bool moving = false;
     bool stuck = false;
+    bool has_last_known = false;        // 是否已捕获最后已知状态（T032）。
+    bool last_known_destroyed = false;  // 最后已知状态中的摧毁标志（T032）。
+    bool retreating = false;            // 失败后处置/侦察阶段撤退中（T034/T035）。
+    bool mission_loops = true;          // 持续任务循环开关（FR-044）。
+    bool recon_detected = false;        // 侦察任务已被发现（T035）。
     std::string id;
     std::string type;
     std::string node_id;
@@ -77,6 +95,8 @@ struct RuntimeUnitState {
     std::string mission_condition;
     nlohmann::json mission_params = nlohmann::json::object();
     std::string ammo_override;
+    std::string failure_action = "report";  // 失败后处置（FR-044）。
+    std::string failure_target;             // withdraw_to 撤退目标 "x,y"。
 
     // 战斗节流（T031 自动接敌）。
     std::string last_exhausted_weapon;  // 防事件刷屏：弹药耗尽只报一次/武器。
@@ -109,6 +129,15 @@ struct SimState {
     CommandDelayConfig command_delay_config;
     MovementConfig movement_config;
     CombatConfig combat_config;
+    ContactConfig contact_config;
+    IntelConfig intel_config;
+    MissionExecConfig mission_config;
+    ReconConfig recon_config;
+    OutcomeConfig outcome_config;
+    // T033/T036：情报记录与胜负/目标进度（确定性状态，随存档序列化）。
+    std::map<std::string, IntelRecord> intel_records;
+    std::vector<ObjectiveRuntimeState> objective_states;
+    OutcomeState outcome;
     std::vector<model::TerrainElement> terrain_library;  // 运行期派生，不进哈希。
     std::vector<TerrainCell> terrain_cells;              // 运行期派生，不进哈希。
     std::vector<model::Ammo> ammo_library;               // 运行期派生，不进哈希。
@@ -123,6 +152,13 @@ inline void to_json(nlohmann::json& json, const RuntimeUnitState& unit) {
                           {"formation", unit.formation},
                           {"cover", unit.cover},
                           {"suppression", unit.suppression},
+                          {"last_known_x", unit.last_known_x},
+                          {"last_known_y", unit.last_known_y},
+                          {"last_known_suppression", unit.last_known_suppression},
+                          {"last_known_formation", unit.last_known_formation},
+                          {"last_known_modules", unit.last_known_modules},
+                          {"has_last_known", unit.has_last_known},
+                          {"last_known_destroyed", unit.last_known_destroyed},
                           {"out_of_contact", unit.out_of_contact},
                           {"contact_ticks_remaining", unit.contact_ticks_remaining},
                           {"destroyed", unit.destroyed},
@@ -145,6 +181,14 @@ inline void to_json(nlohmann::json& json, const RuntimeUnitState& unit) {
                           {"mission_params", unit.mission_params},
                           {"ammo_policy", unit.ammo_policy},
                           {"ammo_override", unit.ammo_override},
+                          {"failure_action", unit.failure_action},
+                          {"failure_target", unit.failure_target},
+                          {"mission_loops", unit.mission_loops},
+                          {"recon_progress_ticks", unit.recon_progress_ticks},
+                          {"recon_hold_ticks", unit.recon_hold_ticks},
+                          {"recon_shots_fired", unit.recon_shots_fired},
+                          {"recon_detected", unit.recon_detected},
+                          {"retreating", unit.retreating},
                           {"moving", unit.moving},
                           {"target_x", unit.target_x},
                           {"target_y", unit.target_y},
@@ -165,6 +209,14 @@ inline void from_json(const nlohmann::json& json, RuntimeUnitState& unit) {
     unit.formation = json.at("formation").get<model::Formation>();
     unit.cover = json.at("cover").get<model::CoverState>();
     unit.suppression = json.at("suppression").get<double>();
+    // T032–T036 新增字段：旧存档缺失时按默认值恢复（非破坏性演进）。
+    unit.last_known_x = json.value("last_known_x", 0.0);
+    unit.last_known_y = json.value("last_known_y", 0.0);
+    unit.last_known_suppression = json.value("last_known_suppression", 0.0);
+    unit.last_known_formation = json.value("last_known_formation", model::Formation::kMarch);
+    unit.last_known_modules = json.value("last_known_modules", model::ModuleStatus{});
+    unit.has_last_known = json.value("has_last_known", false);
+    unit.last_known_destroyed = json.value("last_known_destroyed", false);
     unit.out_of_contact = json.at("out_of_contact").get<bool>();
     unit.contact_ticks_remaining = json.at("contact_ticks_remaining").get<std::uint64_t>();
     unit.destroyed = json.at("destroyed").get<bool>();
@@ -191,6 +243,14 @@ inline void from_json(const nlohmann::json& json, RuntimeUnitState& unit) {
     unit.mission_params = json.at("mission_params");
     unit.ammo_policy = json.at("ammo_policy").get<model::AmmoPolicy>();
     unit.ammo_override = json.at("ammo_override").get<std::string>();
+    unit.failure_action = json.value("failure_action", std::string("report"));
+    unit.failure_target = json.value("failure_target", std::string());
+    unit.mission_loops = json.value("mission_loops", true);
+    unit.recon_progress_ticks = json.value("recon_progress_ticks", 0U);
+    unit.recon_hold_ticks = json.value("recon_hold_ticks", 0U);
+    unit.recon_shots_fired = json.value("recon_shots_fired", 0U);
+    unit.recon_detected = json.value("recon_detected", false);
+    unit.retreating = json.value("retreating", false);
     unit.moving = json.at("moving").get<bool>();
     unit.target_x = json.at("target_x").get<double>();
     unit.target_y = json.at("target_y").get<double>();
