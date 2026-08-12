@@ -6,7 +6,7 @@ add_test(
     COMMAND pwsh -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_CURRENT_SOURCE_DIR}/run_cli_tests.ps1"
         -Exe "$<TARGET_FILE:sim_headless>"
-        -Scenario "${PROJECT_SOURCE_DIR}/data/scenarios/scn-smoke-test.json"
+        -Scenario "${PROJECT_SOURCE_DIR}/../data/scenarios/scn-smoke-test.json"
         -Script "${CMAKE_CURRENT_SOURCE_DIR}/command_chain.jsonl"
 )
 set_tests_properties(cli_tests PROPERTIES TIMEOUT 120)
@@ -18,7 +18,7 @@ add_test(
     COMMAND pwsh -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_CURRENT_SOURCE_DIR}/run_command_chain_tests.ps1"
         -Exe "$<TARGET_FILE:sim_headless>"
-        -Scenario "${PROJECT_SOURCE_DIR}/data/scenarios/scn-tutorial-platoon.json"
+        -Scenario "${PROJECT_SOURCE_DIR}/../data/scenarios/scn-tutorial-platoon.json"
         -Script "${CMAKE_CURRENT_SOURCE_DIR}/test_command_chain.jsonl"
 )
 set_tests_properties(command_chain_tests PROPERTIES TIMEOUT 120)
