@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "kind": "squad",
+  "entries": [
+    {
+      "id": "squad-rifle-us",
+      "name": "US Rifle Squad",
+      "soldier_count": 9,
+      "soldier_capability": 0.75,
+      "footprint_radius_m": 15,
+      "weapons": [
+        "rifle-556",
+        "saw-556"
+      ],
+      "ammo": [
+        "ammo-556",
+        "ammo-frag-grenade"
+      ],
+      "crewed_equipment": [
+        {
+          "equipment_id": "saw-556",
+          "min_crew": 1
+        }
+      ]
+    },
+    {
+      "id": "squad-rifle-opposition",
+      "name": "Opposition Rifle Squad",
+      "soldier_count": 8,
+      "soldier_capability": 0.6,
+      "footprint_radius_m": 15,
+      "weapons": [
+        "rifle-762",
+        "rpg-7"
+      ],
+      "ammo": [
+        "ammo-762",
+        "ammo-rpg"
+      ],
+      "crewed_equipment": []
+    },
+    {
+      "id": "squad-atgm-team",
+      "name": "ATGM Team",
+      "soldier_count": 4,
+      "soldier_capability": 0.7,
+      "footprint_radius_m": 10,
+      "weapons": [
+        "atgm-9k111"
+      ],
+      "ammo": [
+        "ammo-atgm"
+      ],
+      "crewed_equipment": [
+        {
+          "equipment_id": "atgm-9k111",
+          "min_crew": 2
+        }
+      ]
+    },
+    {
+      "id": "squad-mortar-team",
+      "name": "60mm Mortar Team",
+      "soldier_count": 4,
+      "soldier_capability": 0.7,
+      "footprint_radius_m": 12,
+      "weapons": [
+        "mortar-60"
+      ],
+      "ammo": [
+        "ammo-he-60",
+        "ammo-smoke"
+      ],
+      "crewed_equipment": [
+        {
+          "equipment_id": "mortar-60",
+          "min_crew": 2
+        }
+      ]
+    },
+    {
+      "id": "squad-hmg-team",
+      "name": "HMG Team",
+      "soldier_count": 3,
+      "soldier_capability": 0.65,
+      "footprint_radius_m": 8,
+      "weapons": [
+        "hmg-127"
+      ],
+      "ammo": [
+        "ammo-127"
+      ],
+      "crewed_equipment": [
+        {
+          "equipment_id": "hmg-127",
+          "min_crew": 2
+        }
+      ]
+    }
+  ]
+}

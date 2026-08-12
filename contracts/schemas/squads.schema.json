@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim squad catalog",
+  "description": "Runtime schema for data/units/squads.json (T037). Mirrors specs data-model.md section 7; semantic weapon/ammo references are validated by load_data_library in sim/src/loader.cpp.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "const": "squad"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "soldier_count",
+          "soldier_capability",
+          "footprint_radius_m",
+          "weapons",
+          "ammo",
+          "crewed_equipment"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "soldier_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "soldier_capability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "footprint_radius_m": {
+            "type": "number",
+            "minimum": 0
+          },
+          "weapons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "ammo": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "crewed_equipment": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "equipment_id",
+                "min_crew"
+              ],
+              "properties": {
+                "equipment_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "min_crew": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
