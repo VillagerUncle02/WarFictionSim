@@ -1,6 +1,7 @@
-<!-- 文件总览：2D 兵牌地图视图（T040）。
+<!-- 文件总览：2D 兵牌地图视图（T040 + F2 命令闭环）。
      迷雾生效：ItemsControl 只绑定 BattleMapViewModel.Markers（已过滤的可见兵牌）；
-     平移/缩放走纯几何 MapViewport，渲染独立于模拟 tick（FR-025）。
+     平移（右键拖拽）/缩放（滚轮）走纯几何 MapViewport，渲染独立于模拟 tick
+     （FR-025）；左键点选兵牌、左键拖拽框选、Esc 清除选择（FR-045 点选与框选）。
      识别档位/来源/最后已知状态直接呈现在兵牌样式与工具提示上。 -->
 <UserControl x:Class="WarFictionSim.Ui.BattleMap.BattleMapView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -10,7 +11,8 @@
              xmlns:map="clr-namespace:WarFictionSim.Ui.BattleMap"
              mc:Ignorable="d"
              d:DesignHeight="480" d:DesignWidth="720"
-             KeyboardNavigation.TabNavigation="Cycle">
+             KeyboardNavigation.TabNavigation="Cycle"
+             PreviewKeyDown="UserControl_PreviewKeyDown">
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#1D1D1D" Padding="8,4">
             <StackPanel Orientation="Horizontal">
@@ -34,7 +36,9 @@
                     MouseWheel="MapCanvas_MouseWheel"
                     MouseLeftButtonDown="MapCanvas_MouseLeftButtonDown"
                     MouseMove="MapCanvas_MouseMove"
-                    MouseLeftButtonUp="MapCanvas_MouseLeftButtonUp">
+                    MouseLeftButtonUp="MapCanvas_MouseLeftButtonUp"
+                    MouseRightButtonDown="MapCanvas_MouseRightButtonDown"
+                    MouseRightButtonUp="MapCanvas_MouseRightButtonUp">
                 <ItemsControl ItemsSource="{Binding Markers}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -85,6 +89,8 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <Rectangle x:Name="SelectionRect" Stroke="#FFD54F" StrokeThickness="1" StrokeDashArray="4 2"
+                           Fill="#30FFD54F" Visibility="Collapsed" IsHitTestVisible="False"/>
             </Canvas>
         </Border>
     </DockPanel>

@@ -1,8 +1,9 @@
-// 文件总览：兵牌地图视图代码后置（T040）。
+// 文件总览：兵牌地图视图代码后置（T040 + F2 命令闭环）。
 //
-// 只承载 WPF 输入事件（滚轮缩放、拖拽平移、尺寸同步）：把鼠标动作翻译为
-// MapViewport 的纯几何调用，并刷新兵牌屏幕坐标。点击选中兵牌走 DataTemplate
-// 里的命令绑定，不在这里处理（避免把选择逻辑塞进视图）。
+// 只承载 WPF 输入事件翻译：滚轮缩放、右键拖拽平移、左键点选兵牌
+// （命中 UnitMarkerViewModel 的 Button 命令）、左键拖拽出选择矩形框选
+// （命中矩形内单位）、Esc 清除选择。选择几何命中判定在
+// BattleMapViewModel.SelectUnitsInScreenRect（可单测），视图只传递矩形。
 
 using System.Windows;
 using System.Windows.Controls;
@@ -13,7 +14,11 @@ namespace WarFictionSim.Ui.BattleMap;
 /// <summary>2D 兵牌地图视图。</summary>
 public partial class BattleMapView : UserControl
 {
-    private Point? _lastDragPoint;
+    private const double ClickDragThreshold = 4.0;
+
+    private Point? _selectionStart;
+    private bool _isBoxSelecting;
+    private Point? _panPoint;
 
     /// <summary>初始化视图。</summary>
     public BattleMapView() => InitializeComponent();
@@ -28,6 +33,15 @@ public partial class BattleMapView : UserControl
         {
             viewModel.Viewport.ResetToFit();
             viewModel.RefreshPositions();
+        }
+    }
+
+    private void UserControl_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && DataContext is BattleMapViewModel viewModel)
+        {
+            viewModel.ClearSelection();
+            e.Handled = true;
         }
     }
 
@@ -79,34 +93,97 @@ public partial class BattleMapView : UserControl
 
     private void MapCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // 点击兵牌按钮时不要启动拖拽平移（按钮自己处理选中）。
+        // 点击兵牌按钮时不要启动框选/清空（按钮自己处理点选）。
         if (e.OriginalSource is System.Windows.DependencyObject source &&
             FindAncestor<Button>(source) is not null)
         {
             return;
         }
 
-        _lastDragPoint = e.GetPosition(MapCanvas);
+        _selectionStart = e.GetPosition(MapCanvas);
+        _isBoxSelecting = false;
+        UpdateSelectionRect(_selectionStart.Value, _selectionStart.Value);
         MapCanvas.CaptureMouse();
     }
 
     private void MapCanvas_MouseMove(object sender, MouseEventArgs e)
     {
-        if (_lastDragPoint is not Point previous || DataContext is not BattleMapViewModel viewModel)
+        if (_selectionStart is Point start && DataContext is BattleMapViewModel selectionViewModel)
         {
+            Point current = e.GetPosition(MapCanvas);
+            if (!_isBoxSelecting)
+            {
+                double distance = (current - start).Length;
+                if (distance < ClickDragThreshold)
+                {
+                    return; // 尚属点选，未进入框选。
+                }
+
+                _isBoxSelecting = true;
+                SelectionRect.Visibility = Visibility.Visible;
+            }
+
+            UpdateSelectionRect(start, current);
             return;
         }
 
-        Point current = e.GetPosition(MapCanvas);
-        viewModel.Viewport.PanBy(current.X - previous.X, current.Y - previous.Y);
-        viewModel.RefreshPositions();
-        _lastDragPoint = current;
+        if (_panPoint is Point previous && DataContext is BattleMapViewModel panViewModel)
+        {
+            Point current = e.GetPosition(MapCanvas);
+            panViewModel.Viewport.PanBy(current.X - previous.X, current.Y - previous.Y);
+            panViewModel.RefreshPositions();
+            _panPoint = current;
+        }
     }
 
     private void MapCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        _lastDragPoint = null;
+        if (_selectionStart is not Point start)
+        {
+            return;
+        }
+
+        if (DataContext is BattleMapViewModel viewModel)
+        {
+            if (_isBoxSelecting)
+            {
+                Point end = e.GetPosition(MapCanvas);
+                viewModel.SelectUnitsInScreenRect(
+                    Math.Min(start.X, end.X),
+                    Math.Min(start.Y, end.Y),
+                    Math.Max(start.X, end.X),
+                    Math.Max(start.Y, end.Y));
+            }
+            else
+            {
+                viewModel.SelectUnit(null); // 点空白处清除选择。
+            }
+        }
+
+        _selectionStart = null;
+        _isBoxSelecting = false;
+        SelectionRect.Visibility = Visibility.Collapsed;
         MapCanvas.ReleaseMouseCapture();
+    }
+
+    private void MapCanvas_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _panPoint = e.GetPosition(MapCanvas);
+        MapCanvas.CaptureMouse();
+    }
+
+    private void MapCanvas_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _panPoint = null;
+        MapCanvas.ReleaseMouseCapture();
+    }
+
+    private void UpdateSelectionRect(Point start, Point current)
+    {
+        Canvas.SetLeft(SelectionRect, Math.Min(start.X, current.X));
+        Canvas.SetTop(SelectionRect, Math.Min(start.Y, current.Y));
+        SelectionRect.Width = Math.Abs(current.X - start.X);
+        SelectionRect.Height = Math.Abs(current.Y - start.Y);
     }
 
     private static T? FindAncestor<T>(DependencyObject source)

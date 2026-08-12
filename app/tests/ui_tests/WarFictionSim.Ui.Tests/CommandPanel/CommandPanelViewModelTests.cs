@@ -11,12 +11,12 @@ namespace WarFictionSim.Ui.Tests.CommandPanel;
 
 public class CommandPanelViewModelTests
 {
-    private static CommandContext Context() =>
+    private static CommandContext Context(ulong tick = 1000) =>
         new()
         {
             CommanderNodeId = "node-player",
             FriendlySide = "side-a",
-            CurrentTick = 1000,
+            CurrentTick = tick,
             Units = [new CommandableUnit("squad-a", "node-player", "side-a", ["ammo-556"], false)],
             ZoneIds = ["zone-hill"],
         };
@@ -68,6 +68,61 @@ public class CommandPanelViewModelTests
 
         viewModel.SelectExecutorCommand.Execute("squad-a");
         Assert.Empty(viewModel.Draft.ExecutorIds);
+    }
+
+    [Fact]
+    public void SetExecutors_ReplacesExecutorIds()
+    {
+        var viewModel = new CommandPanelViewModel();
+        viewModel.ApplyContext(Context());
+
+        viewModel.SetExecutors(["squad-a"]);
+        Assert.Single(viewModel.Draft.ExecutorIds);
+
+        viewModel.SetExecutors([]);
+        Assert.Empty(viewModel.Draft.ExecutorIds);
+    }
+
+    [Fact]
+    public void ExecutorCollectionChange_TriggersRevalidation()
+    {
+        var viewModel = new CommandPanelViewModel();
+        viewModel.ApplyContext(Context());
+        Assert.Contains(viewModel.Issues, issue => issue.Code == "TARGET_REQUIRED");
+
+        viewModel.Draft.ExecutorIds.Add("squad-a");
+
+        Assert.DoesNotContain(viewModel.Issues, issue => issue.Code == "TARGET_REQUIRED");
+    }
+
+    [Fact]
+    public void ApplyContext_UnchangedContext_DoesNotRebuildOrRevalidate()
+    {
+        var viewModel = new CommandPanelViewModel();
+        viewModel.ApplyContext(Context());
+        System.Collections.ObjectModel.ObservableCollection<CommandableUnit> units = viewModel.ContextUnits;
+        System.Collections.ObjectModel.ObservableCollection<string> zones = viewModel.ContextZones;
+        int issueChanges = 0;
+        viewModel.Issues.CollectionChanged += (_, _) => issueChanges++;
+
+        viewModel.ApplyContext(Context()); // 新实例但内容相同：不得重建集合、不得重校验。
+
+        Assert.Same(units, viewModel.ContextUnits);
+        Assert.Same(zones, viewModel.ContextZones);
+        Assert.Equal(0, issueChanges);
+    }
+
+    [Fact]
+    public void ApplyContext_AdvancedTick_Revalidates()
+    {
+        var viewModel = new CommandPanelViewModel();
+        viewModel.ApplyContext(Context());
+        int issueChanges = 0;
+        viewModel.Issues.CollectionChanged += (_, _) => issueChanges++;
+
+        viewModel.ApplyContext(Context(tick: 1001));
+
+        Assert.True(issueChanges > 0);
     }
 
     [Fact]

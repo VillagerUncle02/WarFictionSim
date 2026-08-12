@@ -31,6 +31,8 @@ public sealed partial class CommandPanelViewModel : ObservableObject
 
         // 草稿任何字段变化都触发重校验（三级提示实时内嵌，不打断操作）。
         Draft.PropertyChanged += (_, _) => Revalidate();
+        // 执行单位集合增删（点选/框选派生）同样触发重校验，不靠每帧 ApplyContext 掩盖。
+        Draft.ExecutorIds.CollectionChanged += (_, _) => Revalidate();
     }
 
     /// <summary>校验通过并序列化成功时触发（参数为命令 JSON，由应用壳注入核心）。</summary>
@@ -71,20 +73,52 @@ public sealed partial class CommandPanelViewModel : ObservableObject
     /// <param name="context">校验上下文。</param>
     public void ApplyContext(CommandContext context)
     {
+        bool contextChanged = _context is null ||
+            context.CurrentTick != _context.CurrentTick ||
+            context.CommanderNodeId != _context.CommanderNodeId ||
+            !ContextUnits.SequenceEqual(context.Units) ||
+            !ContextZones.SequenceEqual(context.ZoneIds);
         _context = context;
-        ContextUnits.Clear();
-        foreach (CommandableUnit unit in context.Units)
+        // 仅在内容变化时重建集合：避免每帧 Clear+Add 数百个单位与下拉重绑（F8）。
+        if (!ContextUnits.SequenceEqual(context.Units))
         {
-            ContextUnits.Add(unit);
+            ContextUnits.Clear();
+            foreach (CommandableUnit unit in context.Units)
+            {
+                ContextUnits.Add(unit);
+            }
         }
 
-        ContextZones.Clear();
-        foreach (string zoneId in context.ZoneIds)
+        if (!ContextZones.SequenceEqual(context.ZoneIds))
         {
-            ContextZones.Add(zoneId);
+            ContextZones.Clear();
+            foreach (string zoneId in context.ZoneIds)
+            {
+                ContextZones.Add(zoneId);
+            }
         }
 
-        Revalidate();
+        if (contextChanged)
+        {
+            Revalidate();
+        }
+    }
+
+    /// <summary>把执行单位集合替换为地图点选/框选派生的结果（内容不变则不重校验）。</summary>
+    /// <param name="unitIds">新的执行单位 id 列表（由选中己方单位派生）。</param>
+    public void SetExecutors(IEnumerable<string> unitIds)
+    {
+        List<string> next = unitIds.ToList();
+        if (Draft.ExecutorIds.SequenceEqual(next))
+        {
+            return;
+        }
+
+        Draft.ExecutorIds.Clear();
+        foreach (string unitId in next)
+        {
+            Draft.ExecutorIds.Add(unitId);
+        }
     }
 
     /// <summary>切换执行单位选中态。</summary>

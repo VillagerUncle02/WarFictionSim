@@ -20,9 +20,9 @@ public class CommandValidationRulesTests
             CurrentTick = tick,
             Units =
             [
-                new CommandableUnit("squad-a", "node-player", "side-a", ["ammo-556"], MissionActive: false),
-                new CommandableUnit("squad-b", "node-player", "side-a", ["ammo-762"], MissionActive: true),
-                new CommandableUnit("enemy-1", "node-enemy", "side-b", ["ammo-762"], MissionActive: false),
+                new CommandableUnit("squad-a", "node-player", "side-a", ["ammo-556"], false),
+                new CommandableUnit("squad-b", "node-player", "side-a", ["ammo-762"], true),
+                new CommandableUnit("enemy-1", "node-enemy", "side-b", ["ammo-762"], false),
             ],
             ZoneIds = ["zone-hill"],
         };

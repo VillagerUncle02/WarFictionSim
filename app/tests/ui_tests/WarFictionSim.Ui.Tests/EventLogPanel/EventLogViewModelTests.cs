@@ -74,7 +74,7 @@ public class EventLogViewModelTests
         viewModel.MinSeverity = SimEventSeverity.Info;
         viewModel.SearchText = "接敌";
 
-        string query = Assert.Single(client.EventQueries.Where(JsonContainsAllFilters));
+        string query = Assert.Single(client.EventQueries, JsonContainsAllFilters);
         Assert.Contains("\"category\":\"combat\"", query, StringComparison.Ordinal);
         Assert.Contains("\"min_severity\":\"info\"", query, StringComparison.Ordinal);
         Assert.Contains("\"text\":\"接敌\"", query, StringComparison.Ordinal);

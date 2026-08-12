@@ -6,18 +6,67 @@
 
 namespace WarFictionSim.Ui.CommandPanel;
 
-/// <summary>命令校验所需的单位纯数据视图。</summary>
-/// <param name="Id">单位 id。</param>
-/// <param name="NodeId">所属指挥节点。</param>
-/// <param name="Side">阵营。</param>
-/// <param name="AmmoIds">单位装备弹药 id。</param>
-/// <param name="MissionActive">是否已有执行中任务。</param>
-public sealed record CommandableUnit(
-    string Id,
-    string NodeId,
-    string Side,
-    IReadOnlyList<string> AmmoIds,
-    bool MissionActive);
+/// <summary>命令校验所需的单位纯数据视图（值相等：含弹药序列）。</summary>
+public sealed class CommandableUnit : IEquatable<CommandableUnit>
+{
+    /// <summary>初始化单位视图。</summary>
+    /// <param name="id">单位 id。</param>
+    /// <param name="nodeId">所属指挥节点。</param>
+    /// <param name="side">阵营。</param>
+    /// <param name="ammoIds">单位装备弹药 id。</param>
+    /// <param name="missionActive">是否已有执行中任务。</param>
+    public CommandableUnit(string id, string nodeId, string side, IReadOnlyList<string> ammoIds, bool missionActive)
+    {
+        Id = id;
+        NodeId = nodeId;
+        Side = side;
+        AmmoIds = ammoIds;
+        MissionActive = missionActive;
+    }
+
+    /// <summary>单位 id。</summary>
+    public string Id { get; }
+
+    /// <summary>所属指挥节点。</summary>
+    public string NodeId { get; }
+
+    /// <summary>阵营。</summary>
+    public string Side { get; }
+
+    /// <summary>单位装备弹药 id。</summary>
+    public IReadOnlyList<string> AmmoIds { get; }
+
+    /// <summary>是否已有执行中任务。</summary>
+    public bool MissionActive { get; }
+
+    /// <inheritdoc />
+    public bool Equals(CommandableUnit? other) =>
+        other is not null &&
+        Id == other.Id &&
+        NodeId == other.NodeId &&
+        Side == other.Side &&
+        MissionActive == other.MissionActive &&
+        AmmoIds.SequenceEqual(other.AmmoIds);
+
+    /// <inheritdoc />
+    public override bool Equals(object? obj) => obj is CommandableUnit other && Equals(other);
+
+    /// <inheritdoc />
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Id, StringComparer.Ordinal);
+        hash.Add(NodeId, StringComparer.Ordinal);
+        hash.Add(Side, StringComparer.Ordinal);
+        hash.Add(MissionActive);
+        foreach (string ammoId in AmmoIds)
+        {
+            hash.Add(ammoId, StringComparer.Ordinal);
+        }
+
+        return hash.ToHashCode();
+    }
+}
 
 /// <summary>命令面板预校验上下文（只读）。</summary>
 public sealed class CommandContext

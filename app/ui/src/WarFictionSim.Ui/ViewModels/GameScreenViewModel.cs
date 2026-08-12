@@ -25,6 +25,8 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
     private string _stateHash = string.Empty;
     private string? _statusError;
     private string? _lastStepError;
+    private CommandContext? _commandContext;
+    private ulong _commandContextTick;
 
     /// <summary>初始化战斗主屏。</summary>
     /// <param name="client">已创建（并已读档）的模拟客户端。</param>
@@ -39,6 +41,9 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         TimeControls = new TimeControlsViewModel((int)scenario.TickHz);
         EventLog = new EventLogViewModel(_client, scenario.TickHz);
         CommandPanel.SubmitRequested += (_, json) => InjectCommand(json);
+        // 命令闭环：地图点选/框选 → 由选中己方单位派生命令面板执行单位（FR-045）。
+        BattleMap.UnitSelected += OnBattleMapUnitSelected;
+        BattleMap.UnitsSelected += OnBattleMapUnitsSelected;
     }
 
     /// <summary>场景显示名。</summary>
@@ -110,7 +115,8 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
     public void ApplySnapshot(SimulationSnapshot snapshot)
     {
         BattleMap.ApplySnapshot(snapshot);
-        CommandPanel.ApplyContext(BuildCommandContext(snapshot));
+        CommandContext context = BuildCommandContext(snapshot);
+        CommandPanel.ApplyContext(context);
         EventLog.ApplySummary(snapshot.EventLog, snapshot.Tick);
         TickDisplay = $"tick {snapshot.Tick}";
         StateHash = _client.GetStateHash();
@@ -139,11 +145,47 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
+        BattleMap.UnitSelected -= OnBattleMapUnitSelected;
+        BattleMap.UnitsSelected -= OnBattleMapUnitsSelected;
         _client.Dispose();
+    }
+
+    private void OnBattleMapUnitSelected(object? sender, string? unitId) =>
+        SyncExecutors(unitId is null ? [] : [unitId]);
+
+    private void OnBattleMapUnitsSelected(object? sender, IReadOnlyList<string> unitIds) =>
+        SyncExecutors(unitIds);
+
+    /// <summary>执行单位由选中己方单位派生：敌方/未知 id 一律过滤（只读投影）。</summary>
+    /// <param name="unitIds">地图选中的单位 id。</param>
+    private void SyncExecutors(IReadOnlyList<string> unitIds)
+    {
+        var friendlyIds = new List<string>();
+        if (_commandContext is not null)
+        {
+            Dictionary<string, CommandableUnit> unitsById =
+                _commandContext.Units.ToDictionary(unit => unit.Id, StringComparer.Ordinal);
+            foreach (string unitId in unitIds)
+            {
+                if (unitsById.TryGetValue(unitId, out CommandableUnit? unit) &&
+                    unit.Side == _commandContext.FriendlySide)
+                {
+                    friendlyIds.Add(unitId);
+                }
+            }
+        }
+
+        CommandPanel.SetExecutors(friendlyIds);
     }
 
     private CommandContext BuildCommandContext(SimulationSnapshot snapshot)
     {
+        // 同一 tick 内状态不变：缓存上下文，避免每帧重建数百个 CommandableUnit（F8）。
+        if (_commandContext is not null && _commandContextTick == snapshot.Tick)
+        {
+            return _commandContext;
+        }
+
         string friendlySide = snapshot.Units.FirstOrDefault(unit => unit.NodeId == snapshot.PlayerNodeId)?.Side
             ?? snapshot.PlayerNodeId;
         var units = new List<CommandableUnit>(snapshot.Units.Count);
@@ -157,7 +199,7 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
                 unit.MissionActive));
         }
 
-        return new CommandContext
+        var context = new CommandContext
         {
             CommanderNodeId = snapshot.PlayerNodeId,
             FriendlySide = friendlySide,
@@ -165,5 +207,8 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
             Units = units,
             ZoneIds = _zoneIds,
         };
+        _commandContext = context;
+        _commandContextTick = snapshot.Tick;
+        return context;
     }
 }

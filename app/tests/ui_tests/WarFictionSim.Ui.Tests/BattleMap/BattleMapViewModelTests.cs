@@ -79,6 +79,58 @@ public class BattleMapViewModelTests
     }
 
     [Fact]
+    public void SelectUnit_Again_ClearsSelection()
+    {
+        UnitState friendly = SnapshotFactory.Unit("friendly-1", "node-player", "side-a", 1, 1);
+        var viewModel = new BattleMapViewModel(5, 5);
+        viewModel.ApplySnapshot(SnapshotFactory.Create(0, [friendly]));
+        var events = new List<string?>();
+        viewModel.UnitSelected += (_, unitId) => events.Add(unitId);
+
+        viewModel.SelectUnit("friendly-1");
+        viewModel.SelectUnit("friendly-1");
+
+        Assert.Equal(["friendly-1", null], events);
+        Assert.Null(viewModel.SelectedUnitId);
+        Assert.False(Assert.Single(viewModel.Markers).IsSelected);
+    }
+
+    [Fact]
+    public void BoxSelect_SelectsUnitsInsideScreenRect_FriendlyOnlyByDefault()
+    {
+        UnitState friendlyA = SnapshotFactory.Unit("friendly-a", "node-player", "side-a", 1, 1);
+        UnitState friendlyB = SnapshotFactory.Unit("friendly-b", "node-player", "side-a", 2, 2);
+        UnitState enemy = SnapshotFactory.Unit("enemy-1", "node-enemy", "side-b", 3, 3);
+        var intel = new Dictionary<string, IntelRecordState>
+        {
+            ["node-player:enemy-1"] = SnapshotFactory.Intel("enemy-1", IntelTier.T1, 0, 500, 3, 3),
+        };
+        var viewModel = new BattleMapViewModel(5, 5);
+        viewModel.ApplySnapshot(SnapshotFactory.Create(0, [friendlyA, friendlyB, enemy], intel));
+        foreach (UnitMarkerViewModel marker in viewModel.Markers)
+        {
+            marker.SetScreenPosition(
+                marker.UnitId switch
+                {
+                    "friendly-a" => 10,
+                    "enemy-1" => 30,
+                    _ => 100,
+                },
+                marker.UnitId == "friendly-a" ? 10 : 100);
+        }
+
+        IReadOnlyList<string>? selected = null;
+        viewModel.UnitsSelected += (_, unitIds) => selected = unitIds;
+
+        viewModel.SelectUnitsInScreenRect(0, 0, 60, 60);
+
+        Assert.Equal(["friendly-a"], selected);
+        Assert.True(viewModel.Markers.Single(marker => marker.UnitId == "friendly-a").IsSelected);
+        Assert.False(viewModel.Markers.Single(marker => marker.UnitId == "enemy-1").IsSelected);
+        Assert.False(viewModel.Markers.Single(marker => marker.UnitId == "friendly-b").IsSelected);
+    }
+
+    [Fact]
     public void RefreshPositions_ProjectsWorldToScreen()
     {
         UnitState friendly = SnapshotFactory.Unit("friendly-1", "node-player", "side-a", 2, 1);

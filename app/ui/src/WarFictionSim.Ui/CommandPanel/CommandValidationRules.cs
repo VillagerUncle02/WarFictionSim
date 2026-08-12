@@ -38,7 +38,7 @@ public static class CommandValidationRules
         // ---- 语义检查 2：执行单位必须存在且属于指挥范围。 ----
         if (draft.ExecutorIds.Count == 0)
         {
-            issues.Add(Error("TARGET_REQUIRED", "请点选/框选至少一个执行单位。"));
+            issues.Add(Error("TARGET_REQUIRED", "未选择执行单位：请在地图上点选/框选至少一个己方单位。"));
         }
         else
         {

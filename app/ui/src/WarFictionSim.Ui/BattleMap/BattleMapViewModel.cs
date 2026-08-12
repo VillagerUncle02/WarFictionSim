@@ -16,6 +16,7 @@ namespace WarFictionSim.Ui.BattleMap;
 public sealed partial class BattleMapViewModel : ObservableObject
 {
     private string? _selectedUnitId;
+    private readonly HashSet<string> _selectedUnitIds = new(StringComparer.Ordinal);
 
     /// <summary>初始化地图。</summary>
     /// <param name="mapWidthKm">地图宽度（km）。</param>
@@ -29,6 +30,9 @@ public sealed partial class BattleMapViewModel : ObservableObject
     /// <summary>当玩家在地图上点选兵牌时触发（参数为单位 id；清空为 null）。</summary>
     public event EventHandler<string?>? UnitSelected;
 
+    /// <summary>当玩家在地图上框选一批兵牌时触发（参数为命中的单位 id 列表）。</summary>
+    public event EventHandler<IReadOnlyList<string>>? UnitsSelected;
+
     /// <summary>视口（平移/缩放）。</summary>
     public MapViewport Viewport { get; }
 
@@ -41,6 +45,9 @@ public sealed partial class BattleMapViewModel : ObservableObject
         get => _selectedUnitId;
         private set => SetProperty(ref _selectedUnitId, value);
     }
+
+    /// <summary>当前选中单位 id 集合（点选 1 个、框选多个；只读快照）。</summary>
+    public IReadOnlyCollection<string> SelectedUnitIds => _selectedUnitIds;
 
     /// <summary>点选兵牌命令。</summary>
     public IRelayCommand<string?> SelectUnitCommand { get; }
@@ -80,9 +87,11 @@ public sealed partial class BattleMapViewModel : ObservableObject
             }
         }
 
-        if (SelectedUnitId is not null && !visibleIds.Contains(SelectedUnitId))
+        List<string> stillVisible = _selectedUnitIds.Where(visibleIds.Contains).ToList();
+        if (stillVisible.Count != _selectedUnitIds.Count)
         {
-            SelectUnit(null);
+            // 迷雾把选中单位移出视野：只保留仍可见者，按剩余数量选择事件形态。
+            SetSelection(stillVisible, raiseUnitSelected: stillVisible.Count <= 1, raiseBatch: stillVisible.Count > 1);
         }
 
         RefreshPositions();
@@ -97,13 +106,59 @@ public sealed partial class BattleMapViewModel : ObservableObject
             return; // 不可见单位不能被选中（迷雾下不能指挥看不到的单位）。
         }
 
-        SelectedUnitId = unitId;
-        foreach (UnitMarkerViewModel marker in Markers)
+        // 点选语义：重复点选唯一选中单位时取消；否则替换为单选该单位。
+        if (unitId is not null && _selectedUnitIds.SetEquals([unitId]))
         {
-            marker.SetSelected(marker.UnitId == unitId);
+            SetSelection([], raiseUnitSelected: true, raiseBatch: false);
+            return;
         }
 
-        UnitSelected?.Invoke(this, unitId);
+        SetSelection(unitId is null ? [] : [unitId], raiseUnitSelected: true, raiseBatch: false);
+    }
+
+    /// <summary>框选屏幕矩形内的兵牌（默认只取己方单位，供命令执行单位派生）。</summary>
+    /// <param name="left">屏幕矩形左边界（px）。</param>
+    /// <param name="top">屏幕矩形上边界（px）。</param>
+    /// <param name="right">屏幕矩形右边界（px）。</param>
+    /// <param name="bottom">屏幕矩形下边界（px）。</param>
+    /// <param name="friendlyOnly">是否只选中己方兵牌。</param>
+    public void SelectUnitsInScreenRect(double left, double top, double right, double bottom, bool friendlyOnly = true)
+    {
+        List<string> hitIds = Markers
+            .Where(marker => marker.ScreenX >= left && marker.ScreenX <= right &&
+                             marker.ScreenY >= top && marker.ScreenY <= bottom)
+            .Where(marker => !friendlyOnly || marker.IsFriendly)
+            .Select(marker => marker.UnitId)
+            .ToList();
+        SetSelection(hitIds, raiseUnitSelected: false, raiseBatch: true);
+    }
+
+    /// <summary>清空全部选中（Esc 语义）。</summary>
+    public void ClearSelection() => SelectUnit(null);
+
+    private void SetSelection(IReadOnlyCollection<string> unitIds, bool raiseUnitSelected, bool raiseBatch)
+    {
+        _selectedUnitIds.Clear();
+        foreach (string unitId in unitIds)
+        {
+            _selectedUnitIds.Add(unitId);
+        }
+
+        SelectedUnitId = _selectedUnitIds.Count == 1 ? _selectedUnitIds.Single() : null;
+        foreach (UnitMarkerViewModel marker in Markers)
+        {
+            marker.SetSelected(_selectedUnitIds.Contains(marker.UnitId));
+        }
+
+        if (raiseUnitSelected)
+        {
+            UnitSelected?.Invoke(this, SelectedUnitId);
+        }
+
+        if (raiseBatch)
+        {
+            UnitsSelected?.Invoke(this, unitIds.ToList());
+        }
     }
 
     /// <summary>按当前视口重算全部兵牌屏幕坐标。</summary>
