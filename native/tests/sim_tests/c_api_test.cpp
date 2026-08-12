@@ -112,13 +112,12 @@ TEST(WfsCApiTest, NullCommandJsonReturnsInvalidArgument) {
     EXPECT_EQ(wfs_sim_inject_ai_decision(handle.get(), nullptr), WFS_SIM_RESULT_INVALID_ARGUMENT);
 }
 
-TEST(WfsCApiTest, FutureStagesReturnNotImplemented) {
+TEST(WfsCApiTest, StateHashImplementedAndWellFormed) {
     Handle handle;
     ASSERT_NE(handle.get(), nullptr);
-    char hash[65] = {};
-    EXPECT_EQ(wfs_sim_get_state_hash(handle.get(), hash), WFS_SIM_RESULT_NOT_IMPLEMENTED);
-    EXPECT_EQ(wfs_sim_save(handle.get(), "save.wfs"), WFS_SIM_RESULT_NOT_IMPLEMENTED);
-    EXPECT_EQ(wfs_sim_load_save(handle.get(), "save.wfs"), WFS_SIM_RESULT_NOT_IMPLEMENTED);
+    char hash[WFS_SIM_STATE_HASH_HEX_LEN] = {};
+    EXPECT_EQ(wfs_sim_get_state_hash(handle.get(), hash), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(std::string(hash).size(), 64u);
 }
 
 TEST(WfsCApiTest, SnapshotRoundTripAndFields) {

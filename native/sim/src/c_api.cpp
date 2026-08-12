@@ -9,8 +9,8 @@
 // 绝不跨语言边界抛出；create 失败显式返回 NULL（契约无错误码通道）。
 // 快照为只读 JSON 纯数据文本，缓冲生命周期完全由调用方负责；
 // 连续读取相同输入产生相同输出（宪法第 7 条）。
-// get_state_hash/save/load_save 属 T016/T017，本任务显式返回
-// NOT_IMPLEMENTED，禁止静默吞错（宪法第 17 条）。
+// get_state_hash 由 snapshot.cpp（T016）、save/load_save 由 save.cpp（T017）
+// 实现；本文件只负责参数校验、错误码映射与缓冲生命周期。
 
 #include "wfs/sim/c_api.h"
 
@@ -27,16 +27,16 @@
 #include "wfs/sim/queue.h"
 #include "wfs/sim/rng.h"
 
-// 不透明句柄：C 侧只能持有指针，所有成员仅在本翻译单元可见。
-struct wfs_sim_handle {
-    wfs::sim::Scenario scenario;
-    wfs::sim::GameClock clock;
-    wfs::sim::Rng rng;
-    wfs::sim::EventQueue queue;
-    std::uint64_t seed = 0U;
-    int threads = 1;
-    std::uint64_t processed_events = 0U;
-    std::filesystem::path scenario_path;
+#include "save.h"
+#include "sim_state.h"
+#include "state_serialization.h"
+
+// 不透明句柄：C 侧只能持有指针，全部内容物为 SimState（sim_state.h，
+// T016/T017 快照与存档模块共享的单一状态容器）；本类型仅作为 ABI 外壳。
+struct wfs_sim_handle : wfs::sim::SimState {
+    // 显式默认构造：SimState 含带默认参数 explicit 构造的成员（EventLog），
+    // 聚合初始化不可用，统一走值初始化路径。
+    wfs_sim_handle() = default;
 };
 
 namespace {
@@ -142,20 +142,9 @@ wfs_sim_result wfs_sim_get_snapshot(wfs_sim_handle* handle, char* out_buf, std::
         return WFS_SIM_RESULT_INVALID_ARGUMENT;
     }
     try {
-        const nlohmann::json snapshot = {
-            {"abi_version", WFS_SIM_VERSION_STRING},
-            {"tick", handle->clock.tick()},
-            {"total_us", handle->clock.total_us()},
-            {"seed", handle->seed},
-            {"threads", handle->threads},
-            {"scenario_id", handle->scenario.id},
-            {"scenario_name", handle->scenario.name},
-            {"player_node_id", handle->scenario.player_node_id},
-            {"pending_events", handle->queue.size()},
-            {"processed_events", handle->processed_events},
-        };
-        // dump() 默认紧凑输出且对象键经 std::map 排序，跨调用/跨进程确定。
-        const std::string text = snapshot.dump();
+        // 快照构建与确定性保证见 snapshot.cpp（键序/字段由
+        // serialize_state_json 同一规范约束，宪法第 7 条）。
+        const std::string text = wfs::sim::build_snapshot_text(*handle);
         const std::size_t required = text.size() + 1U;  // 含 NUL 终止符
         if (buf_size < required) {
             *out_len = required;
@@ -177,24 +166,30 @@ wfs_sim_result wfs_sim_get_state_hash(wfs_sim_handle* handle, char out_hex[WFS_S
     if (handle == nullptr || out_hex == nullptr) {
         return WFS_SIM_RESULT_INVALID_ARGUMENT;
     }
-    // T016 实现状态快照与 SHA-256；显式报错，不静默返回假哈希。
-    return WFS_SIM_RESULT_NOT_IMPLEMENTED;
+    try {
+        // 状态哈希 = SHA-256(权威状态 JSON)；threads 不在序列化范围内，
+        // 因此线程数不影响哈希（宪法第 7 条，T018 联动验收）。
+        const std::string hex = wfs::sim::compute_state_hash_hex(*handle);
+        std::memcpy(out_hex, hex.data(), hex.size());
+        out_hex[hex.size()] = '\0';
+        return WFS_SIM_RESULT_OK;
+    } catch (...) {
+        return WFS_SIM_RESULT_INTERNAL_ERROR;
+    }
 }
 
 wfs_sim_result wfs_sim_save(wfs_sim_handle* handle, const char* path) {
     if (handle == nullptr || path == nullptr) {
         return WFS_SIM_RESULT_INVALID_ARGUMENT;
     }
-    // T017 实现 WFS-SAVE 存档格式；显式报错。
-    return WFS_SIM_RESULT_NOT_IMPLEMENTED;
+    return wfs::sim::save_to_file(*handle, path);
 }
 
 wfs_sim_result wfs_sim_load_save(wfs_sim_handle* handle, const char* path) {
     if (handle == nullptr || path == nullptr) {
         return WFS_SIM_RESULT_INVALID_ARGUMENT;
     }
-    // T017 实现存档加载与迁移链；显式报错。
-    return WFS_SIM_RESULT_NOT_IMPLEMENTED;
+    return wfs::sim::load_save_into(*handle, path);
 }
 
 }  // extern "C"

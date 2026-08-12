@@ -67,10 +67,12 @@ wfs_sim_result wfs_sim_inject_ai_decision(wfs_sim_handle* h, const char* decisio
 // 输出只读 JSON 快照文本到调用方缓冲；out_len 为文本字节数（不含 NUL）。
 wfs_sim_result wfs_sim_get_snapshot(wfs_sim_handle* h, char* out_buf, size_t buf_size, size_t* out_len);
 
-// 输出状态哈希（SHA-256，T016 实现；本任务显式返回 NOT_IMPLEMENTED）。
+// 输出状态哈希（SHA-256，T016）：对确定性状态 JSON 序列计算摘要，
+// 线程数只影响性能、不影响哈希结果（宪法第 7 条）。
 wfs_sim_result wfs_sim_get_state_hash(wfs_sim_handle* h, char out_hex[WFS_SIM_STATE_HASH_HEX_LEN]);
 
-// 存档写入/读取（T017 实现；本任务显式返回 NOT_IMPLEMENTED）。
+// 存档写入/读取（T017）：WFS-SAVE 格式（magic + format_version +
+// header_json + state_blob + state_hash），见 contracts/save-format.md。
 wfs_sim_result wfs_sim_save(wfs_sim_handle* h, const char* path);
 wfs_sim_result wfs_sim_load_save(wfs_sim_handle* h, const char* path);
 
