@@ -67,7 +67,10 @@ function Get-TaskIdsFromTasksFile {
 # 获取"相对 origin/main 新增完成"的任务 ID：链式 PR 只应 Closes 本分支新完成的任务，
 # 前序 PR 已完成的 [x]（其 issue 已关闭）不应重复出现在正文。
 # TasksFile 为仓库内绝对路径；基线 tasks.md 通过 `git show origin/main:<rel>` 读取。
-# 基线不可读（首次 PR / tasks.md 未在 main）时回退为全量已完成任务并给出警告。
+# 基线不可读时的回退语义（预期行为，非错误）：
+#   - 首次 PR（tasks.md 尚未合入 main）或基线漂移：回退为全量已完成任务并 Write-Err 警告，
+#     此时正文可能包含前序 PR 已关闭的 issue（冗余但不阻断）；调用方可人工核对。
+#   - 正常链式流程（前序 PR 已合并）：基线可读，仅返回本分支新完成的任务。
 function Get-NewCompletedTaskIds {
     param(
         [string]$TasksFile,
