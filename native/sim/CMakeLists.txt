@@ -12,6 +12,7 @@ add_library(sim STATIC
     src/event_log.cpp
     src/sha256.cpp
     src/snapshot.cpp
+    src/save.cpp
     src/loader.cpp
     src/command_validation.cpp
     src/schema_validator.cpp

@@ -12,6 +12,7 @@ add_executable(sim_tests
     queue_test.cpp
     event_log_test.cpp
     snapshot_test.cpp
+    save_test.cpp
     loader_test.cpp
     command_validation_test.cpp
     c_api_test.cpp
