@@ -89,6 +89,35 @@ TEST(WfsMissionRegistryTest, StateMachineTransitions) {
     EXPECT_FALSE(model::is_terminal_mission_state(MissionState::kExecuting));
 }
 
+TEST(WfsMissionRegistryTest, ContinuousLoopIsConsumedOutsideStateTable) {
+    // F2：持续任务循环不进入状态机表——COMPLETED 是终态，循环由 T034
+    // 执行器按 Mission.loops 在表外重新下发（FR-044）。
+    EXPECT_FALSE(model::can_transition(MissionState::kCompleted, MissionState::kExecuting));
+    EXPECT_TRUE(model::is_terminal_mission_state(MissionState::kCompleted));
+}
+
+TEST(WfsMissionRegistryTest, MissionContinuousMustMatchRegistry) {
+    Mission attack;
+    attack.id = "attack-bad";
+    attack.type = MissionType::kAttack;
+    attack.continuous = true;  // ATTACK 注册表为条件完成型（非持续）。
+    EXPECT_FALSE(attack.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(attack)).get<Mission>(), std::invalid_argument);
+
+    Mission patrol;
+    patrol.id = "patrol-bad";
+    patrol.type = MissionType::kPatrol;
+    patrol.continuous = false;  // PATROL 注册表为持续任务。
+    EXPECT_FALSE(patrol.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(patrol)).get<Mission>(), std::invalid_argument);
+
+    Mission patrol_ok;
+    patrol_ok.id = "patrol-ok";
+    patrol_ok.type = MissionType::kPatrol;
+    patrol_ok.continuous = true;
+    EXPECT_TRUE(patrol_ok.is_valid());
+}
+
 TEST(WfsMissionRegistryTest, MissionRoundTrip) {
     Mission mission;
     mission.id = "mission-1";

@@ -239,6 +239,80 @@ TEST(WfsOrganizationModelTest, OrganizationUnitRoundTrip) {
     EXPECT_EQ(restored, unit);
 }
 
+TEST(WfsOrganizationTreeTest, BuildsTreeAndRoundTrips) {
+    model::OrganizationTree tree;
+    const OrganizationUnit company =
+        OrganizationUnit{"c1", "c1", Echelon::kCompany, OrganizationKind::kInfantry, "", 0.0, 0.0, 0.8, {}};
+    const OrganizationUnit platoon = MakePlatoon("p1", OrganizationKind::kInfantry, 0.0);
+    ASSERT_TRUE(tree.AddUnit(company));
+    ASSERT_TRUE(tree.AddUnit(MakeSquad("s1", OrganizationKind::kInfantry, 0.8)));
+    ASSERT_TRUE(tree.AddUnit(MakeSquad("s2", OrganizationKind::kInfantry, 0.7)));
+    ASSERT_TRUE(tree.AddUnit(platoon));
+    EXPECT_TRUE(tree.AddSubordinate("c1", "p1"));
+    EXPECT_TRUE(tree.AddSubordinate("p1", "s1"));
+    EXPECT_TRUE(tree.AddSubordinate("p1", "s2"));
+
+    // 互反一致：parent_id 与 subordinate_ids 双向同步。
+    EXPECT_EQ(tree.Find("p1")->parent_id, "c1");
+    EXPECT_EQ(tree.SubordinatesOf("c1"), std::vector<std::string>{"p1"});
+    EXPECT_EQ(tree.SubordinatesOf("p1"), (std::vector<std::string>{"s1", "s2"}));
+
+    const model::OrganizationTree restored = RoundTrip(nlohmann::json(tree)).get<model::OrganizationTree>();
+    EXPECT_EQ(restored.size(), tree.size());
+    EXPECT_EQ(restored.SubordinatesOf("p1"), tree.SubordinatesOf("p1"));
+    EXPECT_EQ(restored.Find("s1")->parent_id, "p1");
+}
+
+TEST(WfsOrganizationTreeTest, RejectsInconsistentJson) {
+    // 非互反：p1 声明下级 s1，但 s1 的 parent_id 缺失。
+    OrganizationUnit parent_claims = MakePlatoon("p1", OrganizationKind::kInfantry, 0.0);
+    parent_claims.subordinate_ids = {"s1"};
+    const nlohmann::json non_mutual = nlohmann::json{
+        {"units", nlohmann::json::array({nlohmann::json(parent_claims),
+                                         nlohmann::json(MakeSquad("s1", OrganizationKind::kInfantry, 0.8))})}};
+    EXPECT_THROW(non_mutual.get<model::OrganizationTree>(), std::invalid_argument);
+
+    // 未知引用：s1 挂到不存在的父节点。
+    OrganizationUnit orphan = MakeSquad("s1", OrganizationKind::kInfantry, 0.8);
+    orphan.parent_id = "ghost";
+    const nlohmann::json unknown_parent = nlohmann::json{{"units", nlohmann::json::array({nlohmann::json(orphan)})}};
+    EXPECT_THROW(unknown_parent.get<model::OrganizationTree>(), std::invalid_argument);
+
+    // 类型约束：步兵排不能包含装甲班。
+    OrganizationUnit armored_child = MakeSquad("s1", OrganizationKind::kArmored, 0.7);
+    armored_child.parent_id = "p1";
+    OrganizationUnit infantry_platoon = MakePlatoon("p1", OrganizationKind::kInfantry, 0.0);
+    infantry_platoon.subordinate_ids = {"s1"};
+    const nlohmann::json kind_mismatch = nlohmann::json{
+        {"units", nlohmann::json::array({nlohmann::json(infantry_platoon), nlohmann::json(armored_child)})}};
+    EXPECT_THROW(kind_mismatch.get<model::OrganizationTree>(), std::invalid_argument);
+}
+
+TEST(WfsOrganizationTreeTest, RejectsCycleOnSetParent) {
+    model::OrganizationTree tree;
+    ASSERT_TRUE(tree.AddUnit(MakePlatoon("p1", OrganizationKind::kInfantry, 0.0)));
+    ASSERT_TRUE(tree.AddUnit(MakeSquad("s1", OrganizationKind::kInfantry, 0.8)));
+    ASSERT_TRUE(tree.AddUnit(MakeSquad("s2", OrganizationKind::kInfantry, 0.7)));
+    ASSERT_TRUE(tree.AddSubordinate("p1", "s1"));
+    ASSERT_TRUE(tree.AddSubordinate("p1", "s2"));
+    // 非法重挂：同级互斥与"父节点位于本节点子树"的成环路径均被拒绝（F6）。
+    EXPECT_FALSE(tree.SetParent("s2", "s1"));
+    EXPECT_FALSE(tree.SetParent("p1", "s2"));
+    EXPECT_EQ(tree.Find("p1")->parent_id, "");
+}
+
+TEST(WfsCommandNodeModelTest, InvalidNumericRangesRejected) {
+    CommandNode node = MakePlayerNode("node-bad");
+    node.coordination = 1.5;
+    EXPECT_FALSE(node.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(node)).get<CommandNode>(), std::invalid_argument);
+
+    OrganizationUnit unit = MakeSquad("s-bad", OrganizationKind::kInfantry, 0.8);
+    unit.coordination = -0.2;
+    EXPECT_FALSE(unit.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(unit)).get<OrganizationUnit>(), std::invalid_argument);
+}
+
 TEST(WfsMinUnitModelTest, MinCommandUnitRoundTrip) {
     MinCommandUnit unit;
     unit.id = "mc-squad-1";

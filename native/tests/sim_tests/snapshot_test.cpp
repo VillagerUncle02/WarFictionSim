@@ -35,7 +35,7 @@ std::string ValidCommandJson() {
         "target": {"kind": "unit", "ref": "squad-a"},
         "completion": {"condition": "secure_zone", "params": {"zone": "zone-hill", "duration_ticks": 1200}},
         "intent": "占领高地并坚守",
-        "behavior": {"engagement": "aggressive", "ammo_override": "5.56mm", "failure_action": "hold"},
+        "behavior": {"engagement": "aggressive", "ammo_override": "ammo-556", "failure_action": "hold"},
         "priority": 1,
         "deadline": {"game_time": 3600}
     })";

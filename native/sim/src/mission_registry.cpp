@@ -279,6 +279,9 @@ void from_json(const nlohmann::json& json, Mission& mission) {
     mission.state = json.at("state").get<MissionState>();
     mission.continuous = json.at("continuous").get<bool>();
     mission.loops = json.at("loops").get<bool>();
+    if (!mission.is_valid()) {
+        throw std::invalid_argument("任务 continuous 与注册表不一致: " + mission.id);
+    }
 }
 
 const std::vector<MissionType>& registered_mission_types() {
@@ -306,20 +309,12 @@ const MissionTypeSpec& mission_type_spec(const MissionType type) {
     return *found;
 }
 
-bool is_continuous_mission(const MissionType type) noexcept {
-    try {
-        return mission_type_spec(type).continuous;
-    } catch (const std::invalid_argument&) {
-        return false;
-    }
+bool is_continuous_mission(const MissionType type) {
+    return mission_type_spec(type).continuous;
 }
 
-bool is_recon_mission(const MissionType type) noexcept {
-    try {
-        return mission_type_spec(type).recon;
-    } catch (const std::invalid_argument&) {
-        return false;
-    }
+bool is_recon_mission(const MissionType type) {
+    return mission_type_spec(type).recon;
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -331,6 +326,8 @@ bool can_transition(const MissionState from_state, const MissionState target_sta
 std::span<const MissionState> transitions_from(const MissionState state) noexcept {
     // FR-044：下达后进入执行或取消；执行中可完成/失败/超时/取消；
     // 超时后由指挥官决定 继续（回执行）/判失败/取消；终态不可再转移。
+    // 持续任务循环（COMPLETED→EXECUTING）不进入本状态机表：完成是终态，
+    // 循环由 T034 执行器按 Mission.loops 在表外重新下发（F2）。
     static constexpr std::array kIssued = {MissionState::kExecuting, MissionState::kCancelled};
     static constexpr std::array kExecuting = {MissionState::kCompleted, MissionState::kFailed, MissionState::kTimedOut,
                                               MissionState::kCancelled};

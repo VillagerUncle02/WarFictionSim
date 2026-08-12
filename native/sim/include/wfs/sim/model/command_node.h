@@ -82,6 +82,10 @@ struct CommandNode {
 
     bool is_root() const noexcept { return parent_id.empty(); }
 
+    bool is_valid() const noexcept {
+        return owner.is_valid() && coordination >= 0.0 && coordination <= 1.0 && experience.is_valid();
+    }
+
     bool operator==(const CommandNode&) const = default;
 };
 
@@ -199,6 +203,9 @@ inline void from_json(const nlohmann::json& json, CommandNode& node) {
     node.command_limit = json.at("command_limit").get<std::uint32_t>();
     node.coordination = json.at("coordination").get<double>();
     node.experience = json.at("experience").get<Experience>();
+    if (!node.is_valid()) {
+        throw std::invalid_argument("指挥节点数值越界或归属非法: " + node.id);
+    }
 }
 
 inline CommandNode* CommandTree::FindMutable(const std::string& id) {

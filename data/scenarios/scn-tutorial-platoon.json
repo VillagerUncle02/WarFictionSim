@@ -25,7 +25,7 @@
   "units": [
     {
       "id": "tutorial-platoon-cp",
-      "type": "infantry_squad",
+      "type": "squad-rifle-us",
       "node_id": "node-tutorial-platoon",
       "x": 0.2,
       "y": 0.2,
@@ -35,7 +35,7 @@
     },
     {
       "id": "tutorial-squad-1",
-      "type": "infantry_squad",
+      "type": "squad-rifle-us",
       "node_id": "node-tutorial-platoon",
       "x": 0.35,
       "y": 0.3,
@@ -46,7 +46,7 @@
     },
     {
       "id": "tutorial-squad-2",
-      "type": "infantry_squad",
+      "type": "squad-rifle-us",
       "node_id": "node-tutorial-platoon",
       "x": 0.4,
       "y": 0.45,
@@ -56,7 +56,7 @@
     },
     {
       "id": "tutorial-squad-3",
-      "type": "infantry_squad",
+      "type": "squad-rifle-us",
       "node_id": "node-tutorial-platoon",
       "x": 0.5,
       "y": 0.35,
@@ -67,7 +67,7 @@
     },
     {
       "id": "tutorial-enemy-squad-1",
-      "type": "infantry_squad",
+      "type": "squad-rifle-opposition",
       "node_id": "node-tutorial-enemy",
       "x": 1.15,
       "y": 1.2,
@@ -77,7 +77,7 @@
     },
     {
       "id": "tutorial-enemy-squad-2",
-      "type": "infantry_squad",
+      "type": "squad-rifle-opposition",
       "node_id": "node-tutorial-enemy",
       "x": 1.2,
       "y": 1.25,
@@ -87,7 +87,7 @@
     },
     {
       "id": "tutorial-enemy-cp",
-      "type": "infantry_squad",
+      "type": "squad-rifle-opposition",
       "node_id": "node-tutorial-enemy",
       "x": 1.35,
       "y": 1.3,

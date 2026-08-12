@@ -15,6 +15,7 @@
 
 #include "wfs/sim/command_validation.h"
 #include "wfs/sim/loader.h"
+#include "wfs/sim/model/mission.h"
 
 namespace {
 
@@ -112,6 +113,17 @@ TEST(WfsCommandValidationTest, UnregisteredTypeRejected) {
     const CommandValidationResult result = Validate(command);
     ASSERT_FALSE(result.ok());
     EXPECT_EQ(result.errors.front().code, "UNREGISTERED_TYPE");
+}
+
+TEST(WfsCommandValidationTest, DefaultTypeTableMatchesMissionRegistry) {
+    // F5：默认内置类型表由 model::registered_mission_types() 生成，
+    // 13 种任务类型必须全部可校验通过（消除双源漂移）。
+    for (const wfs::sim::model::MissionType type : wfs::sim::model::registered_mission_types()) {
+        nlohmann::json command = ValidCommandJson();
+        command["type"] = wfs::sim::model::to_string(type);
+        const CommandValidationResult result = Validate(command);
+        EXPECT_TRUE(result.ok()) << wfs::sim::model::to_string(type);
+    }
 }
 
 TEST(WfsCommandValidationTest, TargetNotFoundRejected) {

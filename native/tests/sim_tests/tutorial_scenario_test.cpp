@@ -112,3 +112,25 @@ TEST(WfsTutorialScenarioTest, NonTutorialScenarioHasNoIndependentSaveSlot) {
     EXPECT_TRUE(result.scenario.save_slot.empty());
     EXPECT_EQ(result.scenario.time_limit_ticks, 0u);
 }
+
+TEST(WfsTutorialScenarioTest, TutorialRequiresSaveSlot) {
+    nlohmann::json root = TutorialJson();
+    root.erase("save_slot");
+    TempDir dir;
+    const auto result = load_scenario(dir.Write("tutorial-no-save-slot.json", root), ScenarioSchema());
+    ASSERT_FALSE(result.ok());
+    // Schema if-then 与语义校验双保险：任一层面拒绝均可（F3）。
+    const std::string code = result.issues.front().code;
+    EXPECT_TRUE(code == "TUTORIAL_SAVE_SLOT_REQUIRED" || code == "SCHEMA_INVALID") << code;
+}
+
+TEST(WfsTutorialScenarioTest, NonTutorialRejectsSaveSlot) {
+    std::ifstream in(RepoRoot() / "data" / "scenarios" / "scn-smoke-test.json");
+    nlohmann::json root = nlohmann::json::parse(in);
+    root["save_slot"] = "main-custom-slot";
+    TempDir dir;
+    const auto result = load_scenario(dir.Write("save-slot-on-non-tutorial.json", root), ScenarioSchema());
+    ASSERT_FALSE(result.ok());
+    const std::string code = result.issues.front().code;
+    EXPECT_TRUE(code == "SAVE_SLOT_FORBIDDEN" || code == "SCHEMA_INVALID") << code;
+}

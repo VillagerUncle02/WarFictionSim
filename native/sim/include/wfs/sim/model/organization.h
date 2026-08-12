@@ -13,10 +13,13 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -64,6 +67,25 @@ struct OrganizationUnit {
 
     // 类型约束（data-model.md §2）；非法组合返回 false。
     bool CanContain(const OrganizationUnit& child) const noexcept;
+
+    // 数值域校验（F7）：能力/协调 [0,1]；subordinate_ids 无重复、无自引用。
+    bool is_valid() const noexcept {
+        if (soldier_capability < 0.0 || soldier_capability > 1.0 || minimum_soldier_capability < 0.0 ||
+            minimum_soldier_capability > 1.0 || coordination < 0.0 || coordination > 1.0) {
+            return false;
+        }
+        for (std::size_t i = 0; i < subordinate_ids.size(); ++i) {
+            if (subordinate_ids[i] == id) {
+                return false;
+            }
+            for (std::size_t j = i + 1; j < subordinate_ids.size(); ++j) {
+                if (subordinate_ids[i] == subordinate_ids[j]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 
     bool operator==(const OrganizationUnit&) const = default;
 };
@@ -212,6 +234,187 @@ inline void from_json(const nlohmann::json& json, OrganizationUnit& unit) {
     unit.minimum_soldier_capability = json.at("minimum_soldier_capability").get<double>();
     unit.coordination = json.at("coordination").get<double>();
     unit.subordinate_ids = json.at("subordinate_ids").get<std::vector<std::string>>();
+    if (!unit.is_valid()) {
+        throw std::invalid_argument("编制单位数值越界或下级引用重复: " + unit.id);
+    }
+}
+
+// 编制树（F6）：维护 parent_id 与 subordinate_ids 互反一致，校验引用存在、
+// 无环与 CanContain 类型约束（参照 CommandTree 的约束方式）。
+class OrganizationTree {
+   public:
+    // 添加节点：id 唯一；parent_id 非空时必须已存在且满足 CanContain，
+    // 成功后自动互反接线（把本节点加入父节点 subordinate_ids）。
+    bool AddUnit(OrganizationUnit unit);
+    // 把 unit_id 挂到 parent_id 下（parent_id 空 = 根）；失败返回 false 且树不变。
+    bool SetParent(const std::string& unit_id, const std::string& parent_id);
+    // 语义同 SetParent(child_id, parent_id)：显式表达"为 parent 增加下级"。
+    bool AddSubordinate(const std::string& parent_id, const std::string& child_id);
+
+    const OrganizationUnit* Find(const std::string& id) const;
+    bool Contains(const std::string& id) const;
+    std::size_t size() const noexcept { return units_.size(); }
+    bool empty() const noexcept { return units_.empty(); }
+
+    std::vector<OrganizationUnit> UnitsInInsertionOrder() const { return units_; }
+    std::vector<std::string> SubordinatesOf(const std::string& id) const;
+    void Clear() noexcept { units_.clear(); }
+
+   private:
+    OrganizationUnit* FindMutable(const std::string& id);
+    bool IsDescendantOf(const std::string& candidate, const std::string& ancestor) const;
+    void Attach(OrganizationUnit& child, OrganizationUnit& parent);
+    void Detach(OrganizationUnit& child);
+
+    std::vector<OrganizationUnit> units_;
+};
+
+void to_json(nlohmann::json& json, const OrganizationTree& tree);
+// 反序列化失败（重复 id/未知父节点/类型不匹配/互反不一致）抛 std::invalid_argument。
+void from_json(const nlohmann::json& json, OrganizationTree& tree);
+
+inline OrganizationUnit* OrganizationTree::FindMutable(const std::string& id) {
+    for (OrganizationUnit& unit : units_) {
+        if (unit.id == id) {
+            return &unit;
+        }
+    }
+    return nullptr;
+}
+
+inline const OrganizationUnit* OrganizationTree::Find(const std::string& id) const {
+    for (const OrganizationUnit& unit : units_) {
+        if (unit.id == id) {
+            return &unit;
+        }
+    }
+    return nullptr;
+}
+
+inline bool OrganizationTree::Contains(const std::string& id) const {
+    return Find(id) != nullptr;
+}
+
+inline bool OrganizationTree::IsDescendantOf(const std::string& candidate, const std::string& ancestor) const {
+    const OrganizationUnit* current = Find(candidate);
+    while (current != nullptr && !current->parent_id.empty()) {
+        if (current->parent_id == ancestor) {
+            return true;
+        }
+        current = Find(current->parent_id);
+    }
+    return false;
+}
+
+inline void OrganizationTree::Attach(OrganizationUnit& child, OrganizationUnit& parent) {
+    child.parent_id = parent.id;
+    if (std::find(parent.subordinate_ids.begin(), parent.subordinate_ids.end(), child.id) ==
+        parent.subordinate_ids.end()) {
+        parent.subordinate_ids.push_back(child.id);
+    }
+}
+
+inline void OrganizationTree::Detach(OrganizationUnit& child) {
+    if (child.parent_id.empty()) {
+        return;
+    }
+    if (OrganizationUnit* old_parent = FindMutable(child.parent_id)) {
+        std::erase(old_parent->subordinate_ids, child.id);
+    }
+    child.parent_id.clear();
+}
+
+inline bool OrganizationTree::AddUnit(OrganizationUnit unit) {
+    if (Contains(unit.id)) {
+        return false;
+    }
+    const std::string parent_id = unit.parent_id;
+    if (!parent_id.empty()) {
+        if (parent_id == unit.id || !Contains(parent_id)) {
+            return false;
+        }
+        if (!Find(parent_id)->CanContain(unit)) {
+            return false;
+        }
+    }
+    units_.push_back(std::move(unit));
+    if (!parent_id.empty()) {
+        Attach(*FindMutable(units_.back().id), *FindMutable(parent_id));
+    }
+    return true;
+}
+
+inline bool OrganizationTree::SetParent(const std::string& unit_id, const std::string& parent_id) {
+    OrganizationUnit* child = FindMutable(unit_id);
+    if (child == nullptr) {
+        return false;
+    }
+    if (!parent_id.empty()) {
+        if (parent_id == unit_id || !Contains(parent_id)) {
+            return false;
+        }
+        OrganizationUnit* parent = FindMutable(parent_id);
+        if (!parent->CanContain(*child)) {
+            return false;
+        }
+        if (IsDescendantOf(parent_id, unit_id)) {
+            return false;  // 父节点位于本节点子树内 → 成环。
+        }
+        Detach(*child);
+        Attach(*child, *parent);
+        return true;
+    }
+    Detach(*child);
+    return true;
+}
+
+inline bool OrganizationTree::AddSubordinate(const std::string& parent_id, const std::string& child_id) {
+    return SetParent(child_id, parent_id);
+}
+
+inline std::vector<std::string> OrganizationTree::SubordinatesOf(const std::string& id) const {
+    const OrganizationUnit* unit = Find(id);
+    return unit == nullptr ? std::vector<std::string>{} : unit->subordinate_ids;
+}
+
+inline void to_json(nlohmann::json& json, const OrganizationTree& tree) {
+    json = nlohmann::json{{"units", tree.UnitsInInsertionOrder()}};
+}
+
+inline void from_json(const nlohmann::json& json, OrganizationTree& tree) {
+    OrganizationTree candidate;
+    std::vector<std::pair<std::string, std::string>> parent_links;
+    std::map<std::string, std::vector<std::string>> expected_subordinates;
+    for (const nlohmann::json& unit_json : json.at("units")) {
+        const OrganizationUnit unit = unit_json.get<OrganizationUnit>();
+        parent_links.emplace_back(unit.id, unit.parent_id);
+        if (!unit.parent_id.empty()) {
+            expected_subordinates[unit.parent_id].push_back(unit.id);
+        }
+        OrganizationUnit detached = unit;
+        detached.parent_id.clear();
+        if (!candidate.AddUnit(detached)) {
+            throw std::invalid_argument("编制树包含重复 id: " + unit.id);
+        }
+    }
+    // 父节点可能晚于子节点出现：全部入树后再统一接线（顺序无关，F6）。
+    for (const auto& [unit_id, parent_id] : parent_links) {
+        if (!parent_id.empty() && !candidate.SetParent(unit_id, parent_id)) {
+            throw std::invalid_argument("编制树父节点/类型/成环校验失败: " + unit_id);
+        }
+    }
+    // 互反一致性：JSON 声明的 subordinate_ids 必须与 parent_id 推导一致（F6）。
+    for (const nlohmann::json& unit_json : json.at("units")) {
+        const OrganizationUnit unit = unit_json.get<OrganizationUnit>();
+        std::vector<std::string> expected = expected_subordinates[unit.id];
+        std::sort(expected.begin(), expected.end());
+        std::vector<std::string> declared = unit.subordinate_ids;
+        std::sort(declared.begin(), declared.end());
+        if (expected != declared) {
+            throw std::invalid_argument("编制树 parent/subordinate 互反不一致: " + unit.id);
+        }
+    }
+    tree = std::move(candidate);
 }
 
 }  // namespace wfs::sim::model

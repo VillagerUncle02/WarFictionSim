@@ -189,5 +189,33 @@
       }
     }
   },
+  "if": {
+    "properties": {
+      "tutorial": {
+        "const": true
+      }
+    },
+    "required": [
+      "tutorial"
+    ]
+  },
+  "then": {
+    "required": [
+      "save_slot"
+    ],
+    "properties": {
+      "save_slot": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "else": {
+    "not": {
+      "required": [
+        "save_slot"
+      ]
+    }
+  },
   "additionalProperties": true
 }

@@ -56,6 +56,8 @@ struct MinEquippedUnit {
     double weight_kg = 0.0;
     bool heavy_equipment = false;
 
+    bool is_valid() const noexcept { return weight_kg >= 0.0; }
+
     bool operator==(const MinEquippedUnit&) const = default;
 };
 
@@ -66,6 +68,20 @@ struct MinCommandUnit {
     std::string organization_id;                 // 行政编制 id（organization.h）。
     std::vector<std::string> equipped_unit_ids;  // 构成该单位的最小配备单位。
     std::string parent_unit_id;                  // 上级最小可指挥单位（战术分队，可空）。
+
+    bool is_valid() const noexcept {
+        if (!parent_unit_id.empty() && parent_unit_id == id) {
+            return false;
+        }
+        for (std::size_t i = 0; i < equipped_unit_ids.size(); ++i) {
+            for (std::size_t j = i + 1; j < equipped_unit_ids.size(); ++j) {
+                if (equipped_unit_ids[i] == equipped_unit_ids[j]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 
     bool operator==(const MinCommandUnit&) const = default;
 };
@@ -157,6 +173,9 @@ inline void from_json(const nlohmann::json& json, MinEquippedUnit& unit) {
     unit.combat_ref = json.at("combat_ref").get<std::string>();
     unit.weight_kg = json.at("weight_kg").get<double>();
     unit.heavy_equipment = json.at("heavy_equipment").get<bool>();
+    if (!unit.is_valid()) {
+        throw std::invalid_argument("最小配备单位数值越界: " + unit.id);
+    }
 }
 
 inline void to_json(nlohmann::json& json, const MinCommandUnit& unit) {
@@ -173,6 +192,9 @@ inline void from_json(const nlohmann::json& json, MinCommandUnit& unit) {
     unit.organization_id = json.at("organization_id").get<std::string>();
     unit.equipped_unit_ids = json.at("equipped_unit_ids").get<std::vector<std::string>>();
     unit.parent_unit_id = json.at("parent_unit_id").get<std::string>();
+    if (!unit.is_valid()) {
+        throw std::invalid_argument("最小可指挥单位构成非法: " + unit.id);
+    }
 }
 
 }  // namespace wfs::sim::model

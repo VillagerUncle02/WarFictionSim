@@ -15,6 +15,7 @@
 #include <array>
 #include <cstdint>
 #include <fstream>
+#include <map>
 #include <set>
 #include <string>
 #include <utility>
@@ -110,6 +111,34 @@ bool ExtractObjectiveList(const nlohmann::json& list, const std::string& label, 
     return valid;
 }
 
+// 由 Schema 文件路径推导仓库数据根目录
+// （<repo>/contracts/schemas/<name>.schema.json → <repo>/data）。
+std::filesystem::path RepoDataRoot(const std::filesystem::path& schema_path) {
+    return schema_path.parent_path().parent_path().parent_path() / "data";
+}
+
+// F4：场景单位 type/ammo 必须存在于数据目录（宪法第 12 条：数据引用必须存在）。
+void CheckScenarioUnitReferences(const Scenario& scenario, const DataLibrary& library, std::vector<DataIssue>& issues) {
+    std::set<std::string> squad_ids;
+    std::set<std::string> ammo_ids;
+    for (const DataEntry& entry : library.squads.entries) {
+        squad_ids.insert(entry.id);
+    }
+    for (const DataEntry& entry : library.ammo.entries) {
+        ammo_ids.insert(entry.id);
+    }
+    for (const ScenarioUnit& unit : scenario.units) {
+        if (!squad_ids.contains(unit.type)) {
+            issues.push_back(Issue("UNIT_TYPE_NOT_FOUND", "场景单位 " + unit.id + " 引用不存在的班类型: " + unit.type));
+        }
+        for (const std::string& ammo : unit.ammo) {
+            if (!ammo_ids.contains(ammo)) {
+                issues.push_back(Issue("UNIT_AMMO_NOT_FOUND", "场景单位 " + unit.id + " 引用不存在的弹药: " + ammo));
+            }
+        }
+    }
+}
+
 // 语义校验 + 实体提取。Schema 已保证必需字段存在，此处只做跨字段完整性；
 // 失败时按固定顺序追加 issue 并返回 false。
 bool ExtractScenarioData(const nlohmann::json& root, const detail::SchemaFileResult& schema_file, Scenario& scenario,
@@ -136,6 +165,14 @@ bool ExtractScenarioData(const nlohmann::json& root, const detail::SchemaFileRes
     scenario.time_limit_ticks = root.value("time_limit_ticks", 0U);
     scenario.tutorial = root.value("tutorial", false);
     scenario.save_slot = root.value("save_slot", "");
+    // F3：教程独立存档标识不变量（contracts/save-format.md：教程不写入主游戏存档）。
+    if (scenario.tutorial && scenario.save_slot.empty()) {
+        issues.push_back(
+            Issue("TUTORIAL_SAVE_SLOT_REQUIRED", "教程场景必须配置非空 save_slot（教程不写入主游戏存档）"));
+    }
+    if (!scenario.tutorial && !scenario.save_slot.empty()) {
+        issues.push_back(Issue("SAVE_SLOT_FORBIDDEN", "非教程场景不允许配置 save_slot: " + scenario.save_slot));
+    }
 
     // 预先分配容量：避免大场景（预算测试 2000 单位）循环内反复扩容。
     scenario.zones.reserve(root["zones"].size());
@@ -249,6 +286,19 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, con
         return Failure(std::move(issues));
     }
 
+    // 第三层：数据目录引用校验（F4）。Schema 路径同时定位仓库数据根目录。
+    const std::filesystem::path data_root = RepoDataRoot(schema_path);
+    const DataLibraryLoadResult library = load_data_library(data_root);
+    for (const DataIssue& issue : library.issues) {
+        issues.push_back(issue);
+    }
+    if (library.ok()) {
+        CheckScenarioUnitReferences(scenario, library.library, issues);
+    }
+    if (!issues.empty()) {
+        return Failure(std::move(issues));
+    }
+
     scenario.raw = std::move(root);
     return ScenarioLoadResult{std::vector<DataIssue>{}, std::move(scenario)};
 }
@@ -317,50 +367,78 @@ DataCatalogLoadResult load_data_catalog(const std::filesystem::path& data_file,
     return DataCatalogLoadResult{std::vector<DataIssue>{}, std::move(catalog)};
 }
 
+// 通用引用检查：字段内每个 ref 必须存在于 known 集合（确定性顺序）。
+void CheckEntryRefs(const DataEntry& entry, const std::string& field, const std::set<std::string>& known,
+                    const char* target_kind, std::vector<DataIssue>& issues) {
+    for (const nlohmann::json& ref : entry.raw.value(field, nlohmann::json::array())) {
+        const std::string ref_id = ref.get<std::string>();
+        if (known.contains(ref_id)) {
+            continue;
+        }
+        std::string message = target_kind;
+        message += " ";
+        message += entry.id;
+        message += " 引用不存在的 ";
+        message += field;
+        message += ": ";
+        message += ref_id;
+        issues.push_back(Issue("DATA_REF_NOT_FOUND", std::move(message)));
+    }
+}
+
+// 班条目引用完整性：武器/弹药存在、弹药与武器兼容、乘组装备存在（F4）。
+void ValidateSquadReferences(const DataEntry& entry, const std::set<std::string>& weapon_ids,
+                             const std::set<std::string>& ammo_ids,
+                             const std::map<std::string, std::set<std::string>>& weapon_compatible,
+                             std::vector<DataIssue>& issues) {
+    CheckEntryRefs(entry, "weapons", weapon_ids, "班", issues);
+    CheckEntryRefs(entry, "ammo", ammo_ids, "班", issues);
+
+    std::set<std::string> squad_compatible;
+    for (const nlohmann::json& weapon_ref : entry.raw.value("weapons", nlohmann::json::array())) {
+        const std::string weapon_id = weapon_ref.get<std::string>();
+        const auto compatible = weapon_compatible.find(weapon_id);
+        if (compatible != weapon_compatible.end()) {
+            squad_compatible.insert(compatible->second.begin(), compatible->second.end());
+        }
+    }
+    for (const nlohmann::json& ammo_ref : entry.raw.value("ammo", nlohmann::json::array())) {
+        const std::string ammo_id = ammo_ref.get<std::string>();
+        if (ammo_ids.contains(ammo_id) && !squad_compatible.contains(ammo_id)) {
+            issues.push_back(
+                Issue("DATA_AMMO_INCOMPATIBLE", "班 " + entry.id + " 的弹药 " + ammo_id + " 不在其武器兼容弹药内"));
+        }
+    }
+    for (const nlohmann::json& crewed : entry.raw.value("crewed_equipment", nlohmann::json::array())) {
+        const std::string equipment_id = crewed["equipment_id"].get<std::string>();
+        if (!weapon_ids.contains(equipment_id)) {
+            issues.push_back(Issue("DATA_REF_NOT_FOUND", "班 " + entry.id + " 引用不存在的乘组装备: " + equipment_id));
+        }
+    }
+}
+
 // 第二层：跨文件引用完整性（固定顺序：班 → 武器 → 工事）。
 bool ValidateDataReferences(const DataLibrary& library, std::vector<DataIssue>& issues) {
     std::set<std::string> weapon_ids;
     std::set<std::string> weapon_categories;
     std::set<std::string> ammo_ids;
+    std::map<std::string, std::set<std::string>> weapon_compatible;
     for (const DataEntry& entry : library.weapons.entries) {
         weapon_ids.insert(entry.id);
         weapon_categories.insert(entry.raw["category"].get<std::string>());
+        for (const nlohmann::json& ref : entry.raw.value("compatible_ammo", nlohmann::json::array())) {
+            weapon_compatible[entry.id].insert(ref.get<std::string>());
+        }
     }
     for (const DataEntry& entry : library.ammo.entries) {
         ammo_ids.insert(entry.id);
     }
 
-    const auto check_refs = [&issues](const DataEntry& entry, const std::string& field,
-                                      const std::set<std::string>& known, const char* target_kind) {
-        for (const nlohmann::json& ref : entry.raw.value(field, nlohmann::json::array())) {
-            const std::string ref_id = ref.get<std::string>();
-            if (known.contains(ref_id)) {
-                continue;
-            }
-            std::string message = target_kind;
-            message += " ";
-            message += entry.id;
-            message += " 引用不存在的 ";
-            message += field;
-            message += ": ";
-            message += ref_id;
-            issues.push_back(Issue("DATA_REF_NOT_FOUND", std::move(message)));
-        }
-    };
-
     for (const DataEntry& entry : library.squads.entries) {
-        check_refs(entry, "weapons", weapon_ids, "班");
-        check_refs(entry, "ammo", ammo_ids, "班");
-        for (const nlohmann::json& crewed : entry.raw.value("crewed_equipment", nlohmann::json::array())) {
-            const std::string equipment_id = crewed["equipment_id"].get<std::string>();
-            if (!weapon_ids.contains(equipment_id)) {
-                issues.push_back(
-                    Issue("DATA_REF_NOT_FOUND", "班 " + entry.id + " 引用不存在的乘组装备: " + equipment_id));
-            }
-        }
+        ValidateSquadReferences(entry, weapon_ids, ammo_ids, weapon_compatible, issues);
     }
     for (const DataEntry& entry : library.weapons.entries) {
-        check_refs(entry, "compatible_ammo", ammo_ids, "武器");
+        CheckEntryRefs(entry, "compatible_ammo", ammo_ids, "武器", issues);
     }
     for (const DataEntry& entry : library.fortifications.entries) {
         for (const nlohmann::json& ref : entry.raw.value("applicable_weapon_categories", nlohmann::json::array())) {

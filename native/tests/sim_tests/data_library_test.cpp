@@ -193,12 +193,24 @@ TEST(WfsDataLibraryTest, UnknownWeaponReferenceRejected) {
     TempDir dir;
     nlohmann::json squads = ReadFile(DataRoot() / "units" / "squads.json");
     squads["entries"][0]["weapons"] = nlohmann::json::array({"ghost-weapon"});
+    squads["entries"][0]["ammo"] = nlohmann::json::array();  // 避免兼容性检查噪音。
     CopyBaselineTo(dir, "units/squads.json", squads);
 
     const auto result = load_data_library(dir.path(), SchemaDir());
     ASSERT_FALSE(result.ok());
     EXPECT_EQ(result.issues.front().code, "DATA_REF_NOT_FOUND");
     EXPECT_NE(result.issues.front().message.find("ghost-weapon"), std::string::npos);
+}
+
+TEST(WfsDataLibraryTest, SquadAmmoMustBeCompatibleWithWeapons) {
+    TempDir dir;
+    nlohmann::json squads = ReadFile(DataRoot() / "units" / "squads.json");
+    squads["entries"][0]["ammo"] = nlohmann::json::array({"ammo-atgm"});  // 与步枪/班机不兼容。
+    CopyBaselineTo(dir, "units/squads.json", squads);
+
+    const auto result = load_data_library(dir.path(), SchemaDir());
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "DATA_AMMO_INCOMPATIBLE");
 }
 
 TEST(WfsDataLibraryTest, SchemaVersionMismatchRejected) {
@@ -216,6 +228,7 @@ TEST(WfsDataLibraryTest, ReferenceErrorsAreDeterministic) {
     TempDir dir;
     nlohmann::json squads = ReadFile(DataRoot() / "units" / "squads.json");
     squads["entries"][0]["weapons"] = nlohmann::json::array({"ghost-weapon"});
+    squads["entries"][0]["ammo"] = nlohmann::json::array();  // 避免兼容性检查噪音。
     squads["entries"][1]["ammo"] = nlohmann::json::array({"ghost-ammo"});
     CopyBaselineTo(dir, "units/squads.json", squads);
 

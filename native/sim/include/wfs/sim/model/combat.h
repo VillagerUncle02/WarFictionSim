@@ -118,6 +118,8 @@ struct AntiArmorProfile {
     double penetration_mm = 0.0;
     double base_damage = 0.0;
 
+    bool is_valid() const noexcept { return penetration_mm >= 0.0 && base_damage >= 0.0; }
+
     bool operator==(const AntiArmorProfile&) const = default;
 };
 
@@ -126,6 +128,10 @@ struct AntiPersonnelProfile {
     double blast_radius_m = 0.0;
     double fragment_radius_m = 0.0;
     double lethality = 0.0;
+
+    bool is_valid() const noexcept {
+        return blast_radius_m >= 0.0 && fragment_radius_m >= 0.0 && lethality >= 0.0 && lethality <= 1.0;
+    }
 
     bool operator==(const AntiPersonnelProfile&) const = default;
 };
@@ -138,6 +144,8 @@ struct Ammo {
     AntiPersonnelProfile anti_personnel;
     bool special_effect = false;  // 烟幕等基础特种弹药（data-model §8）。
     double weight_kg = 0.0;
+
+    bool is_valid() const noexcept { return anti_armor.is_valid() && anti_personnel.is_valid() && weight_kg >= 0.0; }
 
     bool operator==(const Ammo&) const = default;
 };
@@ -158,6 +166,20 @@ struct Weapon {
 
     bool supports_ammo(const std::string& ammo_id) const {
         return std::find(compatible_ammo.begin(), compatible_ammo.end(), ammo_id) != compatible_ammo.end();
+    }
+
+    bool is_valid() const noexcept {
+        if (effective_range_m < 0.0 || accuracy < 0.0 || accuracy > 1.0 || weight_kg < 0.0 || min_crew == 0U) {
+            return false;
+        }
+        for (std::size_t i = 0; i < compatible_ammo.size(); ++i) {
+            for (std::size_t j = i + 1; j < compatible_ammo.size(); ++j) {
+                if (compatible_ammo[i] == compatible_ammo[j]) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     bool operator==(const Weapon&) const = default;
@@ -201,6 +223,8 @@ struct Soldier {
     // 泅渡规则（FR-022）：不携带重装备才可泅渡。
     bool can_swim() const noexcept { return !carries_heavy_equipment; }
     bool is_casualty() const noexcept { return status == SoldierStatus::kCasualty; }
+
+    bool is_valid() const noexcept { return experience.is_valid() && carry_weight_kg >= 0.0; }
 
     bool operator==(const Soldier&) const = default;
 };
@@ -249,6 +273,27 @@ struct Squad {
         return it != crewed_equipment.end() && effective_soldier_count() >= it->min_crew;
     }
 
+    bool is_valid() const noexcept {
+        if (footprint_radius_m < 0.0) {
+            return false;
+        }
+        for (std::size_t i = 0; i < soldiers.size(); ++i) {
+            for (std::size_t j = i + 1; j < soldiers.size(); ++j) {
+                if (soldiers[i].id == soldiers[j].id) {
+                    return false;
+                }
+            }
+        }
+        for (std::size_t i = 0; i < crewed_equipment.size(); ++i) {
+            for (std::size_t j = i + 1; j < crewed_equipment.size(); ++j) {
+                if (crewed_equipment[i].equipment_id == crewed_equipment[j].equipment_id) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     bool operator==(const Squad&) const = default;
 };
 
@@ -259,6 +304,8 @@ struct DirectionalArmor {
     double kinetic_mm = 0.0;
     double chemical_mm = 0.0;
 
+    bool is_valid() const noexcept { return kinetic_mm >= 0.0 && chemical_mm >= 0.0; }
+
     bool operator==(const DirectionalArmor&) const = default;
 };
 
@@ -268,6 +315,10 @@ struct ArmorProfile {
     DirectionalArmor side;
     DirectionalArmor top;
     DirectionalArmor bottom;
+
+    bool is_valid() const noexcept {
+        return front.is_valid() && side.is_valid() && top.is_valid() && bottom.is_valid();
+    }
 
     bool operator==(const ArmorProfile&) const = default;
 };
@@ -310,6 +361,22 @@ struct Vehicle {
         return state == VehicleState::kSeverelyDamaged || state == VehicleState::kDestroyed;
     }
     std::size_t total_occupants() const noexcept { return crew.size() + passengers.size(); }
+
+    bool is_valid() const noexcept {
+        if (!armor.is_valid() || crew.size() > crew_capacity || passengers.size() > passenger_capacity) {
+            return false;
+        }
+        // 状态与模块一致性：正常状态不得有模块瘫痪；摧毁状态必须全部瘫痪。
+        if (state == VehicleState::kOperational && modules.any_disabled()) {
+            return false;
+        }
+        if (state == VehicleState::kDestroyed &&
+            (modules.mobility != ModuleState::kDisabled || modules.optics != ModuleState::kDisabled ||
+             modules.reloading != ModuleState::kDisabled)) {
+            return false;
+        }
+        return true;
+    }
 
     bool operator==(const Vehicle&) const = default;
 };
@@ -577,6 +644,9 @@ inline void to_json(nlohmann::json& json, const AntiArmorProfile& profile) {
 inline void from_json(const nlohmann::json& json, AntiArmorProfile& profile) {
     profile.penetration_mm = json.at("penetration_mm").get<double>();
     profile.base_damage = json.at("base_damage").get<double>();
+    if (!profile.is_valid()) {
+        throw std::invalid_argument("对甲属性越界（必须非负）");
+    }
 }
 
 inline void to_json(nlohmann::json& json, const AntiPersonnelProfile& profile) {
@@ -588,6 +658,9 @@ inline void from_json(const nlohmann::json& json, AntiPersonnelProfile& profile)
     profile.blast_radius_m = json.at("blast_radius_m").get<double>();
     profile.fragment_radius_m = json.at("fragment_radius_m").get<double>();
     profile.lethality = json.at("lethality").get<double>();
+    if (!profile.is_valid()) {
+        throw std::invalid_argument("对人员属性越界（lethality 必须在 [0,1]）");
+    }
 }
 
 inline void to_json(nlohmann::json& json, const Ammo& ammo) {
@@ -607,6 +680,9 @@ inline void from_json(const nlohmann::json& json, Ammo& ammo) {
     ammo.anti_personnel = json.at("anti_personnel").get<AntiPersonnelProfile>();
     ammo.special_effect = json.at("special_effect").get<bool>();
     ammo.weight_kg = json.at("weight_kg").get<double>();
+    if (!ammo.is_valid()) {
+        throw std::invalid_argument("弹药数值越界: " + ammo.id);
+    }
 }
 
 inline void to_json(nlohmann::json& json, const Weapon& weapon) {
@@ -632,6 +708,9 @@ inline void from_json(const nlohmann::json& json, Weapon& weapon) {
     weapon.heavy_equipment = json.at("heavy_equipment").get<bool>();
     weapon.min_crew = json.at("min_crew").get<std::uint32_t>();
     weapon.compatible_ammo = json.at("compatible_ammo").get<std::vector<std::string>>();
+    if (!weapon.is_valid()) {
+        throw std::invalid_argument("武器数值越界或兼容弹药重复: " + weapon.id);
+    }
 }
 
 inline void to_json(nlohmann::json& json, const Protection& protection) {
@@ -661,6 +740,9 @@ inline void from_json(const nlohmann::json& json, Soldier& soldier) {
     soldier.status = json.at("status").get<SoldierStatus>();
     soldier.carries_heavy_equipment = json.at("carries_heavy_equipment").get<bool>();
     soldier.carry_weight_kg = json.at("carry_weight_kg").get<double>();
+    if (!soldier.is_valid()) {
+        throw std::invalid_argument("士兵数值越界: " + soldier.id);
+    }
 }
 
 inline void to_json(nlohmann::json& json, const CrewedEquipment& equipment) {
@@ -688,6 +770,9 @@ inline void from_json(const nlohmann::json& json, Squad& squad) {
     squad.formation = json.at("formation").get<Formation>();
     squad.cover = json.at("cover").get<CoverState>();
     squad.crewed_equipment = json.at("crewed_equipment").get<std::vector<CrewedEquipment>>();
+    if (!squad.is_valid()) {
+        throw std::invalid_argument("班组数值越界或成员/装备 id 重复: " + squad.id);
+    }
 }
 
 inline void to_json(nlohmann::json& json, const DirectionalArmor& armor) {
@@ -696,6 +781,9 @@ inline void to_json(nlohmann::json& json, const DirectionalArmor& armor) {
 inline void from_json(const nlohmann::json& json, DirectionalArmor& armor) {
     armor.kinetic_mm = json.at("kinetic_mm").get<double>();
     armor.chemical_mm = json.at("chemical_mm").get<double>();
+    if (!armor.is_valid()) {
+        throw std::invalid_argument("方向防护越界（必须非负）");
+    }
 }
 
 inline void to_json(nlohmann::json& json, const ArmorProfile& profile) {
@@ -707,6 +795,9 @@ inline void from_json(const nlohmann::json& json, ArmorProfile& profile) {
     profile.side = json.at("side").get<DirectionalArmor>();
     profile.top = json.at("top").get<DirectionalArmor>();
     profile.bottom = json.at("bottom").get<DirectionalArmor>();
+    if (!profile.is_valid()) {
+        throw std::invalid_argument("四方向防护越界");
+    }
 }
 
 inline void to_json(nlohmann::json& json, const ModuleStatus& modules) {
@@ -747,6 +838,9 @@ inline void from_json(const nlohmann::json& json, Vehicle& vehicle) {
     vehicle.crew = json.at("crew").get<std::vector<Soldier>>();
     vehicle.passengers = json.at("passengers").get<std::vector<Soldier>>();
     vehicle.weapons = json.at("weapons").get<std::vector<Weapon>>();
+    if (!vehicle.is_valid()) {
+        throw std::invalid_argument("载具数值越界或状态与模块不一致: " + vehicle.id);
+    }
 }
 
 }  // namespace wfs::sim::model

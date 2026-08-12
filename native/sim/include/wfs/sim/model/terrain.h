@@ -68,8 +68,7 @@ enum class FacilityVisibility : std::uint8_t {
 enum class FacilityLifecycleState : std::uint8_t {
     kDeployed = 0,
     kCancelled = 1,
-    kRedeploying = 2,
-    kDestroyed = 3,
+    kDestroyed = 2,
 };
 
 // 工事种类（FR-067：战壕/掩体/射界工事/伪装/专用工事）。
@@ -149,6 +148,8 @@ struct Passability {
         return true;
     }
 
+    bool is_valid() const noexcept { return speed_multiplier >= 0.0; }
+
     bool operator==(const Passability&) const = default;
 };
 
@@ -161,6 +162,10 @@ struct TerrainElement {
     Passability passability;
     double concealment = 0.0;  // 隐蔽（降低被发现概率，FR-022）。
     double cover = 0.0;        // 掩蔽（阻挡伤害与射击）。
+
+    bool is_valid() const noexcept {
+        return passability.is_valid() && concealment >= 0.0 && concealment <= 1.0 && cover >= 0.0 && cover <= 1.0;
+    }
 
     bool operator==(const TerrainElement&) const = default;
 };
@@ -213,21 +218,27 @@ struct Facility {
         lifecycle = FacilityLifecycleState::kCancelled;
     }
 
-    // 再次确认后清除残留（FR-014："直到再次确认"）。
+    // 再次确认：只清除旧位置残留并标记当前位置已确认，不改变生命周期
+    // （部署/重布置由 Deploy 负责，FR-014）。
     void ConfirmRecon() {
         recon_confirmed = true;
         recon_residue = false;
-        if (lifecycle != FacilityLifecycleState::kDeployed) {
-            lifecycle = FacilityLifecycleState::kDeployed;
-        }
     }
 
+    // 摧毁：仅当旧位置已被侦察确认时才保留侦察残留（FR-014）。
     void Destroy() {
-        old_x = x;
-        old_y = y;
-        recon_residue = true;
+        if (recon_confirmed) {
+            old_x = x;
+            old_y = y;
+            recon_residue = true;
+        }
         recon_confirmed = false;
         lifecycle = FacilityLifecycleState::kDestroyed;
+    }
+
+    bool is_valid() const noexcept {
+        // 残留必须对应真实存在过的旧位置（取消/重布置/已确认设施被摧毁时记录）。
+        return !recon_residue || lifecycle != FacilityLifecycleState::kDeployed || old_x != x || old_y != y;
     }
 
     bool operator==(const Facility&) const = default;
@@ -251,6 +262,11 @@ struct Fortification {
                    applicable_weapon_categories.end();
     }
 
+    bool is_valid() const noexcept {
+        return concealment_bonus >= 0.0 && concealment_bonus <= 1.0 && cover_bonus >= 0.0 && cover_bonus <= 1.0 &&
+               detection_reduction >= 0.0 && detection_reduction <= 1.0;
+    }
+
     bool operator==(const Fortification&) const = default;
 };
 
@@ -261,6 +277,11 @@ struct EnvironmentState {
     double visibility_multiplier = 1.0;
     double mobility_multiplier = 1.0;
     double accuracy_multiplier = 1.0;
+
+    bool is_valid() const noexcept {
+        return visibility_multiplier >= 0.0 && visibility_multiplier <= 1.0 && mobility_multiplier >= 0.0 &&
+               mobility_multiplier <= 1.0 && accuracy_multiplier >= 0.0 && accuracy_multiplier <= 1.0;
+    }
 
     bool operator==(const EnvironmentState&) const = default;
 };
@@ -419,8 +440,6 @@ inline std::string_view to_string(const FacilityLifecycleState state) noexcept {
             return "deployed";
         case FacilityLifecycleState::kCancelled:
             return "cancelled";
-        case FacilityLifecycleState::kRedeploying:
-            return "redeploying";
         case FacilityLifecycleState::kDestroyed:
             return "destroyed";
     }
@@ -433,9 +452,6 @@ inline FacilityLifecycleState facility_lifecycle_from_string(const std::string_v
     }
     if (name == "cancelled") {
         return FacilityLifecycleState::kCancelled;
-    }
-    if (name == "redeploying") {
-        return FacilityLifecycleState::kRedeploying;
     }
     if (name == "destroyed") {
         return FacilityLifecycleState::kDestroyed;
@@ -595,6 +611,9 @@ inline void from_json(const nlohmann::json& json, Passability& passability) {
     passability.is_water = json.at("is_water").get<bool>();
     passability.requires_bridge = json.at("requires_bridge").get<bool>();
     passability.amphibious_allowed = json.at("amphibious_allowed").get<bool>();
+    if (!passability.is_valid()) {
+        throw std::invalid_argument("通行属性非法: speed_multiplier 必须非负");
+    }
 }
 
 inline void to_json(nlohmann::json& json, const TerrainElement& element) {
@@ -614,6 +633,9 @@ inline void from_json(const nlohmann::json& json, TerrainElement& element) {
     element.passability = json.at("passability").get<Passability>();
     element.concealment = json.at("concealment").get<double>();
     element.cover = json.at("cover").get<double>();
+    if (!element.is_valid()) {
+        throw std::invalid_argument("地形要素数值越界: " + element.id);
+    }
 }
 
 inline void to_json(nlohmann::json& json, const Facility& facility) {
@@ -641,6 +663,9 @@ inline void from_json(const nlohmann::json& json, Facility& facility) {
     facility.recon_residue = json.at("recon_residue").get<bool>();
     facility.old_x = json.at("old_x").get<double>();
     facility.old_y = json.at("old_y").get<double>();
+    if (!facility.is_valid()) {
+        throw std::invalid_argument("设施侦察残留状态非法: " + facility.id);
+    }
 }
 
 inline void to_json(nlohmann::json& json, const Fortification& fortification) {
@@ -663,6 +688,9 @@ inline void from_json(const nlohmann::json& json, Fortification& fortification) 
     fortification.applicable_weapon_categories =
         json.at("applicable_weapon_categories").get<std::vector<std::string>>();
     fortification.construction_ticks = json.at("construction_ticks").get<std::uint64_t>();
+    if (!fortification.is_valid()) {
+        throw std::invalid_argument("工事数值越界: " + fortification.id);
+    }
 }
 
 inline void to_json(nlohmann::json& json, const EnvironmentState& state) {
@@ -678,6 +706,9 @@ inline void from_json(const nlohmann::json& json, EnvironmentState& state) {
     state.visibility_multiplier = json.at("visibility_multiplier").get<double>();
     state.mobility_multiplier = json.at("mobility_multiplier").get<double>();
     state.accuracy_multiplier = json.at("accuracy_multiplier").get<double>();
+    if (!state.is_valid()) {
+        throw std::invalid_argument("环境乘数越界（必须位于 [0,1]）");
+    }
 }
 
 }  // namespace wfs::sim::model

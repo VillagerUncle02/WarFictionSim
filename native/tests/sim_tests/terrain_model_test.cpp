@@ -152,6 +152,38 @@ TEST(WfsFacilityModelTest, DestroyKeepsResidue) {
     EXPECT_FALSE(facility.is_visible());
 }
 
+TEST(WfsFacilityModelTest, DestroyWithoutReconLeavesNoResidue) {
+    Facility facility = MakeDeployableFacility("fac-hidden");
+    facility.Destroy();  // 从未被侦察确认：不留残留（FR-014）。
+    EXPECT_EQ(facility.lifecycle, FacilityLifecycleState::kDestroyed);
+    EXPECT_FALSE(facility.recon_residue);
+    EXPECT_FALSE(facility.is_visible());
+}
+
+TEST(WfsFacilityModelTest, ConfirmReconDoesNotResurrectCancelledFacility) {
+    Facility facility = MakeDeployableFacility("fac-cancelled");
+    facility.ConfirmRecon();
+    facility.Cancel();
+    EXPECT_EQ(facility.lifecycle, FacilityLifecycleState::kCancelled);
+
+    facility.ConfirmRecon();  // 只清残留/标记确认，不得把生命周期改回已部署（F1）。
+    EXPECT_EQ(facility.lifecycle, FacilityLifecycleState::kCancelled);
+    EXPECT_TRUE(facility.recon_confirmed);
+    EXPECT_FALSE(facility.recon_residue);
+    EXPECT_FALSE(facility.is_visible());
+}
+
+TEST(WfsFacilityModelTest, ConfirmReconDoesNotResurrectDestroyedFacility) {
+    Facility facility = MakeDeployableFacility("fac-destroyed");
+    facility.ConfirmRecon();
+    facility.Destroy();
+    facility.ConfirmRecon();  // 摧毁后确认不得复活（F1）。
+    EXPECT_EQ(facility.lifecycle, FacilityLifecycleState::kDestroyed);
+    EXPECT_TRUE(facility.recon_confirmed);
+    EXPECT_FALSE(facility.recon_residue);
+    EXPECT_FALSE(facility.is_visible());
+}
+
 TEST(WfsFacilityModelTest, FacilityRoundTrip) {
     Facility facility = MakeDeployableFacility("fac-medical");
     facility.ConfirmRecon();
@@ -197,4 +229,35 @@ TEST(WfsEnvironmentModelTest, StaticEnvironmentRoundTrip) {
     const EnvironmentState restored = RoundTrip(nlohmann::json(state)).get<EnvironmentState>();
     EXPECT_EQ(restored, state);
     EXPECT_DOUBLE_EQ(restored.visibility_multiplier, 0.4);
+}
+
+TEST(WfsTerrainModelTest, InvalidNumericRangesRejected) {
+    // Passability 负速度系数。
+    const nlohmann::json bad_speed = nlohmann::json{{"speed_multiplier", -1.0},
+                                                    {"blocked", false},
+                                                    {"is_water", false},
+                                                    {"requires_bridge", false},
+                                                    {"amphibious_allowed", true}};
+    EXPECT_THROW(bad_speed.get<Passability>(), std::invalid_argument);
+
+    // 地形掩蔽/隐蔽越界 [0,1]。
+    TerrainElement element;
+    element.id = "terrain-bad";
+    element.concealment = 0.5;
+    element.cover = 1.5;
+    EXPECT_FALSE(element.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(element)).get<TerrainElement>(), std::invalid_argument);
+
+    // 工事加成越界。
+    Fortification fort;
+    fort.id = "fort-bad";
+    fort.concealment_bonus = 1.2;
+    EXPECT_FALSE(fort.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(fort)).get<Fortification>(), std::invalid_argument);
+
+    // 环境乘数越界。
+    EnvironmentState state;
+    state.visibility_multiplier = 1.5;
+    EXPECT_FALSE(state.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(state)).get<EnvironmentState>(), std::invalid_argument);
 }

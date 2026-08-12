@@ -190,6 +190,7 @@ TEST(WfsCombatModelTest, VehicleArmorModulesAndOccupants) {
     vehicle.state = VehicleState::kSeverelyDamaged;
     EXPECT_TRUE(vehicle.can_abandon());  // 严重受损可弃车（FR-062）
     vehicle.state = VehicleState::kDestroyed;
+    vehicle.modules = ModuleStatus{ModuleState::kDisabled, ModuleState::kDisabled, ModuleState::kDisabled};
     EXPECT_TRUE(vehicle.can_abandon());
 
     const Vehicle restored = RoundTrip(nlohmann::json(vehicle)).get<Vehicle>();
@@ -205,4 +206,54 @@ TEST(WfsCombatModelTest, FourDirectionArmorProfileRoundTrip) {
     EXPECT_EQ(restored, profile);
     EXPECT_DOUBLE_EQ(restored.side.kinetic_mm, 3.0);
     EXPECT_DOUBLE_EQ(restored.top.chemical_mm, 6.0);
+}
+
+TEST(WfsCombatModelTest, InvalidNumericRangesRejected) {
+    // 弹药杀伤力越界 [0,1]。
+    Ammo bad_ammo = MakeKineticAmmo();
+    bad_ammo.anti_personnel.lethality = 1.5;
+    EXPECT_FALSE(bad_ammo.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(bad_ammo)).get<Ammo>(), std::invalid_argument);
+
+    // 武器精度越界。
+    Weapon bad_weapon;
+    bad_weapon.id = "w-bad";
+    bad_weapon.accuracy = 1.2;
+    bad_weapon.compatible_ammo = {"ammo-556"};
+    EXPECT_FALSE(bad_weapon.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(bad_weapon)).get<Weapon>(), std::invalid_argument);
+
+    // 士兵负负重。
+    Soldier bad_soldier = MakeSoldier("s-bad");
+    bad_soldier.carry_weight_kg = -1.0;
+    EXPECT_FALSE(bad_soldier.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(bad_soldier)).get<Soldier>(), std::invalid_argument);
+
+    // 班组重复士兵 id。
+    Squad bad_squad;
+    bad_squad.id = "squad-bad";
+    bad_squad.soldiers = {MakeSoldier("dup"), MakeSoldier("dup")};
+    EXPECT_FALSE(bad_squad.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(bad_squad)).get<Squad>(), std::invalid_argument);
+
+    // 载具摧毁状态与模块不一致。
+    Vehicle bad_vehicle;
+    bad_vehicle.id = "vehicle-bad";
+    bad_vehicle.state = VehicleState::kDestroyed;
+    bad_vehicle.modules = ModuleStatus{ModuleState::kFunctional, ModuleState::kFunctional, ModuleState::kFunctional};
+    EXPECT_FALSE(bad_vehicle.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(bad_vehicle)).get<Vehicle>(), std::invalid_argument);
+
+    // 载员超过容量。
+    Vehicle overflow;
+    overflow.id = "vehicle-overflow";
+    overflow.passenger_capacity = 1U;
+    overflow.passengers = {MakeSoldier("p1"), MakeSoldier("p2")};
+    EXPECT_FALSE(overflow.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(overflow)).get<Vehicle>(), std::invalid_argument);
+
+    // 方向防护负值。
+    DirectionalArmor bad_armor{-5.0, 0.0};
+    EXPECT_FALSE(bad_armor.is_valid());
+    EXPECT_THROW(RoundTrip(nlohmann::json(bad_armor)).get<DirectionalArmor>(), std::invalid_argument);
 }

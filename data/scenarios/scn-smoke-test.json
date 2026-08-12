@@ -18,33 +18,33 @@
   "units": [
     {
       "id": "squad-a",
-      "type": "infantry_squad",
+      "type": "squad-rifle-us",
       "node_id": "platoon-alpha",
       "x": 1.0,
       "y": 1.0,
       "ammo": [
-        "5.56mm",
-        "frag_grenade"
+        "ammo-556",
+        "ammo-frag-grenade"
       ]
     },
     {
       "id": "squad-b",
-      "type": "infantry_squad",
+      "type": "squad-rifle-us",
       "node_id": "platoon-alpha",
       "x": 1.2,
       "y": 1.1,
       "ammo": [
-        "5.56mm"
+        "ammo-556"
       ]
     },
     {
       "id": "squad-c",
-      "type": "infantry_squad",
+      "type": "squad-rifle-opposition",
       "node_id": "enemy-command",
       "x": 4.0,
       "y": 4.0,
       "ammo": [
-        "7.62mm"
+        "ammo-762"
       ]
     }
   ],

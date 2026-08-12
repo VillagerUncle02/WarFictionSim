@@ -21,6 +21,8 @@
 #include <utility>
 #include <vector>
 
+#include "wfs/sim/model/mission.h"
+
 #include "schema_validator.h"
 
 namespace wfs::sim {
@@ -43,23 +45,18 @@ const std::vector<ConditionSpec>& BuiltInConditions() {
 }
 
 const std::vector<std::string>& BuiltInCommandTypes() {
-    // v1 13 种任务类型（data-model.md §11）；context.registered_types
-    // 非空时由调用方集合完全覆盖。
-    static const std::vector<std::string> types = {
-        "MOVE",
-        "PATROL",
-        "ATTACK",
-        "DEFEND",
-        "SECURE_ZONE",
-        "CLEAR",
-        "DRIVE_OUT",
-        "FORTIFY",
-        "HIDDEN_RECON",
-        "INFILTRATE_RECON",
-        "OBSERVATION_POST",
-        "FIRE_RECON",
-        "SUPPORT_REQUEST",
-    };
+    // v1 13 种任务类型（data-model.md §11）：默认表直接由 mission_registry
+    // 生成，消除双源漂移（F5）；context.registered_types 非空时由调用方
+    // 集合完全覆盖（SC-010 可扩展）。
+    static const std::vector<std::string> types = [] {
+        const std::vector<model::MissionType>& registered = model::registered_mission_types();
+        std::vector<std::string> names;
+        names.reserve(registered.size());
+        for (const model::MissionType type : registered) {
+            names.push_back(std::string(model::to_string(type)));
+        }
+        return names;
+    }();
     return types;
 }
 

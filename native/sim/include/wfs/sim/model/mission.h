@@ -14,7 +14,8 @@
 //   由指挥官决定 继续/取消/判失败；持续任务循环直到被新命令取代或终止。
 // - ConditionExpr 是确定性条件表达式（AND/OR/NOT + 比较），Evaluate 只
 //   依赖输入上下文，无随机/时钟/无序容器，短路顺序固定（宪法第 7 条）；
-//   缺失变量显式抛错（宪法第 17 条，不静默吞错）。
+//   缺失变量显式抛错（宪法第 17 条，不静默吞错）——但只在被求值路径上
+//   抛错：短路分支不会被访问，因此未求值分支的缺失变量不会触发异常。
 //
 // 本头文件声明注册表与状态机接口；实现集中在 sim/src/mission_registry.cpp。
 
@@ -149,6 +150,10 @@ struct Mission {
     bool continuous = false;  // 持续任务：循环执行直到被取代/终止（FR-044）。
     bool loops = true;        // 持续任务循环开关。
 
+    // 一致性校验（F2/F7）：continuous 必须与注册表一致；priority 非负。
+    // 未知 MissionType 时经 mission_type_spec 显式抛错（F9，与注册表一致）。
+    bool is_valid() const;
+
     bool operator==(const Mission&) const = default;
 };
 
@@ -164,8 +169,9 @@ struct MissionTypeSpec {
 const std::vector<MissionType>& registered_mission_types();
 bool is_registered_mission_type(std::string_view name);
 const MissionTypeSpec& mission_type_spec(MissionType type);
-bool is_continuous_mission(MissionType type) noexcept;
-bool is_recon_mission(MissionType type) noexcept;
+// 未知枚举与 mission_type_spec 一致显式抛 std::invalid_argument（F9）。
+bool is_continuous_mission(MissionType type);
+bool is_recon_mission(MissionType type);
 
 // 状态机数据表（FR-044）。
 bool can_transition(MissionState from_state, MissionState target_state) noexcept;
@@ -191,13 +197,16 @@ std::string_view to_string(ConditionOp op) noexcept;
 ConditionOp condition_op_from_string(std::string_view name);
 
 // 确定性条件表达式树：叶子 = 比较运算，复合 = AND/OR/NOT。
+// 缺失变量仅在"实际被求值的路径"上报错：AND/OR 短路后未访问的分支
+// 不读取变量，因此不会因短路分支缺失变量而抛异常（F8）。
 struct ConditionExpr {
     ConditionOp op = ConditionOp::kTrue;
     std::string variable;                 // 叶子变量名。
     double threshold = 0.0;               // 叶子阈值。
     std::vector<ConditionExpr> children;  // 复合节点子条件（固定顺序）。
 
-    // 求值：只读取上下文、按固定顺序短路；缺失变量抛 std::invalid_argument。
+    // 求值：只读取上下文、按固定顺序短路；被求值路径上的缺失变量抛
+    // std::invalid_argument（短路分支不访问，不报错）。
     bool Evaluate(const std::map<std::string, double>& context) const;
 
     nlohmann::json ToJson() const;
@@ -227,6 +236,13 @@ inline ConditionExpr ConditionExpr::Compare(const ConditionOp op, std::string va
 
 inline ConditionExpr ConditionExpr::Combine(const ConditionOp op, std::vector<ConditionExpr> children) {
     return ConditionExpr{op, "", 0.0, std::move(children)};
+}
+
+inline bool Mission::is_valid() const {
+    if (priority < 0) {
+        return false;
+    }
+    return is_continuous_mission(type) == continuous;
 }
 
 inline bool ConditionExpr::Evaluate(const std::map<std::string, double>& context) const {

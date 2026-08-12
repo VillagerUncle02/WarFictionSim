@@ -218,11 +218,11 @@ TEST(WfsLoaderTest, ValidationCompletesWithinBudget) {
     root["units"].clear();
     for (int i = 0; i < 2000; ++i) {
         root["units"].push_back(nlohmann::json{{"id", "unit-" + std::to_string(i)},
-                                               {"type", "infantry_squad"},
+                                               {"type", "squad-rifle-us"},
                                                {"node_id", "platoon-alpha"},
                                                {"x", 1.0},
                                                {"y", 1.0},
-                                               {"ammo", nlohmann::json::array({"5.56mm"})}});
+                                               {"ammo", nlohmann::json::array({"ammo-556"})}});
     }
     TempDir dir;
     const std::filesystem::path file = dir.Write("budget.json", root.dump());
@@ -235,4 +235,24 @@ TEST(WfsLoaderTest, ValidationCompletesWithinBudget) {
     ASSERT_TRUE(result.ok()) << (result.issues.empty() ? "" : result.issues.front().message);
     EXPECT_LT(elapsed.count(), 5000);
     EXPECT_EQ(result.scenario.units.size(), 2000u);
+}
+
+TEST(WfsLoaderTest, ScenarioUnitTypeMustExistInDataCatalog) {
+    nlohmann::json root = ValidScenarioJson();
+    root["units"][0]["type"] = "ghost-squad";
+    TempDir dir;
+    const std::filesystem::path file = dir.Write("unknown-unit-type.json", root.dump());
+    const ScenarioLoadResult result = load_scenario(file, ScenarioSchema());
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "UNIT_TYPE_NOT_FOUND");
+}
+
+TEST(WfsLoaderTest, ScenarioUnitAmmoMustExistInDataCatalog) {
+    nlohmann::json root = ValidScenarioJson();
+    root["units"][0]["ammo"] = nlohmann::json::array({"ghost-ammo"});
+    TempDir dir;
+    const std::filesystem::path file = dir.Write("unknown-unit-ammo.json", root.dump());
+    const ScenarioLoadResult result = load_scenario(file, ScenarioSchema());
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "UNIT_AMMO_NOT_FOUND");
 }
