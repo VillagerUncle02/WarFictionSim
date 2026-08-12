@@ -3,7 +3,8 @@
 // T026 单元测试：士兵/班组/载具/武器/弹药战斗模型。
 // 覆盖：弹药双属性（对甲/对人员）、武器弹药兼容、四方向防护（前/侧/上/底）、
 // 模块状态、乘员/载员与弃车判定（FR-062）、重装备标志与泅渡规则（FR-022）、
-// 班组区域结算所需字段（人数/占地半径/平均防护/掩蔽、装备最低操作人数），
+// 乘员/载员花名册 id 唯一性、班组区域结算所需字段（人数/占地半径/平均防护/
+// 掩蔽、装备最低操作人数），
 // 以及全部类型的 JSON 序列化往返。
 
 #include <cstdint>
@@ -198,6 +199,34 @@ TEST(WfsCombatModelTest, VehicleArmorModulesAndOccupants) {
     EXPECT_EQ(restored, vehicle);
     EXPECT_DOUBLE_EQ(restored.armor.front.kinetic_mm, 60.0);
     EXPECT_DOUBLE_EQ(restored.armor.bottom.chemical_mm, 30.0);
+}
+
+TEST(WfsCombatModelTest, VehicleRosterUniquenessValidated) {
+    // 合法花名册：无重复 id 且人数在容量内，不应被误判（回归保护）。
+    Vehicle vehicle;
+    vehicle.id = "vehicle-roster";
+    vehicle.crew_capacity = 2U;
+    vehicle.passenger_capacity = 2U;
+    vehicle.crew = {MakeSoldier("crew-a"), MakeSoldier("crew-b")};
+    vehicle.passengers = {MakeSoldier("pax-a"), MakeSoldier("pax-b")};
+    EXPECT_TRUE(vehicle.is_valid());
+
+    // 乘员内部重复 id：同一士兵不能占用两个乘员席位。
+    Vehicle duplicate_crew = vehicle;
+    duplicate_crew.crew = {MakeSoldier("dup"), MakeSoldier("dup")};
+    EXPECT_FALSE(duplicate_crew.is_valid());
+
+    // 载员内部重复 id：同一士兵不能占用两个载员席位。
+    Vehicle duplicate_passengers = vehicle;
+    duplicate_passengers.passengers = {MakeSoldier("dup"), MakeSoldier("dup")};
+    EXPECT_FALSE(duplicate_passengers.is_valid());
+
+    // 同一 id 同时出现在乘员与载员两侧：弃车后将拆成两个班组，
+    // 重复 id 会破坏班组标识唯一性。
+    Vehicle cross_roster = vehicle;
+    cross_roster.crew = {MakeSoldier("shared")};
+    cross_roster.passengers = {MakeSoldier("shared")};
+    EXPECT_FALSE(cross_roster.is_valid());
 }
 
 TEST(WfsCombatModelTest, FourDirectionArmorProfileRoundTrip) {

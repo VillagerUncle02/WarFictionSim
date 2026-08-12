@@ -378,6 +378,30 @@ struct Vehicle {
         if (!armor.is_valid() || crew.size() > crew_capacity || passengers.size() > passenger_capacity) {
             return false;
         }
+        // 花名册唯一性：同一士兵 id 不得重复占用席位，否则弃车后按 FR-062
+        // 拆分出的车组/搭乘班组会携带重复 id，破坏班组标识唯一性。
+        for (std::size_t i = 0; i < crew.size(); ++i) {
+            for (std::size_t j = i + 1; j < crew.size(); ++j) {
+                if (crew[i].id == crew[j].id) {
+                    return false;
+                }
+            }
+        }
+        for (std::size_t i = 0; i < passengers.size(); ++i) {
+            for (std::size_t j = i + 1; j < passengers.size(); ++j) {
+                if (passengers[i].id == passengers[j].id) {
+                    return false;
+                }
+            }
+        }
+        // 同一士兵 id 不得同时占用乘员与载员两类席位。
+        for (std::size_t i = 0; i < crew.size(); ++i) {
+            for (std::size_t j = 0; j < passengers.size(); ++j) {
+                if (crew[i].id == passengers[j].id) {
+                    return false;
+                }
+            }
+        }
         // 状态与模块一致性：正常状态不得有模块瘫痪；摧毁状态必须全部瘫痪。
         if (state == VehicleState::kOperational && modules.any_disabled()) {
             return false;
@@ -387,6 +411,9 @@ struct Vehicle {
              modules.reloading != ModuleState::kDisabled)) {
             return false;
         }
+        // 待量化项：规格（data-model.md §6 / FR-062）未定义 kSeverelyDamaged/
+        // kModuleDamage 必须对应的模块降级/瘫痪组合，故暂不对这两个状态做
+        // 模块一致性校验，避免自行发明规则；待规格明确后再补充。
         return true;
     }
 
