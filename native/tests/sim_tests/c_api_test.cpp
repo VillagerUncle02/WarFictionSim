@@ -122,6 +122,15 @@ nlohmann::json QueryEventsJson(wfs_sim_handle* handle, const std::string& query_
     return nlohmann::json::parse(QueryEventsText(handle, query_json));
 }
 
+std::vector<std::uint64_t> EventSeqs(const nlohmann::json& events) {
+    std::vector<std::uint64_t> seqs;
+    seqs.reserve(events.size());
+    for (const nlohmann::json& event : events) {
+        seqs.push_back(event.at("seq").get<std::uint64_t>());
+    }
+    return seqs;
+}
+
 }  // namespace
 
 TEST(WfsCApiTest, VersionMatchesAbiMacroAndIsStable) {
@@ -129,6 +138,9 @@ TEST(WfsCApiTest, VersionMatchesAbiMacroAndIsStable) {
     const char* second = wfs_sim_version();
     ASSERT_NE(first, nullptr);
     EXPECT_EQ(std::string(first), WFS_SIM_VERSION_STRING);
+    EXPECT_EQ(std::string(first), "0.2.0");  // N2：新增 wfs_sim_query_events 后小版本 +1。
+    EXPECT_EQ(WFS_SIM_ABI_VERSION_MINOR, 2);
+    EXPECT_EQ(WFS_SIM_ABI_VERSION_PATCH, 0);
     EXPECT_EQ(first, second);  // 静态存储：两次调用返回同一字符串。
 }
 
@@ -352,6 +364,88 @@ TEST(WfsCApiTest, QueryEventsFiltersCategorySeverityTextAndLimit) {
     }
 }
 
+TEST(WfsCApiTest, QueryEventsFiltersByUnitIdSubstring) {
+    Handle handle;  // scn-smoke-test 含 squad-a/squad-b/squad-c。
+    ASSERT_NE(handle.get(), nullptr);
+    // 注入并执行 squad-a 命令：确定性产生含 "unit=squad-a" 的事件消息。
+    EXPECT_EQ(wfs_sim_inject_command(handle.get(), ValidCommandJson().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(wfs_sim_step(handle.get()), WFS_SIM_RESULT_OK);
+
+    const nlohmann::json all = QueryEventsJson(handle.get(), "{}");
+    const nlohmann::json& all_events = all.at("events");
+    ASSERT_TRUE(all_events.is_array());
+    ASSERT_GT(all_events.size(), 0U);
+
+    // 语义基准：unit_id = message 区分大小写子串（与 text 一致），
+    // 命中集合必须精确等于全集按同一子串过滤后的集合（不多不少）。
+    const nlohmann::json by_unit = QueryEventsJson(handle.get(), R"({"unit_id":"squad-a"})");
+    const nlohmann::json& unit_events = by_unit.at("events");
+    std::vector<std::uint64_t> expected_seqs;
+    for (const nlohmann::json& event : all_events) {
+        if (event.at("message").get<std::string>().find("squad-a") != std::string::npos) {
+            expected_seqs.push_back(event.at("seq").get<std::uint64_t>());
+        }
+    }
+    ASSERT_GT(expected_seqs.size(), 0U) << "前置条件：日志必须含 squad-a 事件";
+    EXPECT_EQ(EventSeqs(unit_events), expected_seqs);
+    EXPECT_EQ(by_unit.at("count").get<std::size_t>(), expected_seqs.size());
+    EXPECT_FALSE(by_unit.at("truncated").get<bool>());
+    for (const nlohmann::json& event : unit_events) {
+        EXPECT_NE(event.at("message").get<std::string>().find("squad-a"), std::string::npos);
+    }
+
+    // 区分大小写：大写 "SQUAD-A" 不命中任何事件。
+    const nlohmann::json case_mismatch = QueryEventsJson(handle.get(), R"({"unit_id":"SQUAD-A"})");
+    EXPECT_EQ(case_mismatch.at("events").size(), 0U);
+    EXPECT_EQ(case_mismatch.at("count").get<std::size_t>(), 0U);
+    EXPECT_FALSE(case_mismatch.at("truncated").get<bool>());
+
+    // 与 category 组合：取交集，结果等于 unit_id 命中集中 category=command 的子集。
+    const nlohmann::json by_unit_command =
+        QueryEventsJson(handle.get(), R"({"unit_id":"squad-a","category":"command"})");
+    std::vector<std::uint64_t> category_intersection;
+    for (const nlohmann::json& event : unit_events) {
+        if (event.at("category").get<std::string>() == "command") {
+            category_intersection.push_back(event.at("seq").get<std::uint64_t>());
+        }
+    }
+    EXPECT_EQ(EventSeqs(by_unit_command.at("events")), category_intersection);
+
+    // 与 text 组合：取交集（两个子串必须同时命中）。
+    const nlohmann::json by_unit_text =
+        QueryEventsJson(handle.get(), R"({"unit_id":"squad-a","text":"COMMAND_ISSUED"})");
+    std::vector<std::uint64_t> text_intersection;
+    for (const nlohmann::json& event : unit_events) {
+        if (event.at("message").get<std::string>().find("COMMAND_ISSUED") != std::string::npos) {
+            text_intersection.push_back(event.at("seq").get<std::uint64_t>());
+        }
+    }
+    ASSERT_GT(text_intersection.size(), 0U) << "前置条件：squad-a 事件必须含 COMMAND_ISSUED";
+    EXPECT_EQ(EventSeqs(by_unit_text.at("events")), text_intersection);
+
+    // 互斥子串：text 与 unit_id 无交集 → 空结果。
+    const nlohmann::json disjoint = QueryEventsJson(handle.get(), R"({"unit_id":"squad-a","text":"COMMAND_QUEUED"})");
+    EXPECT_EQ(disjoint.at("events").size(), 0U);
+    EXPECT_EQ(disjoint.at("count").get<std::size_t>(), 0U);
+    EXPECT_FALSE(disjoint.at("truncated").get<bool>());
+
+    // 空 unit_id / null 视同不过滤：与不带 unit_id 的查询逐字节一致，
+    // 不影响其他字段语义。
+    EXPECT_EQ(QueryEventsText(handle.get(), R"({"unit_id":"","category":"command"})"),
+              QueryEventsText(handle.get(), R"({"category":"command"})"));
+    EXPECT_EQ(QueryEventsText(handle.get(), R"({"unit_id":null,"text":"COMMAND_ISSUED","limit":5})"),
+              QueryEventsText(handle.get(), R"({"text":"COMMAND_ISSUED","limit":5})"));
+
+    // 未知 unit_id 只让本维度不命中，category/limit 等字段语义不变。
+    const nlohmann::json unknown =
+        QueryEventsJson(handle.get(), R"({"unit_id":"no-such-unit","category":"command","limit":2})");
+    EXPECT_EQ(unknown.at("events").size(), 0U);
+    EXPECT_EQ(unknown.at("count").get<std::size_t>(), 0U);
+    EXPECT_FALSE(unknown.at("truncated").get<bool>());
+    const nlohmann::json category_only = QueryEventsJson(handle.get(), R"({"category":"command","limit":2})");
+    EXPECT_GT(category_only.at("events").size(), 0U);  // 去掉 unit_id 即有命中：证明语义未被污染。
+}
+
 TEST(WfsCApiTest, QueryEventsInvalidQueryJsonReturnsInvalidDataWithoutMutation) {
     RuntimeCombatHandle handle;
     ASSERT_NE(handle.get(), nullptr);
@@ -373,6 +467,9 @@ TEST(WfsCApiTest, QueryEventsInvalidQueryJsonReturnsInvalidDataWithoutMutation) 
         R"({"limit":-1})",
         R"({"limit":"3"})",
         R"({"limit":2.5})",
+        R"({"unit_id":7})",
+        R"({"unit_id":[]})",
+        R"({"unit_id":{}})",
     };
     for (const std::string& query : invalid_queries) {
         char out[32] = {};
