@@ -86,7 +86,7 @@ std::string build_snapshot_text(const SimState& state) {
 }
 
 nlohmann::json serialize_state_json(const SimState& state) {
-    return nlohmann::json{
+    nlohmann::json root{
         {"tick", state.clock.tick()},
         {"seed", state.seed},
         {"scenario_id", state.scenario.id},
@@ -109,6 +109,15 @@ nlohmann::json serialize_state_json(const SimState& state) {
              {"entries", EventLogToJson(state.event_log)},
          }},
     };
+    // T020：AI 决策日志与编号游标是确定性状态的一部分（CHK052 回放依据）。
+    // 空值省略字段：旧版存档（无决策日志）加载后再次序列化保持字节一致。
+    if (state.ai_decision_counter > 0U) {
+        root["ai_decision_counter"] = state.ai_decision_counter;
+    }
+    if (!state.decision_log.empty()) {
+        root["decision_log"] = decision_log_to_json(state.decision_log);
+    }
+    return root;
 }
 
 std::string compute_state_hash_hex(const SimState& state) {

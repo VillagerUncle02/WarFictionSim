@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <filesystem>
 
+#include "wfs/sim/ai/decision_log.h"
 #include "wfs/sim/clock.h"
 #include "wfs/sim/event_log.h"
 #include "wfs/sim/loader.h"
@@ -30,6 +31,8 @@ struct SimState {
     std::uint64_t seed = 0U;  // 创建句柄时的显式种子（运行身份标识）。
     int threads = 1;          // 并行度配置（只影响性能，不进哈希/存档状态）。
     std::uint64_t processed_events = 0U;
+    DecisionLog decision_log;                  // T020：AI 决策点记录（宪法 10）。
+    std::uint64_t ai_decision_counter = 0U;    // T020：决策编号单调游标（接受/拒绝共用）。
     std::filesystem::path scenario_path;
 };
 

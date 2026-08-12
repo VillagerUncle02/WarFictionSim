@@ -169,6 +169,20 @@ TEST(WfsCApiTest, SnapshotReflectsCommandInjectionAndStep) {
     EXPECT_EQ(after.at("processed_events"), 1);
 }
 
+TEST(WfsCApiTest, AiDecisionValidCommandAcceptedAndProcessed) {
+    Handle handle;
+    ASSERT_NE(handle.get(), nullptr);
+
+    EXPECT_EQ(wfs_sim_inject_ai_decision(handle.get(), ValidCommandJson().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(SnapshotJson(handle.get()).at("pending_events"), 1);
+
+    EXPECT_EQ(wfs_sim_step(handle.get()), WFS_SIM_RESULT_OK);
+    const nlohmann::json after = SnapshotJson(handle.get());
+    EXPECT_EQ(after.at("tick"), 1);
+    EXPECT_EQ(after.at("pending_events"), 0);
+    EXPECT_EQ(after.at("processed_events"), 1);
+}
+
 TEST(WfsCApiTest, InvalidCommandRejectedWithoutQueueMutation) {
     Handle handle;
     ASSERT_NE(handle.get(), nullptr);

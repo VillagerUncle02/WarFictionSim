@@ -33,6 +33,8 @@ namespace wfs::sim {
 struct ValidationError {
     std::string code;
     std::string message;
+
+    bool operator==(const ValidationError&) const = default;
 };
 
 struct CommandValidationResult {

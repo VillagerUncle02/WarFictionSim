@@ -17,12 +17,16 @@ add_executable(sim_tests
     loader_test.cpp
     command_validation_test.cpp
     c_api_test.cpp
+    ai_inject_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)
 
 # 测试需要定位仓库根目录下的 data/ 与 contracts/ 数据（T012–T014 测试）。
 target_compile_definitions(sim_tests PRIVATE "WFS_SOURCE_ROOT=\"${PROJECT_SOURCE_DIR}/..\"")
+
+# T020 白盒测试直接驱动内部注入通道/SimState（ai_inject.h、sim_state.h）。
+target_include_directories(sim_tests PRIVATE "${PROJECT_SOURCE_DIR}/sim/src")
 
 # Windows 下 vcpkg 的 gtest 为动态库时，把运行期 DLL 复制到测试可执行文件目录，
 # 避免直接运行 sim_tests.exe 时"找不到 gtest.dll"（本地与 CI 均适用）。

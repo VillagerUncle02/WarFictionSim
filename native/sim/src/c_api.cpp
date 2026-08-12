@@ -21,10 +21,10 @@
 
 #include <nlohmann/json.hpp>
 
+#include "ai_inject.h"
+#include "sim_runtime.h"
 #include "wfs/sim/clock.h"
-#include "wfs/sim/command_validation.h"
 #include "wfs/sim/loader.h"
-#include "wfs/sim/queue.h"
 #include "wfs/sim/rng.h"
 
 #include "save.h"
@@ -40,33 +40,6 @@ struct wfs_sim_handle : wfs::sim::SimState {
 };
 
 namespace {
-
-// 玩家命令与 AI 决策共用同一校验与入队路径（FR-045/069：AI 只能生成命令，
-// 与玩家共用同一结构与队列）。校验失败不改变队列状态。
-wfs_sim_result InjectCommand(wfs_sim_handle* handle, const char* command_json) {
-    if (handle == nullptr || command_json == nullptr) {
-        return WFS_SIM_RESULT_INVALID_ARGUMENT;
-    }
-    try {
-        const std::filesystem::path schema_path =
-            wfs::sim::resolve_schema_path(handle->scenario_path, "command.schema.json");
-        if (schema_path.empty()) {
-            return WFS_SIM_RESULT_INTERNAL_ERROR;
-        }
-        const wfs::sim::CommandValidationContext context = wfs::sim::make_validation_context(handle->scenario);
-        const wfs::sim::CommandValidationResult validation =
-            wfs::sim::validate_command(command_json, context, schema_path);
-        if (!validation.ok()) {
-            return WFS_SIM_RESULT_INVALID_DATA;
-        }
-        // 到达 tick = 当前 tick；序列号由队列自动分配（T011），
-        // 与 AI 注入通道（T020）共用同一确定性排序。
-        handle->queue.enqueue(handle->clock.tick(), command_json);
-        return WFS_SIM_RESULT_OK;
-    } catch (...) {
-        return WFS_SIM_RESULT_INTERNAL_ERROR;
-    }
-}
 
 }  // namespace
 
@@ -116,13 +89,7 @@ wfs_sim_result wfs_sim_step(wfs_sim_handle* handle) {
         return WFS_SIM_RESULT_INVALID_ARGUMENT;
     }
     try {
-        handle->clock.advance(1U);
-        // 按 (tick, seq) 顺序处理到期命令：事件 tick 早于当前 tick 时按
-        // 补发语义弹出（T011 try_pop 契约），保证注入在暂停/加速边界不丢命令。
-        wfs::sim::QueuedEvent event;
-        while (handle->queue.try_pop(handle->clock.tick(), event)) {
-            ++handle->processed_events;
-        }
+        wfs::sim::step_sim_state(*handle);
         return WFS_SIM_RESULT_OK;
     } catch (...) {
         return WFS_SIM_RESULT_INTERNAL_ERROR;
@@ -130,11 +97,41 @@ wfs_sim_result wfs_sim_step(wfs_sim_handle* handle) {
 }
 
 wfs_sim_result wfs_sim_inject_command(wfs_sim_handle* handle, const char* command_json) {
-    return InjectCommand(handle, command_json);
+    if (handle == nullptr || command_json == nullptr) {
+        return WFS_SIM_RESULT_INVALID_ARGUMENT;
+    }
+    try {
+        const std::filesystem::path schema_path =
+            wfs::sim::resolve_schema_path(handle->scenario_path, "command.schema.json");
+        if (schema_path.empty()) {
+            return WFS_SIM_RESULT_INTERNAL_ERROR;
+        }
+        const wfs::sim::PlayerCommandResult result =
+            wfs::sim::inject_player_command(*handle, command_json, schema_path);
+        return result.accepted ? WFS_SIM_RESULT_OK : WFS_SIM_RESULT_INVALID_DATA;
+    } catch (...) {
+        return WFS_SIM_RESULT_INTERNAL_ERROR;
+    }
 }
 
 wfs_sim_result wfs_sim_inject_ai_decision(wfs_sim_handle* handle, const char* decision_json) {
-    return InjectCommand(handle, decision_json);
+    if (handle == nullptr || decision_json == nullptr) {
+        return WFS_SIM_RESULT_INVALID_ARGUMENT;
+    }
+    try {
+        const std::filesystem::path schema_path =
+            wfs::sim::resolve_schema_path(handle->scenario_path, "command.schema.json");
+        if (schema_path.empty()) {
+            return WFS_SIM_RESULT_INTERNAL_ERROR;
+        }
+        // C ABI 无节点元数据通道：沿用玩家节点校验上下文（向后兼容）；
+        // 带节点信息的注入（脚本/云端驱动）走内部 inject_ai_decision。
+        const wfs::sim::AiInjectResult result =
+            wfs::sim::inject_ai_decision(*handle, decision_json, wfs::sim::AiDecisionMeta{}, schema_path);
+        return result.accepted ? WFS_SIM_RESULT_OK : WFS_SIM_RESULT_INVALID_DATA;
+    } catch (...) {
+        return WFS_SIM_RESULT_INTERNAL_ERROR;
+    }
 }
 
 wfs_sim_result wfs_sim_get_snapshot(wfs_sim_handle* handle, char* out_buf, std::size_t buf_size, std::size_t* out_len) {

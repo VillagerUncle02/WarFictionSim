@@ -12,6 +12,8 @@
 //   （含 threads），因此线程数不影响内嵌哈希（宪法第 7 条）。
 // - 加载校验顺序：magic → 版本 → header JSON → blob JSON → 哈希 →
 //   元数据交叉校验（header/blob/句柄三者一致）→ 组装新状态 → 一次性提交。
+//   T020 决策日志与编号游标随 blob 恢复；旧存档缺失字段时按空日志/0 游标
+//   兼容（非破坏性演进，不递增 format_version）。
 //   任何失败都返回错误码且不改写句柄（强保证；宪法第 17 条禁止静默恢复）。
 // - 写入用"临时文件 + 替换"避免半写存档；失败时清理临时文件。
 // - 迁移链：version < 当前版本时经 migrate_state 逐级迁移；v1 为第一版，
@@ -242,6 +244,13 @@ EventLog RestoreEventLog(const nlohmann::json& root) {
     return restored;
 }
 
+DecisionLog RestoreDecisionLog(const nlohmann::json& root) {
+    if (!root.contains("decision_log")) {
+        return DecisionLog{};  // 旧版存档兼容：无决策日志。
+    }
+    return decision_log_from_json(root.at("decision_log"));
+}
+
 }  // namespace
 
 nlohmann::json migrate_state(const nlohmann::json& state, std::uint32_t from_version, std::uint32_t to_version) {
@@ -379,6 +388,10 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         next.queue = RestoreQueue(parsed);
         next.processed_events = RequireField<std::uint64_t>(parsed, "processed_events");
         next.event_log = RestoreEventLog(parsed);
+        next.decision_log = RestoreDecisionLog(parsed);
+        if (parsed.contains("ai_decision_counter")) {
+            next.ai_decision_counter = RequireField<std::uint64_t>(parsed, "ai_decision_counter");
+        }
         state = std::move(next);
         return WFS_SIM_RESULT_OK;
     } catch (const std::invalid_argument&) {
