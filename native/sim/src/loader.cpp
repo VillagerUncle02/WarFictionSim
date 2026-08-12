@@ -197,7 +197,12 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, con
     }
 
     // 第一层：JSON Schema 结构校验（违规已确定性排序）。
-    const std::vector<detail::SchemaViolation> violations = schema_file.validate(root);
+    std::vector<detail::SchemaViolation> violations;
+    try {
+        violations = schema_file.validate(root);
+    } catch (const std::exception& error) {
+        return Failure({Issue("SCHEMA_INVALID", std::string("Schema 校验失败: ") + error.what())});
+    }
     for (const detail::SchemaViolation& violation : violations) {
         issues.push_back(Issue("SCHEMA_INVALID", "[" + violation.pointer + "] " + violation.message));
     }

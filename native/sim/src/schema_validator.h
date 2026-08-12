@@ -32,8 +32,9 @@ struct SchemaFileResult {
     nlohmann::json schema;
 
     // 校验文档是否符合本结果携带的 Schema；返回已确定性排序的违规列表。
-    // Schema 本身非法（无法构造校验器）时抛 std::invalid_argument，
-    // 由调用方转换为 SCHEMA_INVALID 错误。
+    // Schema 本身非法（无法构造校验器）或校验器内部失败时抛
+    // std::invalid_argument（validate 内部已把 nlohmann JSON_ASSERT 转为异常，
+    // Debug/Release 一致不崩溃），由调用方转换为 SCHEMA_INVALID 错误。
     // 校验绑定在结果对象上，避免"实例/Schema 两个同类型参数易互换"的误用面。
     std::vector<SchemaViolation> validate(const nlohmann::json& instance) const;
 };

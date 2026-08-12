@@ -233,3 +233,26 @@ TEST(WfsCommandValidationTest, ScenarioContextMapping) {
     EXPECT_EQ(context.units[2].id, "squad-c");
     EXPECT_EQ(context.known_zones, (std::vector<std::string>{"zone-hill"}));
 }
+
+TEST(WfsCommandValidationTest, MalformedSchemaReturnsStructuredError) {
+    // 畸形命令 Schema（required 为字符串而非数组）必须返回 SCHEMA_INVALID，
+    // 不得触发 nlohmann JSON_ASSERT 中止或让异常逃逸（PR #107 review F1）。
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "wfs-cmd-test-malformed";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    const std::filesystem::path schema_path = dir / "bad-command.schema.json";
+    {
+        std::ofstream out(schema_path);
+        out << R"({"schema_version":1,"required":"type"})";
+    }
+
+    const CommandValidationResult result =
+        validate_command(R"({"schema_version":1,"type":"SECURE_ZONE"})", DefaultContext(), schema_path);
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+}

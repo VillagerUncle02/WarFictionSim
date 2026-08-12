@@ -95,10 +95,10 @@ TEST(WfsCApiTest, HandleLifecycle) {
 }
 
 TEST(WfsCApiTest, NullHandleReturnsInvalidArgument) {
-    const char* command = ValidCommandJson().c_str();
+    const std::string command = ValidCommandJson();
     EXPECT_EQ(wfs_sim_step(nullptr), WFS_SIM_RESULT_INVALID_ARGUMENT);
-    EXPECT_EQ(wfs_sim_inject_command(nullptr, command), WFS_SIM_RESULT_INVALID_ARGUMENT);
-    EXPECT_EQ(wfs_sim_inject_ai_decision(nullptr, command), WFS_SIM_RESULT_INVALID_ARGUMENT);
+    EXPECT_EQ(wfs_sim_inject_command(nullptr, command.c_str()), WFS_SIM_RESULT_INVALID_ARGUMENT);
+    EXPECT_EQ(wfs_sim_inject_ai_decision(nullptr, command.c_str()), WFS_SIM_RESULT_INVALID_ARGUMENT);
     EXPECT_EQ(wfs_sim_get_snapshot(nullptr, nullptr, 0u, nullptr), WFS_SIM_RESULT_INVALID_ARGUMENT);
     EXPECT_EQ(wfs_sim_get_state_hash(nullptr, nullptr), WFS_SIM_RESULT_INVALID_ARGUMENT);
     EXPECT_EQ(wfs_sim_save(nullptr, "x.wfs"), WFS_SIM_RESULT_INVALID_ARGUMENT);

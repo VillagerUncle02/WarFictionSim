@@ -245,7 +245,12 @@ CommandValidationResult validate_command(const nlohmann::json& command, const Co
     // 第一层：JSON Schema 结构校验（违规已确定性排序）。
     detail::SchemaFileResult schema_file;
     schema_file.schema = schema;
-    const std::vector<detail::SchemaViolation> violations = schema_file.validate(command);
+    std::vector<detail::SchemaViolation> violations;
+    try {
+        violations = schema_file.validate(command);
+    } catch (const std::exception& error) {
+        return CommandValidationResult{{Error("SCHEMA_INVALID", std::string("Schema 校验失败: ") + error.what())}};
+    }
     if (!violations.empty()) {
         std::vector<ValidationError> errors;
         errors.reserve(violations.size());

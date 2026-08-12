@@ -236,3 +236,17 @@ TEST(WfsLoaderTest, ValidationCompletesWithinBudget) {
     EXPECT_LT(elapsed.count(), 5000);
     EXPECT_EQ(result.scenario.units.size(), 2000u);
 }
+
+TEST(WfsLoaderTest, MalformedSchemaReturnsStructuredError) {
+    // 畸形 Schema（required 为字符串而非数组）必须返回结构化 SCHEMA_INVALID，
+    // 不得触发 nlohmann JSON_ASSERT 中止或让异常逃逸（PR #107 review F1；
+    // 宪法第 12/17 条：非法数据报错而非崩溃）。
+    TempDir dir;
+    const std::filesystem::path schema = dir.Write("bad-schema.json", R"({"schema_version":1,"required":"id"})");
+    const std::filesystem::path scenario = dir.Write("bad-scenario.json", ValidScenarioJson().dump());
+
+    const ScenarioLoadResult result = load_scenario(scenario, schema);
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.issues.empty());
+    EXPECT_EQ(result.issues.front().code, "SCHEMA_INVALID");
+}

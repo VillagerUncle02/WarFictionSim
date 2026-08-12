@@ -10,7 +10,8 @@
 // - 错误一律以 wfs_sim_result 错误码返回，禁止静默吞错（宪法第 17 条）；
 //   create 无错误码通道，失败时显式返回 nullptr。
 // - 快照缓冲生命周期：调用方负责分配与释放 out_buf（纯数据 JSON 文本）；
-//   缓冲区不足返回 WFS_SIM_RESULT_BUFFER_TOO_SMALL 并写出所需字节数。
+//   成功时 out_len 为文本字节数（不含 NUL）；BUFFER_TOO_SMALL 时 out_len 为
+//   包含 NUL 的所需总字节数（重试分配直接使用该值）。
 // - wfs_sim_version 返回 ABI 版本字符串，C# 端用于检测核心错配。
 // - 本头文件同时兼容 C 与 C++（extern "C"），由 c_api.cpp 实现。
 // - 非线程安全：同一句柄的并发调用必须由调用方串行化（与 EventQueue 一致，
@@ -59,6 +60,8 @@ const char* wfs_sim_version(void);
 wfs_sim_result wfs_sim_step(wfs_sim_handle* h);
 
 // 注入玩家命令：经 T014 双重校验后入队；校验失败不改变队列状态。
+// 校验类失败（含 Schema/IO）统一折叠为 INVALID_DATA；IO_ERROR 预留给
+// 存档/读文件通道（sim-c-api.md）。
 wfs_sim_result wfs_sim_inject_command(wfs_sim_handle* h, const char* command_json);
 
 // 注入 AI 决策：与玩家命令共用同一结构/校验/队列（FR-045/069）。
