@@ -262,6 +262,48 @@ TEST(WfsSaveTest, LegacyV1SaveWithoutCrewCountLoads) {
     EXPECT_EQ(StateHash(restored.get()), hash_before);
 }
 
+TEST(WfsSaveTest, LegacyV1SaveWithoutSideKeepsFactionSemantics) {
+    // F1 回归：旧存档（units 无 side 字段）加载后必须按 node_id 兜底阵营。
+    // 若 side 回退为空串，敌我判定（side == 比较）恒同阵营，战斗/侦察/任务/
+    // 胜负会静默失效；兜底后 side == node_id 与原状态一致，状态哈希必须相等。
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "current.wfs";
+    Handle source;
+    ASSERT_NE(source.get(), nullptr);
+    const std::string hash_before = StateHash(source.get());
+    EXPECT_EQ(wfs_sim_save(source.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    const std::string bytes = ReadFile(path);
+    const SavedLayout layout = ParseLayout(bytes);
+    ASSERT_FALSE(layout.blob.empty());
+    nlohmann::json blob = nlohmann::json::parse(layout.blob);
+    for (nlohmann::json& unit : blob.at("units")) {
+        unit.erase("side");
+    }
+    const std::string rebuilt_blob = blob.dump();
+    nlohmann::json header = nlohmann::json::parse(layout.header);
+    header["state_size_bytes"] = rebuilt_blob.size();
+    const std::filesystem::path legacy_path = dir.path() / "legacy-no-side.wfs";
+    {
+        std::ofstream out(legacy_path, std::ios::binary);
+        out << BuildSaveBytes(layout.version, header.dump(), rebuilt_blob);
+    }
+
+    Handle restored;
+    ASSERT_NE(restored.get(), nullptr);
+    EXPECT_EQ(wfs_sim_load_save(restored.get(), legacy_path.string().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(StateHash(restored.get()), hash_before)
+        << "旧存档加载后 side 必须按 node_id 兜底（状态哈希语义一致）";
+
+    // 敌我语义显式断言：每个单位的 side 非空且等于其 node_id（旧场景分组）。
+    const nlohmann::json snapshot = SnapshotJson(restored.get());
+    for (const nlohmann::json& unit : snapshot.at("units")) {
+        const std::string side = unit.at("side").get<std::string>();
+        const std::string node_id = unit.at("node_id").get<std::string>();
+        EXPECT_EQ(side, node_id) << "旧存档加载后单位 side 必须回退为 node_id: " << unit.at("id").get<std::string>();
+    }
+}
+
 TEST(WfsSaveTest, SaveFileLayoutMatchesContract) {
     TempDir dir;
     const std::filesystem::path path = dir.path() / "layout.wfs";

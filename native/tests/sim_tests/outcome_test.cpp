@@ -230,14 +230,33 @@ TEST(WfsOutcomeTest, NewSystemStateRoundTripsThroughSave) {
 TEST(WfsOutcomeTest, DeploymentEnabledRequiresDeadlineAndZone) {
     // Code Reviewer M4（🟡）：deployment_enabled 而漏配 deadline（默认 0）
     // 会在 tick 0 触发部署超时失败；非法配置必须显式拒绝。
+    const nlohmann::json valid_zones{{"zone-start", nlohmann::json{{"x", 0.2}, {"y", 0.2}, {"radius_km", 0.5}}}};
+    const nlohmann::json valid_outcome{{"deployment_enabled", true},
+                                       {"deployment_deadline_ticks", 100U},
+                                       {"deployment_zone", "zone-start"},
+                                       {"zones", valid_zones}};
     EXPECT_THROW(wfs::sim::OutcomeConfig::FromScenario(
                      nlohmann::json{{"outcome", nlohmann::json{{"deployment_enabled", true}}}}),
                  std::invalid_argument);
     EXPECT_THROW(wfs::sim::OutcomeConfig::FromScenario(nlohmann::json{
                      {"outcome", nlohmann::json{{"deployment_enabled", true}, {"deployment_deadline_ticks", 100U}}}}),
                  std::invalid_argument);
-    EXPECT_NO_THROW(wfs::sim::OutcomeConfig::FromScenario(
-        nlohmann::json{{"outcome", nlohmann::json{{"deployment_enabled", true},
-                                                  {"deployment_deadline_ticks", 100U},
-                                                  {"deployment_zone", "zone-start"}}}}));
+    EXPECT_NO_THROW(wfs::sim::OutcomeConfig::FromScenario(nlohmann::json{{"outcome", valid_outcome}}));
+}
+
+TEST(WfsOutcomeTest, DeploymentEnabledRequiresZoneInZoneCenters) {
+    // F2（🟡）：deployment_zone 必须存在于 outcome.zones（zone_centers），
+    // 否则 FindZone 返回 nullptr → 部署超时兜底被静默禁用。
+    const nlohmann::json valid_zones{{"zone-start", nlohmann::json{{"x", 0.2}, {"y", 0.2}, {"radius_km", 0.5}}}};
+    const nlohmann::json valid_outcome{{"deployment_enabled", true},
+                                       {"deployment_deadline_ticks", 100U},
+                                       {"deployment_zone", "zone-start"},
+                                       {"zones", valid_zones}};
+    EXPECT_THROW(wfs::sim::OutcomeConfig::FromScenario(nlohmann::json{
+                     {"outcome",
+                      nlohmann::json{{"deployment_enabled", true},
+                                     {"deployment_deadline_ticks", 100U},
+                                     {"deployment_zone", "zone-typo"}}}}),
+                 std::invalid_argument);
+    EXPECT_NO_THROW(wfs::sim::OutcomeConfig::FromScenario(nlohmann::json{{"outcome", valid_outcome}}));
 }
