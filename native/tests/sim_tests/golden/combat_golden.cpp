@@ -295,6 +295,26 @@ TEST(WfsCombatGolden, SuppressionAndContactLossDeterministic) {
     AssertGolden("contact_loss", nlohmann::json(lost));
 }
 
+TEST(WfsCombatGolden, AreaSuppressionAppliedMatchesHitRatioScaledLogValue) {
+    // FR-063 回归（PR #111 第 2 轮 R3-1）：区域火力实际施加的单位压制必须按
+    // 命中比例缩放，且与 COMBAT_AREA_HIT 日志记录的 suppression_added 一致。
+    const CombatConfig config = CombatConfig::Defaults();
+    const Squad squad = MakeRifleSquad();
+    const Ammo he = MakeHe60();
+    Rng rng(kGoldenSeed, kGoldenStream);
+    const AreaEngagementResult area =
+        wfs::sim::resolve_area_engagement(AreaEngagementInput{&he, &squad, CoverState::kPartial, 0.0}, config, rng);
+    ASSERT_LT(area.hit_count, squad.soldiers.size()) << "样本需覆盖命中比例 < 1 的局部命中场景";
+    ASSERT_GT(area.suppression_added, 0.0);
+
+    const double hit_ratio = static_cast<double>(area.hit_count) / static_cast<double>(squad.soldiers.size());
+    const SuppressionResult suppression =
+        wfs::sim::resolve_suppression(SuppressionInput{0.2, he.anti_personnel.lethality, true, hit_ratio}, config);
+    EXPECT_DOUBLE_EQ(suppression.added, config.suppression_area_gain * he.anti_personnel.lethality * hit_ratio);
+    EXPECT_DOUBLE_EQ(suppression.added, area.suppression_added) << "实际施加的压制增量应与日志 suppression_added 一致";
+    EXPECT_DOUBLE_EQ(suppression.total, 0.2 + suppression.added);
+}
+
 TEST(WfsCombatGolden, TargetSelectionGoldenSample) {
     const CombatConfig config = CombatConfig::Defaults();
     const Weapon rifle = MakeRifle();

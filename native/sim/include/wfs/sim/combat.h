@@ -177,6 +177,8 @@ struct SuppressionInput {
     double current_suppression = 0.0;
     double hit_lethality = 0.0;
     bool area_hit = false;
+    // 区域命中施加的压制按命中人数占比缩放（FR-063）；仅 area_hit=true 时参与结算。
+    double area_hit_ratio = 1.0;
 };
 
 struct SuppressionResult {

@@ -431,7 +431,7 @@ AreaEngagementResult resolve_area_engagement(const AreaEngagementInput& input, c
 SuppressionResult resolve_suppression(const SuppressionInput& input, const CombatConfig& config) {
     double added = 0.0;
     if (input.area_hit) {
-        added = config.suppression_area_gain * input.hit_lethality;
+        added = config.suppression_area_gain * input.hit_lethality * input.area_hit_ratio;
     } else {
         added = config.suppression_hit_gain + (config.suppression_lethality_scale * input.hit_lethality);
     }
@@ -943,8 +943,13 @@ void step_combat(SimState& state) {
                     }
                 }
                 if (area.suppression_added > 0.0) {
+                    // FR-063：实际施加的单位压制与日志 suppression_added 同口径，
+                    // 按命中比例缩放（resolve_area_engagement 已按同一比例计算）。
+                    const double area_hit_ratio =
+                        static_cast<double>(area.hit_count) / static_cast<double>(squad_view.soldiers.size());
                     const SuppressionResult suppression = resolve_suppression(
-                        SuppressionInput{target_mut->suppression, ammo->anti_personnel.lethality, true}, config);
+                        SuppressionInput{target_mut->suppression, ammo->anti_personnel.lethality, true, area_hit_ratio},
+                        config);
                     target_mut->suppression = suppression.total;
                 }
                 LogCombat(state, EventSeverity::kInfo,
