@@ -22,6 +22,7 @@ add_executable(sim_tests
     golden/golden_test.cpp
     command_model_test.cpp
     combat_model_test.cpp
+    terrain_model_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)
