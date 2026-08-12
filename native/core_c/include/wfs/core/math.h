@@ -26,7 +26,7 @@ double wfs_math_sin(double radians);
 double wfs_math_cos(double radians);
 double wfs_math_tan(double radians);
 double wfs_math_atan(double value);
-double wfs_math_atan2(double y, double x);
+double wfs_math_atan2(double y_arg, double x_arg);
 
 #ifdef __cplusplus
 }

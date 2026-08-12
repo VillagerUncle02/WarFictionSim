@@ -35,6 +35,10 @@
 
 namespace wfs::sim::detail {
 
+// PCG32 参考实现常量（上游数值，集中命名便于确定性审查）。
+constexpr std::uint64_t kPcgMultiplier = 6364136223846793005ULL;
+constexpr std::uint32_t kPcgRotMask = 31U;
+
 struct Pcg32Random {
     std::uint64_t state;
     std::uint64_t inc;
@@ -42,15 +46,17 @@ struct Pcg32Random {
 
 inline std::uint32_t pcg32_random_r(Pcg32Random& rng) noexcept {
     const std::uint64_t oldstate = rng.state;
-    rng.state = oldstate * 6364136223846793005ULL + rng.inc;
-    const std::uint32_t xorshifted = static_cast<std::uint32_t>(((oldstate >> 18u) ^ oldstate) >> 27u);
-    const std::uint32_t rot = static_cast<std::uint32_t>(oldstate >> 59u);
-    return (xorshifted >> rot) | (xorshifted << ((0u - rot) & 31u));
+    rng.state = (oldstate * kPcgMultiplier) + rng.inc;
+    const std::uint32_t xorshifted = static_cast<std::uint32_t>(((oldstate >> 18U) ^ oldstate) >> 27U);
+    const std::uint32_t rot = static_cast<std::uint32_t>(oldstate >> 59U);
+    return (xorshifted >> rot) | (xorshifted << ((0U - rot) & kPcgRotMask));
 }
 
-inline void pcg32_srandom_r(Pcg32Random& rng, std::uint64_t initstate, std::uint64_t initseq) noexcept {
-    rng.state = 0u;
-    rng.inc = (initseq << 1u) | 1u;
+// initstate/initseq 为上游语义参数名，保持与参考实现一致。
+inline void pcg32_srandom_r(Pcg32Random& rng, std::uint64_t initstate,
+                            std::uint64_t initseq) noexcept {  // NOLINT(bugprone-easily-swappable-parameters)
+    rng.state = 0U;
+    rng.inc = (initseq << 1U) | 1U;
     pcg32_random_r(rng);
     rng.state += initstate;
     pcg32_random_r(rng);

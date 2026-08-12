@@ -36,7 +36,7 @@ class Rng {
     };
 
     Rng();
-    explicit Rng(std::uint64_t seed, std::uint64_t stream = 0u);
+    explicit Rng(std::uint64_t seed, std::uint64_t stream = 0U);
     explicit Rng(const State& state);
 
     std::uint32_t next() noexcept;

@@ -18,14 +18,14 @@ namespace wfs::sim {
 namespace {
 
 void ValidateStream(std::uint64_t stream) {
-    if ((stream & 1u) == 0u) {
+    if ((stream & 1U) == 0U) {
         throw std::invalid_argument("wfs::sim::Rng: State.stream must be an odd internal increment");
     }
 }
 
 }  // namespace
 
-Rng::Rng() : Rng(0u, 0u) {}
+Rng::Rng() : Rng(0U, 0U) {}
 
 Rng::Rng(std::uint64_t seed, std::uint64_t stream) {
     reset(seed, stream);
@@ -37,19 +37,25 @@ Rng::Rng(const State& state) {
     stream_ = state.stream;
 }
 
+namespace {
+// PCG32 参考实现常量（与 vendor 头文件一致，集中命名便于确定性审查）。
+constexpr std::uint64_t kPcgMultiplier = 6364136223846793005ULL;
+constexpr std::uint32_t kPcgRotMask = 31U;
+}  // namespace
+
 std::uint32_t Rng::next() noexcept {
     const std::uint64_t oldstate = state_;
-    state_ = oldstate * 6364136223846793005ULL + stream_;
-    const std::uint32_t xorshifted = static_cast<std::uint32_t>(((oldstate >> 18u) ^ oldstate) >> 27u);
-    const std::uint32_t rot = static_cast<std::uint32_t>(oldstate >> 59u);
-    return (xorshifted >> rot) | (xorshifted << ((0u - rot) & 31u));
+    state_ = (oldstate * kPcgMultiplier) + stream_;
+    const std::uint32_t xorshifted = static_cast<std::uint32_t>(((oldstate >> 18U) ^ oldstate) >> 27U);
+    const std::uint32_t rot = static_cast<std::uint32_t>(oldstate >> 59U);
+    return (xorshifted >> rot) | (xorshifted << ((0U - rot) & kPcgRotMask));
 }
 
 std::uint32_t Rng::next_bounded(std::uint32_t bound) noexcept {
-    if (bound == 0u) {
-        return 0u;
+    if (bound == 0U) {
+        return 0U;
     }
-    const std::uint32_t threshold = (0u - bound) % bound;
+    const std::uint32_t threshold = (0U - bound) % bound;
     for (;;) {
         const std::uint32_t value = next();
         if (value >= threshold) {

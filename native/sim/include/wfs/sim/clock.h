@@ -27,7 +27,8 @@ using GameTick = std::uint64_t;
 
 class GameClock {
    public:
-    static constexpr std::uint32_t kDefaultTickHz = 20u;
+    static constexpr std::uint32_t kDefaultTickHz = 20U;
+    static constexpr std::uint32_t kMaxTickHz = 1'000'000U;
 
     GameClock();
     explicit GameClock(std::uint32_t tick_hz);
@@ -37,8 +38,8 @@ class GameClock {
     GameTick tick() const noexcept;
     std::uint64_t total_us() const noexcept;
 
-    void reset(GameTick tick = 0u);
-    void advance(GameTick ticks = 1u);
+    void reset(GameTick tick = 0U);
+    void advance(GameTick ticks = 1U);
 
     std::string format() const;
 

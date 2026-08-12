@@ -56,8 +56,8 @@ void EventQueue::enqueue(GameTick tick, std::uint64_t seq, std::string payload) 
     insert(tick, seq, std::move(payload));
     // 保持 auto 序列号全局单调：显式入队成功后把游标前移到 max(next_seq_, seq+1)；
     // seq == UINT64_MAX 时饱和不推进（无后续可分配值）。
-    if (seq != std::numeric_limits<std::uint64_t>::max() && seq + 1u > next_seq_) {
-        next_seq_ = seq + 1u;
+    if (seq != std::numeric_limits<std::uint64_t>::max() && seq + 1U > next_seq_) {
+        next_seq_ = seq + 1U;
     }
 }
 
@@ -65,7 +65,7 @@ void EventQueue::insert(GameTick tick, std::uint64_t seq, std::string payload) {
     if (!seqs_.insert(seq).second) {
         ThrowDuplicateSeq(seq);
     }
-    const auto [it, inserted] = events_.emplace(QueuedEvent{tick, seq, std::move(payload)});
+    const auto [iter, inserted] = events_.emplace(QueuedEvent{tick, seq, std::move(payload)});
     if (!inserted) {
         seqs_.erase(seq);
         ThrowDuplicateSeq(seq);
@@ -83,23 +83,23 @@ void EventQueue::pop() {
     if (events_.empty()) {
         throw std::out_of_range("wfs::sim::EventQueue: pop() on empty queue");
     }
-    const auto it = events_.begin();
-    seqs_.erase(it->seq);
-    events_.erase(it);
+    const auto iter = events_.begin();
+    seqs_.erase(iter->seq);
+    events_.erase(iter);
 }
 
 bool EventQueue::try_pop(GameTick tick, QueuedEvent& out) {
     if (events_.empty()) {
         return false;
     }
-    const auto it = events_.begin();
-    if (it->tick > tick) {
+    const auto iter = events_.begin();
+    if (iter->tick > tick) {
         // 事件晚于请求 tick：留待后续按序补发。
         return false;
     }
-    out = *it;
-    seqs_.erase(it->seq);
-    events_.erase(it);
+    out = *iter;
+    seqs_.erase(iter->seq);
+    events_.erase(iter);
     return true;
 }
 

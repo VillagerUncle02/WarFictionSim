@@ -74,7 +74,7 @@ class EventQueue {
 
     std::set<QueuedEvent, ByTickThenSeq> events_;
     std::unordered_set<std::uint64_t> seqs_;
-    std::uint64_t next_seq_ = 0u;
+    std::uint64_t next_seq_ = 0U;
 };
 
 }  // namespace wfs::sim

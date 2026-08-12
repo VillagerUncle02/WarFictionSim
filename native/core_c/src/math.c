@@ -51,6 +51,6 @@ double wfs_math_atan(double value) {
     return atan(value);
 }
 
-double wfs_math_atan2(double y, double x) {
-    return atan2(y, x);
+double wfs_math_atan2(double y_arg, double x_arg) {
+    return atan2(y_arg, x_arg);
 }
