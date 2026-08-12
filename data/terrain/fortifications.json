@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "kind": "fortification",
+  "entries": [
+    {
+      "id": "fortification-trench",
+      "name": "Trench",
+      "kind": "trench",
+      "concealment_bonus": 0.3,
+      "cover_bonus": 0.6,
+      "detection_reduction": 0.0,
+      "applicable_weapon_categories": [],
+      "construction_ticks": 1800
+    },
+    {
+      "id": "fortification-bunker",
+      "name": "Bunker",
+      "kind": "bunker",
+      "concealment_bonus": 0.2,
+      "cover_bonus": 0.9,
+      "detection_reduction": 0.0,
+      "applicable_weapon_categories": [],
+      "construction_ticks": 7200
+    },
+    {
+      "id": "fortification-mg-emplacement",
+      "name": "HMG Emplacement",
+      "kind": "specialized",
+      "concealment_bonus": 0.2,
+      "cover_bonus": 0.5,
+      "detection_reduction": 0.1,
+      "applicable_weapon_categories": [
+        "mg"
+      ],
+      "construction_ticks": 3600
+    },
+    {
+      "id": "fortification-mortar-emplacement",
+      "name": "Mortar Emplacement",
+      "kind": "specialized",
+      "concealment_bonus": 0.2,
+      "cover_bonus": 0.5,
+      "detection_reduction": 0.1,
+      "applicable_weapon_categories": [
+        "mortar"
+      ],
+      "construction_ticks": 3600
+    },
+    {
+      "id": "fortification-atgm-emplacement",
+      "name": "ATGM Emplacement",
+      "kind": "specialized",
+      "concealment_bonus": 0.25,
+      "cover_bonus": 0.4,
+      "detection_reduction": 0.15,
+      "applicable_weapon_categories": [
+        "atgm"
+      ],
+      "construction_ticks": 3600
+    },
+    {
+      "id": "fortification-camouflage",
+      "name": "Camouflage Position",
+      "kind": "camouflage",
+      "concealment_bonus": 0.4,
+      "cover_bonus": 0.1,
+      "detection_reduction": 0.5,
+      "applicable_weapon_categories": [],
+      "construction_ticks": 1200
+    }
+  ]
+}

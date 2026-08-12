@@ -1,0 +1,221 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim scenario",
+  "description": "Runtime schema for scenario files under data/scenarios/ (T013). Mirrors specs/001-war-sim-command-battle/contracts and data-model.md; schema_version is the project-level schema version required by data/README.md.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "map",
+    "zones",
+    "units",
+    "objectives"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "player_node_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "map": {
+      "type": "object",
+      "required": [
+        "width_km",
+        "height_km"
+      ],
+      "properties": {
+        "width_km": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height_km": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "tick_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "time_limit_ticks": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tutorial": {
+      "type": "boolean"
+    },
+    "save_slot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "failure_conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "target_ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "unit",
+              "zone"
+            ]
+          },
+          "target_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "duration_ticks": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "zones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "node_id",
+          "x",
+          "y",
+          "ammo"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "node_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "ammo": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "objectives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "target_ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "unit",
+              "zone"
+            ]
+          },
+          "target_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "duration_ticks": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "tutorial": {
+        "const": true
+      }
+    },
+    "required": [
+      "tutorial"
+    ]
+  },
+  "then": {
+    "required": [
+      "save_slot"
+    ],
+    "properties": {
+      "save_slot": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "else": {
+    "not": {
+      "required": [
+        "save_slot"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

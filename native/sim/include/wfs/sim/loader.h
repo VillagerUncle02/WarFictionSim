@@ -1,0 +1,152 @@
+// sim/include/wfs/sim/loader.h
+//
+// T013：场景/数据加载与校验框架公开接口。
+//
+// 设计契约（宪法第 12/17 条；data/README.md；research.md §7）：
+// - 一切可自定义内容以 JSON 数据定义，加载时执行 JSON Schema + 语义双重校验，
+//   非法数据以结构化 issue（code + message）报错，绝不崩溃、绝不静默吞错。
+// - 每个数据文件与每个 Schema 都携带 schema_version；数据文件版本必须与
+//   Schema 版本一致，不一致按非法数据拒绝（宪法第 13 条的精神：版本化）。
+// - Schema 文件默认按仓库约定解析：从数据文件所在目录向上查找
+//   contracts/schemas/<schema_file>（T007 建立的运行时契约目录）；
+//   调用方也可显式传入 schema 路径（测试/工具使用临时数据时）。
+// - 语义校验覆盖 Schema 表达不了的引用完整性：单位 id 唯一、目标 id 唯一、
+//   目标引用必须存在、player_node_id 必须对应场景内指挥节点。
+// - 加载结果错误列表按固定顺序生成，保证确定性（宪法第 7 条）。
+// - 性能：启动校验预算 ≤5s（plan.md Performance Goals），由 loader_test
+//   的预算测试守护。
+
+#pragma once
+
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <vector>
+
+#include <nlohmann/json.hpp>
+
+namespace wfs::sim {
+
+// 结构化加载/校验问题：code 为稳定错误码，message 为人类可读说明。
+struct DataIssue {
+    std::string code;
+    std::string message;
+};
+
+struct ScenarioUnit {
+    std::string id;
+    std::string type;
+    std::string node_id;
+    double x = 0.0;
+    double y = 0.0;
+    std::vector<std::string> ammo;
+};
+
+struct ScenarioObjective {
+    std::string id;
+    std::string kind;  // "unit" | "zone"
+    std::string target_ref;
+    std::uint64_t duration_ticks = 0U;  // 0 = 未指定
+};
+
+struct Scenario {
+    // 与 GameClock::kDefaultTickHz 保持同一默认值（20 Hz，research.md §3）。
+    static constexpr std::uint32_t kDefaultTickHz = 20U;
+
+    std::int64_t schema_version = 0;
+    std::string id;
+    std::string name;
+    std::string player_node_id;  // 空 = 未指定（无越权过滤）
+    double map_width_km = 0.0;
+    double map_height_km = 0.0;
+    std::uint32_t tick_hz = kDefaultTickHz;
+    std::uint64_t seed = 0U;
+    std::vector<std::string> zones;
+    std::vector<ScenarioUnit> units;
+    std::vector<ScenarioObjective> objectives;
+    // T038：关键失败条件、时间上限与教程独立存档标识
+    // （FR-043；contracts/save-format.md：教程不写入主游戏存档）。
+    std::uint64_t time_limit_ticks = 0U;  // 0 = 未设置时间上限。
+    std::vector<ScenarioObjective> failure_conditions;
+    bool tutorial = false;
+    std::string save_slot;  // 空 = 主游戏存档；非空 = 独立存档槽位。
+    // 原始 JSON 纯数据：快照/存档/决策日志可直接复用，不跨语言共享对象。
+    nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ScenarioLoadResult {
+    bool ok() const noexcept { return issues.empty(); }
+
+    std::vector<DataIssue> issues;
+    Scenario scenario;
+};
+
+// 按仓库约定解析 Schema 路径：从 data_file 所在目录逐级向上，寻找
+// 第一个包含 contracts/schemas/<schema_file> 的仓库根；找不到返回空路径。
+std::filesystem::path resolve_schema_path(const std::filesystem::path& data_file, const std::string& schema_file);
+
+// 加载并校验场景：Schema 路径按约定从场景文件解析。
+ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path);
+
+// 加载并校验场景：显式指定 Schema 路径（测试/临时数据使用）。
+ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path);
+
+// 加载并校验场景：显式指定 Schema 路径与数据目录。data_root 指向仓库 data/
+// 目录（如 D:/repo/data），场景单位 type/ammo 会与数据目录交叉校验（F4）。
+ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path,
+                                 const std::filesystem::path& data_root);
+
+// T037：数据目录条目（units/、terrain/ 基线 JSON 的原子单位）。
+struct DataEntry {
+    std::string id;
+    std::string kind;  // "squad" | "weapon" | "ammo" | "terrain" | "fortification" | "facility"
+    nlohmann::json raw;
+};
+
+// 单个数据目录文件（如 data/units/weapons.json）。
+struct DataCatalog {
+    std::int64_t schema_version = 0;
+    std::string kind;
+    std::vector<DataEntry> entries;
+};
+
+struct DataCatalogLoadResult {
+    bool ok() const noexcept { return issues.empty(); }
+
+    std::vector<DataIssue> issues;
+    DataCatalog catalog;
+};
+
+// 加载并校验数据目录文件：Schema 按仓库约定从数据文件向上解析
+// （contracts/schemas/<文件名>.schema.json，如 weapons.json →
+// weapons.schema.json）；校验 schema_version 一致与条目 id 唯一。
+DataCatalogLoadResult load_data_catalog(const std::filesystem::path& data_file);
+DataCatalogLoadResult load_data_catalog(const std::filesystem::path& data_file,
+                                        const std::filesystem::path& schema_path);
+
+// T037/F5：基础数据库（units/ + terrain/ 七类目录的汇总视图）。
+struct DataLibrary {
+    DataCatalog squads;
+    DataCatalog vehicles;  // F5：载具目录（四方向防护/模块/乘员/载员/两栖）。
+    DataCatalog weapons;
+    DataCatalog ammo;
+    DataCatalog terrain;
+    DataCatalog fortifications;
+    DataCatalog facilities;
+};
+
+struct DataLibraryLoadResult {
+    bool ok() const noexcept { return issues.empty(); }
+
+    std::vector<DataIssue> issues;
+    DataLibrary library;
+};
+
+// 加载并校验整个基础数据目录（data_root/units、data_root/terrain）：
+// 先逐文件 Schema 校验，再按固定顺序做跨文件引用完整性检查
+// （班→武器/弹药、武器→弹药、工事→武器类别），错误序列确定。
+DataLibraryLoadResult load_data_library(const std::filesystem::path& data_root);
+DataLibraryLoadResult load_data_library(const std::filesystem::path& data_root,
+                                        const std::filesystem::path& schema_dir);
+
+}  // namespace wfs::sim
