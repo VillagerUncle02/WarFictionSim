@@ -20,6 +20,7 @@ add_executable(sim_tests
     ai_inject_test.cpp
     script_backend_test.cpp
     golden/golden_test.cpp
+    command_model_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)
