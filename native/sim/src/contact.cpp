@@ -29,7 +29,6 @@ namespace wfs::sim {
 namespace {
 
 constexpr std::uint32_t kProbabilityScale = 1000U;  // 概率判定统一比例尺。
-constexpr std::uint32_t kMaxBoundedSpan = 1000000U;
 double Clamp01(double value) {
     return std::clamp(value, 0.0, 1.0);
 }
@@ -102,7 +101,7 @@ ContactConfig ContactConfig::FromScenario(
         config.max_ticks = ConfigUint64(*section, "contact_loss_max_ticks", config.max_ticks);
     }
     if (!config.is_valid()) {
-        throw std::invalid_argument("contact 配置非法（概率须在 [0,1]，max_ticks >= min_ticks）");
+        throw std::invalid_argument("contact 配置非法（概率须在 [0,1]，且 min_ticks <= max_ticks <= 2^53-1）");
     }
     return config;
 }
@@ -120,13 +119,12 @@ ContactLossResult resolve_contact_loss(const ContactLossInput& input, const Cont
     const std::uint32_t roll = rng.next_bounded(kProbabilityScale);
     if (roll < static_cast<std::uint32_t>(result.probability * static_cast<double>(kProbabilityScale))) {
         result.lost = true;
-        // M7：恢复时长闭区间 [min, max]（60–180s 契约含端点）。
-        std::uint64_t span = config.max_ticks - config.min_ticks;
-        if (span < kMaxBoundedSpan) {
-            ++span;
-        }
-        result.duration_ticks =
-            config.min_ticks + static_cast<std::uint64_t>(rng.next_bounded(static_cast<std::uint32_t>(span)));
+        // N2：恢复时长统一按闭区间 [min_ticks, max_ticks] 均匀采样（60–180s
+        // 契约含端点）：span+1 = max-min+1 个取值，全程 64 位有界采样。
+        // 旧实现经 uint32 截断：span>=2^32 时坍缩到 min_ticks
+        // （span≡0 mod 2^32 时 next_bounded(0)=0 恒成立），span>=1e6 时差 1 tick。
+        const std::uint64_t span = config.max_ticks - config.min_ticks;
+        result.duration_ticks = config.min_ticks + rng.next_bounded64(span + 1U);
     }
     return result;
 }

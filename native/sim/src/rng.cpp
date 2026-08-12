@@ -64,6 +64,23 @@ std::uint32_t Rng::next_bounded(std::uint32_t bound) noexcept {
     }
 }
 
+std::uint64_t Rng::next_bounded64(std::uint64_t bound) noexcept {
+    if (bound == 0U) {
+        return 0U;
+    }
+    // 与 next_bounded 相同的 threshold 拒绝采样，但候选为 64 位：两次 next()
+    // 先取高 32 位再取低 32 位拼成，保证 [0, bound) 无偏且不经过 uint32 截断。
+    const std::uint64_t threshold = (0U - bound) % bound;
+    for (;;) {
+        const std::uint64_t high = next();
+        const std::uint64_t low = next();
+        const std::uint64_t value = (high << 32U) | low;
+        if (value >= threshold) {
+            return value % bound;
+        }
+    }
+}
+
 Rng::State Rng::state() const noexcept {
     return State{state_, stream_};
 }

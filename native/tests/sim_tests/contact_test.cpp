@@ -91,6 +91,18 @@ ContactConfig AlwaysLostConfig() {
     return config;
 }
 
+// N2 回归辅助：固定 seed 下，恢复时长必须等于 64 位闭区间均匀采样的期望值
+// 且落在 [min_ticks, max_ticks] 内。期望值由 PCG32 参考实现（threshold 拒绝
+// 采样，64 位候选由两次 next() 拼成）离线推导，用于锁定确定性语义。
+void ExpectClosedIntervalDuration(const ContactConfig& config, std::uint64_t seed, std::uint64_t want) {
+    Rng rng(seed, 0U);
+    const ContactLossResult result = wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 1.0, true}, config, rng);
+    ASSERT_TRUE(result.lost) << "seed=" << seed;
+    EXPECT_EQ(result.duration_ticks, want) << "seed=" << seed;
+    EXPECT_GE(result.duration_ticks, config.min_ticks) << "seed=" << seed;
+    EXPECT_LE(result.duration_ticks, config.max_ticks) << "seed=" << seed;
+}
+
 }  // namespace
 
 TEST(WfsContactTest, ContactLossDeterministicAndBounded) {
@@ -207,6 +219,62 @@ TEST(WfsContactTest, RecoveryDurationCoversMaxTickInclusive) {
         saw_max = result.duration_ticks == config.max_ticks;
     }
     EXPECT_TRUE(saw_max) << "恢复时长必须能取到 max（旧实现抽样区间为 [min, max-1]）";
+}
+
+TEST(WfsContactTest, ContactRecoverySpanExactPowerOfTwoBoundary) {
+    // N2 回归：span 恰为 2^32（2^32 ≡ 0 mod 2^32）时，旧实现经 uint32 截断后
+    // next_bounded(0)=0 恒返回 min_ticks；统一 64 位采样必须覆盖整个闭区间。
+    ContactConfig config = AlwaysLostConfig();
+    config.min_ticks = 1U;
+    config.max_ticks = (UINT64_C(1) << 32) + 1U;  // span = 2^32。
+    ExpectClosedIntervalDuration(config, 1U, 3527372289U);
+    ExpectClosedIntervalDuration(config, 2U, 2875648929U);
+    ExpectClosedIntervalDuration(config, 3U, 1324313485U);
+    ExpectClosedIntervalDuration(config, 7U, 597142934U);
+    ExpectClosedIntervalDuration(config, 42U, 3555308143U);
+}
+
+TEST(WfsContactTest, ContactRecoveryLargeSpanBeyondUint32) {
+    // N2 回归：span > UINT32_MAX 时旧实现 uint64→uint32 截断使分布坍缩到
+    // 低位余数（span≡0 mod 2^32 时恒为 min）；64 位采样必须覆盖 [min, max]。
+    ContactConfig config = AlwaysLostConfig();
+    config.min_ticks = 1U;
+    config.max_ticks = (UINT64_C(1) << 32) + 6U;  // span = 2^32 + 5 > UINT32_MAX。
+    ExpectClosedIntervalDuration(config, 7U, 2766973830U);
+    ExpectClosedIntervalDuration(config, 42U, 219078134U);
+}
+
+TEST(WfsContactTest, ContactRecoveryMinEqualsMaxIsStable) {
+    // N2 回归：min==max（span=0，span+1=1）时闭区间抽样必须恒返回该唯一值，
+    // 且不得因 64 位采样引入除零/推进 RNG 的差异。
+    ContactConfig config = AlwaysLostConfig();
+    config.min_ticks = 500U;
+    config.max_ticks = 500U;
+    for (std::uint64_t seed = 1U; seed <= 32U; ++seed) {
+        ExpectClosedIntervalDuration(config, seed, 500U);
+    }
+}
+
+TEST(WfsContactTest, ContactConfigRejectsOutOfRangeMaxTicks) {
+    // N2 回归：is_valid 必须带上界校验（max_ticks 不超过 2^53-1，即 double
+    // 安全整数上限），非法配置显式无效/报错，不静默（宪法 §12/§17）。
+    constexpr std::uint64_t kMaxSafeTick = (UINT64_C(1) << 53) - 1U;
+    ContactConfig upper_bound_ok = AlwaysLostConfig();
+    upper_bound_ok.max_ticks = kMaxSafeTick;
+    EXPECT_TRUE(upper_bound_ok.is_valid());
+
+    ContactConfig beyond_upper_bound = AlwaysLostConfig();
+    beyond_upper_bound.max_ticks = (UINT64_C(1) << 53);  // 2^53 越界。
+    EXPECT_FALSE(beyond_upper_bound.is_valid());
+
+    ContactConfig inverted = AlwaysLostConfig();
+    inverted.min_ticks = 10U;
+    inverted.max_ticks = 9U;
+    EXPECT_FALSE(inverted.is_valid());
+
+    EXPECT_THROW(
+        ContactConfig::FromScenario(nlohmann::json{{"contact", nlohmann::json{{"max_ticks", UINT64_C(1) << 53}}}}),
+        std::invalid_argument);
 }
 
 TEST(WfsContactTest, SuppressionDegradeThresholdIsDataDriven) {

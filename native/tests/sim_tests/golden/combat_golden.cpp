@@ -81,8 +81,9 @@ const std::map<std::string, std::string>& GoldenSamples() {
         {"area_engagement",
          R"({"coverage":0.6,"hit_count":5,"outcomes":[{"armor_penetrated":false,"armor_score":2.0,"casualty":true,"soldier_id":"squad-a-s0","suppressed":false},{"armor_penetrated":false,"armor_score":2.0,"casualty":true,"soldier_id":"squad-a-s1","suppressed":false},{"armor_penetrated":false,"armor_score":2.0,"casualty":true,"soldier_id":"squad-a-s2","suppressed":false},{"armor_penetrated":false,"armor_score":2.0,"casualty":true,"soldier_id":"squad-a-s3","suppressed":false},{"armor_penetrated":false,"armor_score":2.0,"casualty":false,"soldier_id":"squad-a-s4","suppressed":true}],"suppression_added":0.1388888888888889})"},
         {"suppression", R"({"added":0.5,"total":0.7})"},
-        // M7：恢复时长抽样改为闭区间 [min, max]，同一 RNG 流的时长黄金值随之更新。
-        {"contact_loss", R"({"duration_ticks":1388,"lost":true,"probability":0.24000000000000002})"},
+        // M7/N2：恢复时长抽样统一为闭区间 [min, max] 的 64 位有界采样，
+        // 同一 RNG 流的时长黄金值随之更新（N2 改为 64 位拒绝采样）。
+        {"contact_loss", R"({"duration_ticks":1830,"lost":true,"probability":0.24000000000000002})"},
         {"target_selection",
          R"({"ranked":[{"distance_m":250.0,"target_armor_mm":0.0,"target_is_vehicle":false,"threat":1.0,"unit_id":"enemy-squad-threat"},{"distance_m":150.0,"target_armor_mm":0.0,"target_is_vehicle":false,"threat":0.5,"unit_id":"enemy-squad-near"},{"distance_m":300.0,"target_armor_mm":0.0,"target_is_vehicle":false,"threat":0.8,"unit_id":"enemy-squad-far"}],"score":0.75,"target_id":"enemy-squad-threat"})"},
         {"target_selection_ammo_fit_ap",

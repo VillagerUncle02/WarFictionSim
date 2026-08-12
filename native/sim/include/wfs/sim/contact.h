@@ -36,14 +36,22 @@ struct ContactConfig {
     std::uint64_t min_ticks = 1200U;             // 恢复最短时长（60s @20Hz）。
     std::uint64_t max_ticks = 3600U;             // 恢复最长时长（180s @20Hz）。
 
+    // 恢复时长上界（N2）：取 2^53-1（IEEE-754 double 可无损表达的最大整数）。
+    // 为什么：闭区间抽样需计算 span+1 = max_ticks-min_ticks+1；若 max_ticks
+    // 无上界，极端场景配置可能溢出 uint64 且远超 FR-065 分钟级恢复语义。
+    // 按宪法 §12/§17，非法配置必须显式无效/报错，不得静默产出失真分布。
+    static constexpr std::uint64_t kMaxContactTicks = (UINT64_C(1) << 53) - 1U;
+
     // 读取 raw["contact"]；无该节时兼容 raw["combat"].contact_loss_* 旧键。
-    // 非法值（概率越界/max<min）显式抛 std::invalid_argument（宪法 17）。
+    // 非法值（概率越界/max<min/max 超过 kMaxContactTicks）显式抛
+    // std::invalid_argument（宪法 17）。
     static ContactConfig FromScenario(const nlohmann::json& raw);
 
     bool is_valid() const noexcept {
         return suppression_threshold >= 0.0 && suppression_threshold <= 1.0 && damage_probability >= 0.0 &&
                damage_probability <= 1.0 && suppression_probability >= 0.0 && suppression_probability <= 1.0 &&
-               suppression_degrade_threshold >= 0.0 && suppression_degrade_threshold <= 1.0 && max_ticks >= min_ticks;
+               suppression_degrade_threshold >= 0.0 && suppression_degrade_threshold <= 1.0 && max_ticks >= min_ticks &&
+               max_ticks <= kMaxContactTicks;
     }
 };
 

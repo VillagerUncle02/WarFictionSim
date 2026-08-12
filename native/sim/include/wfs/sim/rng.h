@@ -17,7 +17,9 @@
 //   std::invalid_argument，防止非规范序列进入模拟核心。
 //
 // 有界取值边界：next_bounded(bound) 要求 bound > 0，返回 [0, bound)；
-// bound == 0 时按契约返回 0 且不推进 RNG 状态。
+// bound == 0 时按契约返回 0 且不推进 RNG 状态。next_bounded64 为 64 位版本
+// （单个候选由两次连续 next() 拼成，高 32 位在前），供 span 可能超过
+// uint32 的闭区间采样使用，避免 uint64→uint32 截断（contact 恢复时长）。
 
 #pragma once
 
@@ -41,6 +43,7 @@ class Rng {
 
     std::uint32_t next() noexcept;
     std::uint32_t next_bounded(std::uint32_t bound) noexcept;
+    std::uint64_t next_bounded64(std::uint64_t bound) noexcept;
 
     State state() const noexcept;
     void restore(const State& state);
