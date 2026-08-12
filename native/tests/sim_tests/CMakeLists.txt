@@ -12,6 +12,7 @@ add_executable(sim_tests
     queue_test.cpp
     loader_test.cpp
     command_validation_test.cpp
+    c_api_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)

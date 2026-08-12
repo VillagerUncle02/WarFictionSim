@@ -12,6 +12,7 @@ add_library(sim STATIC
     src/loader.cpp
     src/command_validation.cpp
     src/schema_validator.cpp
+    src/c_api.cpp
 )
 
 target_include_directories(sim PUBLIC
