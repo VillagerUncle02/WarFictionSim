@@ -208,23 +208,25 @@ TEST(WfsMissionExecTest, WithdrawTerminatesLoopingContinuousMission) {
     ASSERT_NE(unit, nullptr);
     SetMission(*unit, "PATROL", "patrol", nlohmann::json{{"cycle_ticks", 2}});
     unit->mission_loops = true;
+    unit->mission_command_id = "cmd-patrol";  // 与链上命令一致（SetMission 默认 cmd-test）。
 
-    const nlohmann::json command_json{{"command_id", "cmd-patrol"},
-                                      {"seq", 0U},
-                                      {"type", "PATROL"},
-                                      {"unit_id", "squad-a"},
-                                      {"priority", 1},
-                                      {"issue_tick", 0U},
-                                      {"delay_ticks", 0U},
-                                      {"arrival_tick", 0U},
-                                      {"state", "effective"},
-                                      {"payload", nlohmann::json{{"type", "PATROL"},
-                                                                {"priority", 1},
-                                                                {"loops", true},
-                                                                {"behavior", nlohmann::json{{"failure_action", "report"}}}}},
-                                      {"parent_command_id", ""},
-                                      {"target_command_id", ""},
-                                      {"batch", false}};
+    const nlohmann::json command_json{
+        {"command_id", "cmd-patrol"},
+        {"seq", 0U},
+        {"type", "PATROL"},
+        {"unit_id", "squad-a"},
+        {"priority", 1},
+        {"issue_tick", 0U},
+        {"delay_ticks", 0U},
+        {"arrival_tick", 0U},
+        {"state", "effective"},
+        {"payload", nlohmann::json{{"type", "PATROL"},
+                                   {"priority", 1},
+                                   {"loops", true},
+                                   {"behavior", nlohmann::json{{"failure_action", "report"}}}}},
+        {"parent_command_id", ""},
+        {"target_command_id", ""},
+        {"batch", false}};
     state.command_chain =
         nlohmann::json{{"commands", nlohmann::json::array({command_json})}}.get<wfs::sim::CommandChain>();
 
@@ -232,7 +234,14 @@ TEST(WfsMissionExecTest, WithdrawTerminatesLoopingContinuousMission) {
     step_missions(state);
     step_missions(state);
     ASSERT_TRUE(FindUnit(state, "squad-a")->mission_active);
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_LOOP_RESTARTED unit=squad-a command=cmd-patrol"));
+    std::string mission_events;
+    for (const wfs::sim::SimEvent& event : state.event_log.events()) {
+        if (event.category == wfs::sim::EventCategory::kMission) {
+            mission_events += event.message + "\n";
+        }
+    }
+    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_LOOP_RESTARTED unit=squad-a command=cmd-patrol")) << "任务事件:\n"
+                                                                                                     << mission_events;
 
     const auto withdraw =
         wfs::sim::inject_player_command(state, WithdrawCommand("squad-a", "cmd-patrol"), CommandSchema());
@@ -240,7 +249,6 @@ TEST(WfsMissionExecTest, WithdrawTerminatesLoopingContinuousMission) {
     for (std::uint64_t i = 0U; i < 300U && FindUnit(state, "squad-a")->mission_active; ++i) {
         step_sim_state(state);
     }
-    EXPECT_FALSE(FindUnit(state, "squad-a")->mission_active)
-        << "循环重启后的持续任务必须可被 WITHDRAW 终止（FR-044）";
+    EXPECT_FALSE(FindUnit(state, "squad-a")->mission_active) << "循环重启后的持续任务必须可被 WITHDRAW 终止（FR-044）";
     EXPECT_TRUE(HasEvent(state.event_log, "COMMAND_WITHDRAWN command=cmd-patrol"));
 }

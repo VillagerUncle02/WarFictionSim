@@ -8,8 +8,8 @@
 // - 最后动向：连续观察更新归一化运动方向；
 // - 情报来源标注与过期：直属发现标注 direct，来源过期后标注失效但记忆保留。
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 
@@ -189,17 +189,18 @@ TEST(WfsIntelTest, LastMotionRecordedFromConsecutiveObservations) {
 TEST(WfsIntelTest, OpticsDisabledPreventsIdentification) {
     // Code Reviewer M5（🟡）：观瞄模块失效必须阻断识别（data-model §6）。
     SimState state = MakeState();
-    RuntimeUnitState* observer = FindUnit(state, "squad-a");
-    ASSERT_NE(observer, nullptr);
-    observer->vehicle_modules.optics = wfs::sim::model::ModuleState::kDisabled;
+    for (RuntimeUnitState& unit : state.units) {
+        if (unit.node_id == "platoon-alpha") {
+            unit.vehicle_modules.optics = wfs::sim::model::ModuleState::kDisabled;
+        }
+    }
     RuntimeUnitState* enemy = FindUnit(state, "squad-c");
     ASSERT_NE(enemy, nullptr);
     enemy->x = 1.05;
     enemy->y = 1.05;
 
     step_intel(state);
-    EXPECT_EQ(wfs::sim::find_intel(state, "platoon-alpha", "squad-c"), nullptr)
-        << "观瞄失效不得产生识别记录";
+    EXPECT_EQ(wfs::sim::find_intel(state, "platoon-alpha", "squad-c"), nullptr) << "观瞄失效不得产生识别记录";
 }
 
 TEST(WfsIntelTest, OpticsDegradedOrSuppressedLowersTier) {
@@ -212,8 +213,7 @@ TEST(WfsIntelTest, OpticsDegradedOrSuppressedLowersTier) {
     degraded_enemy->x = 1.05;
     degraded_enemy->y = 1.05;
     step_intel(degraded);
-    const wfs::sim::IntelRecord* degraded_record =
-        wfs::sim::find_intel(degraded, "platoon-alpha", "squad-c");
+    const wfs::sim::IntelRecord* degraded_record = wfs::sim::find_intel(degraded, "platoon-alpha", "squad-c");
     ASSERT_NE(degraded_record, nullptr);
     EXPECT_LT(degraded_record->tier, wfs::sim::RecognitionTier::kT3) << "观瞄降级应降低识别档位";
 
@@ -225,8 +225,7 @@ TEST(WfsIntelTest, OpticsDegradedOrSuppressedLowersTier) {
     suppressed_enemy->x = 1.05;
     suppressed_enemy->y = 1.05;
     step_intel(suppressed);
-    const wfs::sim::IntelRecord* suppressed_record =
-        wfs::sim::find_intel(suppressed, "platoon-alpha", "squad-c");
+    const wfs::sim::IntelRecord* suppressed_record = wfs::sim::find_intel(suppressed, "platoon-alpha", "squad-c");
     ASSERT_NE(suppressed_record, nullptr);
     EXPECT_LT(suppressed_record->tier, wfs::sim::RecognitionTier::kT3) << "压制应降低识别档位";
 }

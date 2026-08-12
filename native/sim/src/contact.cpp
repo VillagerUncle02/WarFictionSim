@@ -30,8 +30,6 @@ namespace {
 
 constexpr std::uint32_t kProbabilityScale = 1000U;  // 概率判定统一比例尺。
 constexpr std::uint32_t kMaxBoundedSpan = 1000000U;
-constexpr double kSuppressionDegradeThreshold = 0.5;  // 压制降级阈值基线。
-
 double Clamp01(double value) {
     return std::clamp(value, 0.0, 1.0);
 }
@@ -89,6 +87,8 @@ ContactConfig ContactConfig::FromScenario(
         config.damage_probability = ConfigDouble(*section, "damage_probability", config.damage_probability);
         config.suppression_probability =
             ConfigDouble(*section, "suppression_probability", config.suppression_probability);
+        config.suppression_degrade_threshold =
+            ConfigDouble(*section, "suppression_degrade_threshold", config.suppression_degrade_threshold);
         config.min_ticks = ConfigUint64(*section, "min_ticks", config.min_ticks);
         config.max_ticks = ConfigUint64(*section, "max_ticks", config.max_ticks);
     } else {
@@ -120,10 +120,13 @@ ContactLossResult resolve_contact_loss(const ContactLossInput& input, const Cont
     const std::uint32_t roll = rng.next_bounded(kProbabilityScale);
     if (roll < static_cast<std::uint32_t>(result.probability * static_cast<double>(kProbabilityScale))) {
         result.lost = true;
-        const std::uint64_t span = config.max_ticks - config.min_ticks;
+        // M7：恢复时长闭区间 [min, max]（60–180s 契约含端点）。
+        std::uint64_t span = config.max_ticks - config.min_ticks;
+        if (span < kMaxBoundedSpan) {
+            ++span;
+        }
         result.duration_ticks =
-            config.min_ticks + static_cast<std::uint64_t>(rng.next_bounded(
-                                   static_cast<std::uint32_t>(std::min<std::uint64_t>(span, kMaxBoundedSpan))));
+            config.min_ticks + static_cast<std::uint64_t>(rng.next_bounded(static_cast<std::uint32_t>(span)));
     }
     return result;
 }
@@ -201,9 +204,9 @@ EffectSeverity worst_effect(const EffectSeverity lhs, const EffectSeverity rhs) 
     return lhs >= rhs ? lhs : rhs;
 }
 
-EffectSeverity effective_mobility_effect(const RuntimeUnitState& unit) noexcept {
+EffectSeverity effective_mobility_effect(const RuntimeUnitState& unit, const ContactConfig& config) noexcept {
     EffectSeverity result =
-        unit.suppression >= kSuppressionDegradeThreshold ? EffectSeverity::kDegraded : EffectSeverity::kNone;
+        unit.suppression >= config.suppression_degrade_threshold ? EffectSeverity::kDegraded : EffectSeverity::kNone;
     result = worst_effect(result, ModuleSeverity(unit.vehicle_modules.mobility));
     if (unit.destroyed) {
         result = EffectSeverity::kDisabled;
@@ -211,25 +214,26 @@ EffectSeverity effective_mobility_effect(const RuntimeUnitState& unit) noexcept 
     return result;
 }
 
-EffectSeverity effective_observation_effect(const RuntimeUnitState& unit) noexcept {
+EffectSeverity effective_observation_effect(const RuntimeUnitState& unit, const ContactConfig& config) noexcept {
     if (unit.destroyed || unit.out_of_contact) {
         return EffectSeverity::kDisabled;
     }
     EffectSeverity result =
-        unit.suppression >= kSuppressionDegradeThreshold ? EffectSeverity::kDegraded : EffectSeverity::kNone;
+        unit.suppression >= config.suppression_degrade_threshold ? EffectSeverity::kDegraded : EffectSeverity::kNone;
     return worst_effect(result, ModuleSeverity(unit.vehicle_modules.optics));
 }
 
-EffectSeverity effective_command_effect(const RuntimeUnitState& unit) noexcept {
+EffectSeverity effective_command_effect(const RuntimeUnitState& unit, const ContactConfig& config) noexcept {
     if (unit.destroyed || unit.out_of_contact) {
         return EffectSeverity::kDisabled;
     }
-    return unit.suppression >= kSuppressionDegradeThreshold ? EffectSeverity::kDegraded : EffectSeverity::kNone;
+    return unit.suppression >= config.suppression_degrade_threshold ? EffectSeverity::kDegraded : EffectSeverity::kNone;
 }
 
-EffectSeverity compound_effect(const RuntimeUnitState& unit) noexcept {
-    return worst_effect(effective_mobility_effect(unit),
-                        worst_effect(effective_observation_effect(unit), effective_command_effect(unit)));
+EffectSeverity compound_effect(const RuntimeUnitState& unit, const ContactConfig& config) noexcept {
+    return worst_effect(
+        effective_mobility_effect(unit, config),
+        worst_effect(effective_observation_effect(unit, config), effective_command_effect(unit, config)));
 }
 
 void step_contact(SimState& state) {

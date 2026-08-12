@@ -103,7 +103,7 @@ bool DetectionRoll(SimState& state, const RuntimeUnitState& unit) {
         return false;
     }
     for (const RuntimeUnitState& enemy : state.units) {
-        if (enemy.node_id == unit.node_id || enemy.destroyed) {
+        if (enemy.side == unit.side || enemy.destroyed) {
             continue;
         }
         if (DistanceKm(enemy, unit.x, unit.y) <= state.recon_config.detection_range_km) {
@@ -202,7 +202,7 @@ void StepHiddenInfiltrate(SimState& state, RuntimeUnitState& unit, model::Missio
 // OBSERVATION_POST 判定：观察周期循环 + 情报登记。
 void StepObservationPost(SimState& state, RuntimeUnitState& unit) {
     for (const RuntimeUnitState& target : state.units) {
-        if (target.node_id == unit.node_id || target.destroyed) {
+        if (target.side == unit.side || target.destroyed) {
             continue;
         }
         wfs::sim::observe_pair(state, unit, target);  // 观察哨向情报板登记。

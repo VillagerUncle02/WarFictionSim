@@ -110,17 +110,26 @@ TEST(WfsSideFactionTest, MultiNodeSameFactionDoesNotBlockSecureZone) {
     FindUnit(state, "squad-b")->side = "blue";
     FindUnit(state, "squad-c")->side = "red";
     AddSameSideOtherNodeUnit(state, "squad-friendly-other-node", 1.0, 1.05);
+    unit = FindUnit(state, "squad-a");  // push_back 可能重分配：重新定位指针。
+    ASSERT_NE(unit, nullptr);
 
-    SetMission(*unit, "SECURE_ZONE", "secure_zone",
-               nlohmann::json{{"zone", "zone-hill"},
-                              {"zone_x", 1.0},
-                              {"zone_y", 1.0},
-                              {"zone_radius_km", 0.1},
-                              {"duration_ticks", 2}});
+    SetMission(
+        *unit, "SECURE_ZONE", "secure_zone",
+        nlohmann::json{
+            {"zone", "zone-hill"}, {"zone_x", 1.0}, {"zone_y", 1.0}, {"zone_radius_km", 0.1}, {"duration_ticks", 2}});
     step_missions(state);
     step_missions(state);
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a type=SECURE_ZONE"))
-        << "同阵营其他节点单位不得被视为区域内敌人";
+    const auto completed = [&state] {
+        std::vector<wfs::sim::SimEvent> matches;
+        for (const wfs::sim::SimEvent& event : state.event_log.events()) {
+            if (event.message.find("MISSION_COMPLETED unit=squad-a") != std::string::npos) {
+                matches.push_back(event);
+            }
+        }
+        return matches;
+    }();
+    ASSERT_FALSE(completed.empty()) << "同阵营其他节点单位不得被视为区域内敌人";
+    EXPECT_NE(completed.front().message.find("type=SECURE_ZONE"), std::string::npos);
 
     // 控制组：真正的敌方单位进入区域则不能完成。
     SimState blocked = MakeState();
@@ -128,19 +137,25 @@ TEST(WfsSideFactionTest, MultiNodeSameFactionDoesNotBlockSecureZone) {
     blocked_unit->side = "blue";
     FindUnit(blocked, "squad-c")->side = "red";
     AddSameSideOtherNodeUnit(blocked, "squad-friendly-other-node", 1.0, 1.05);
+    blocked_unit = FindUnit(blocked, "squad-a");  // push_back 可能重分配：重新定位指针。
+    ASSERT_NE(blocked_unit, nullptr);
     RuntimeUnitState* enemy = FindUnit(blocked, "squad-c");
     enemy->x = 1.02;
     enemy->y = 1.02;
-    SetMission(*blocked_unit, "SECURE_ZONE", "secure_zone",
-               nlohmann::json{{"zone", "zone-hill"},
-                              {"zone_x", 1.0},
-                              {"zone_y", 1.0},
-                              {"zone_radius_km", 0.1},
-                              {"duration_ticks", 2}});
+    SetMission(
+        *blocked_unit, "SECURE_ZONE", "secure_zone",
+        nlohmann::json{
+            {"zone", "zone-hill"}, {"zone_x", 1.0}, {"zone_y", 1.0}, {"zone_radius_km", 0.1}, {"duration_ticks", 2}});
     step_missions(blocked);
     step_missions(blocked);
-    EXPECT_FALSE(HasEvent(blocked.event_log, "MISSION_COMPLETED unit=squad-a type=SECURE_ZONE"))
-        << "敌方单位在区内必须阻止区域目标完成";
+    EXPECT_FALSE([&blocked] {
+        for (const wfs::sim::SimEvent& event : blocked.event_log.events()) {
+            if (event.message.find("MISSION_COMPLETED unit=squad-a") != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
+    }()) << "敌方单位在区内必须阻止区域目标完成";
 }
 
 TEST(WfsSideFactionTest, DriveOutIgnoresSameFactionInZone) {
@@ -151,15 +166,20 @@ TEST(WfsSideFactionTest, DriveOutIgnoresSameFactionInZone) {
     FindUnit(state, "squad-b")->side = "blue";
     FindUnit(state, "squad-c")->side = "red";
     AddSameSideOtherNodeUnit(state, "squad-friendly-other-node", 1.0, 1.05);
+    unit = FindUnit(state, "squad-a");  // push_back 可能重分配：重新定位指针。
+    ASSERT_NE(unit, nullptr);
 
     SetMission(*unit, "DRIVE_OUT", "drive_out",
-               nlohmann::json{{"zone", "zone-hill"},
-                              {"zone_x", 1.0},
-                              {"zone_y", 1.0},
-                              {"zone_radius_km", 0.1}});
+               nlohmann::json{{"zone", "zone-hill"}, {"zone_x", 1.0}, {"zone_y", 1.0}, {"zone_radius_km", 0.1}});
     step_missions(state);
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a type=DRIVE_OUT"))
-        << "驱逐判定必须忽略同阵营其他节点单位";
+    bool completed = false;
+    for (const wfs::sim::SimEvent& event : state.event_log.events()) {
+        if (event.message.find("MISSION_COMPLETED unit=squad-a") != std::string::npos &&
+            event.message.find("type=DRIVE_OUT") != std::string::npos) {
+            completed = true;
+        }
+    }
+    EXPECT_TRUE(completed) << "驱逐判定必须忽略同阵营其他节点单位";
 }
 
 TEST(WfsSideFactionTest, FriendlyUnitDoesNotDetectRecon) {
@@ -170,6 +190,8 @@ TEST(WfsSideFactionTest, FriendlyUnitDoesNotDetectRecon) {
     FindUnit(state, "squad-b")->side = "blue";
     FindUnit(state, "squad-c")->side = "red";
     AddSameSideOtherNodeUnit(state, "squad-friendly-other-node", 1.05, 1.05);
+    unit = FindUnit(state, "squad-a");  // push_back 可能重分配：重新定位指针。
+    ASSERT_NE(unit, nullptr);
     state.recon_config.detection_base_probability = 1.0;
 
     unit->mission_active = true;
@@ -182,8 +204,7 @@ TEST(WfsSideFactionTest, FriendlyUnitDoesNotDetectRecon) {
     unit->failure_action = "report";
 
     step_recon_tasks(state);
-    EXPECT_FALSE(HasEvent(state.event_log, "RECON_DETECTED unit=squad-a"))
-        << "同阵营单位不得触发侦察被发现";
+    EXPECT_FALSE(HasEvent(state.event_log, "RECON_DETECTED unit=squad-a")) << "同阵营单位不得触发侦察被发现";
     EXPECT_TRUE(FindUnit(state, "squad-a")->mission_active);
 }
 

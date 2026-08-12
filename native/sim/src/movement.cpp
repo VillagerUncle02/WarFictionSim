@@ -105,12 +105,8 @@ std::vector<TerrainCell> terrain_cells_from_scenario(const nlohmann::json& raw) 
 }
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
-TerrainSample terrain_sample_at(const std::vector<model::TerrainElement>& library,
+TerrainSample terrain_sample_at(const std::map<std::string, const model::TerrainElement*>& library_index,
                                 const std::vector<TerrainCell>& cells, const double x_km, const double y_km) {
-    std::map<std::string, const model::TerrainElement*> by_id;
-    for (const model::TerrainElement& element : library) {
-        by_id.emplace(element.id, &element);
-    }
     TerrainSample sample;  // 平原默认：可通过、速度 1.0、无遮蔽。
     for (const TerrainCell& cell : cells) {
         const bool inside =
@@ -118,8 +114,8 @@ TerrainSample terrain_sample_at(const std::vector<model::TerrainElement>& librar
         if (!inside) {
             continue;
         }
-        const auto iterator = by_id.find(cell.terrain_id);
-        if (iterator == by_id.end()) {
+        const auto iterator = library_index.find(cell.terrain_id);
+        if (iterator == library_index.end()) {
             continue;  // 未知地形条目按平原处理（加载阶段已交叉校验数据目录）。
         }
         const model::TerrainElement& element = *iterator->second;
@@ -133,6 +129,16 @@ TerrainSample terrain_sample_at(const std::vector<model::TerrainElement>& librar
     return sample;
 }
 // NOLINTEND(bugprone-easily-swappable-parameters)
+
+// 便捷入口：每次调用重建索引（单次采样/外部调用方）。
+TerrainSample terrain_sample_at(const std::vector<model::TerrainElement>& library,
+                                const std::vector<TerrainCell>& cells, const double x_km, const double y_km) {
+    std::map<std::string, const model::TerrainElement*> library_index;
+    for (const model::TerrainElement& element : library) {
+        library_index.emplace(element.id, &element);
+    }
+    return terrain_sample_at(library_index, cells, x_km, y_km);
+}
 
 // 坐标参数语义由名字区分，保持与 terrain_sample_at 一致的几何签名。
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
@@ -211,6 +217,11 @@ void LogMovement(SimState& state, const EventSeverity severity, std::string mess
 // NOLINTBEGIN(readability-function-cognitive-complexity)
 void step_movement(SimState& state) {
     const MovementConfig& config = state.movement_config;
+    // M6：地形索引每 tick 构建一次，供全部单位采样复用。
+    std::map<std::string, const model::TerrainElement*> terrain_index;
+    for (const model::TerrainElement& element : state.terrain_library) {
+        terrain_index.emplace(element.id, &element);
+    }
     const double environment_mobility =
         state.scenario.raw.value("environment", nlohmann::json::object()).value("mobility_multiplier", 1.0);
     const double tick_seconds = static_cast<double>(state.clock.tick_duration_us()) / 1'000'000.0;  // 秒/tick。
@@ -254,7 +265,7 @@ void step_movement(SimState& state) {
         }
 
         // 地形速度系数与通行限制（FR-022）。
-        const TerrainSample terrain = terrain_sample_at(state.terrain_library, state.terrain_cells, unit.x, unit.y);
+        const TerrainSample terrain = terrain_sample_at(terrain_index, state.terrain_cells, unit.x, unit.y);
         const bool blocked = terrain.blocked || (terrain.water_requires_amphibious && !unit.amphibious);
         if (blocked) {
             if (!unit.stuck) {

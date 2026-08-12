@@ -81,6 +81,7 @@ struct RuntimeUnitState {
     std::string id;
     std::string type;
     std::string node_id;
+    std::string side;  // 阵营（数据驱动；缺省按 node_id 派生，M3）。
     model::ArmorProfile vehicle_armor;
     model::ModuleStatus vehicle_modules;
     std::vector<model::Weapon> weapons;
@@ -143,10 +144,22 @@ struct SimState {
     std::vector<model::Ammo> ammo_library;               // 运行期派生，不进哈希。
 };
 
+// 玩家阵营：按 player_node_id 对应单位的 side 派生；缺省回退 node_id
+// （与旧场景 node_id 分组兼容，M3）。
+inline std::string friendly_side(const SimState& state) {
+    for (const RuntimeUnitState& unit : state.units) {
+        if (unit.node_id == state.scenario.player_node_id) {
+            return unit.side;
+        }
+    }
+    return state.scenario.player_node_id;
+}
+
 inline void to_json(nlohmann::json& json, const RuntimeUnitState& unit) {
     json = nlohmann::json{{"id", unit.id},
                           {"type", unit.type},
                           {"node_id", unit.node_id},
+                          {"side", unit.side},
                           {"x", unit.x},
                           {"y", unit.y},
                           {"formation", unit.formation},
@@ -204,6 +217,7 @@ inline void from_json(const nlohmann::json& json, RuntimeUnitState& unit) {
     unit.id = json.at("id").get<std::string>();
     unit.type = json.at("type").get<std::string>();
     unit.node_id = json.at("node_id").get<std::string>();
+    unit.side = json.value("side", std::string());
     unit.x = json.at("x").get<double>();
     unit.y = json.at("y").get<double>();
     unit.formation = json.at("formation").get<model::Formation>();

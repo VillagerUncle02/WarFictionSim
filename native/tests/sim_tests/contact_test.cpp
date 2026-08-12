@@ -200,8 +200,7 @@ TEST(WfsContactTest, RecoveryDurationCoversMaxTickInclusive) {
     bool saw_max = false;
     for (std::uint64_t seed = 1U; seed <= 100U && !saw_max; ++seed) {
         Rng rng(seed, 0U);
-        const ContactLossResult result =
-            wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 1.0, true}, config, rng);
+        const ContactLossResult result = wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 1.0, true}, config, rng);
         ASSERT_TRUE(result.lost);
         EXPECT_GE(result.duration_ticks, config.min_ticks);
         EXPECT_LE(result.duration_ticks, config.max_ticks);
@@ -212,8 +211,8 @@ TEST(WfsContactTest, RecoveryDurationCoversMaxTickInclusive) {
 
 TEST(WfsContactTest, SuppressionDegradeThresholdIsDataDriven) {
     // Code Reviewer M9（💭）：压制降级阈值并入 ContactConfig 数据驱动。
-    const ContactConfig config =
-        ContactConfig::FromScenario(nlohmann::json{{"contact", nlohmann::json{{"suppression_degrade_threshold", 0.8}}}});
+    const ContactConfig config = ContactConfig::FromScenario(
+        nlohmann::json{{"contact", nlohmann::json{{"suppression_degrade_threshold", 0.8}}}});
     EXPECT_DOUBLE_EQ(config.suppression_degrade_threshold, 0.8);
 
     SimState state = MakeState();

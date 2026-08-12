@@ -60,7 +60,8 @@
       "properties": {
         "condition": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "完成条件：secure_zone/destroy_unit/drive_out/clear/hold/reach_point/patrol/fortify/recon（语义参数校验见 command_validation.cpp，M1）"
         },
         "params": {
           "type": "object"

@@ -141,6 +141,11 @@
             "type": "string",
             "minLength": 1
           },
+          "side": {
+            "type": "string",
+            "minLength": 1,
+            "description": "阵营标识（M3）；缺省按 node_id 分组兼容旧场景"
+          },
           "x": {
             "type": "number"
           },

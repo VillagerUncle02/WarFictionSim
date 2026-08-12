@@ -23,6 +23,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sim_state.h"
+#include "wfs/sim/contact.h"
 #include "wfs/sim/event_log.h"
 #include "wfs/sim/movement.h"
 
@@ -93,6 +94,8 @@ IntelConfig IntelConfig::FromScenario(
         ConfigDouble(json, "moving_concealment_reduction", config.moving_concealment_reduction);
     config.vehicle_size_bonus = ConfigDouble(json, "vehicle_size_bonus", config.vehicle_size_bonus);
     config.smoke_obscuration = ConfigDouble(json, "smoke_obscuration", config.smoke_obscuration);
+    config.degraded_observation_factor =
+        ConfigDouble(json, "degraded_observation_factor", config.degraded_observation_factor);
     config.memory_ticks = ConfigUint64(json, "memory_ticks", config.memory_ticks);
     config.source_expiry_ticks = ConfigUint64(json, "source_expiry_ticks", config.source_expiry_ticks);
     if (!config.is_valid()) {
@@ -251,13 +254,26 @@ void register_intel(SimState& state, const IntelRecord& record) {
     }
 }
 
-bool observe_pair(SimState& state, const RuntimeUnitState& observer, const RuntimeUnitState& target) {
-    const TerrainSample terrain = terrain_sample_at(state.terrain_library, state.terrain_cells, target.x, target.y);
+namespace {
+
+// 使用预建地形索引的观察结算（M6：step_intel 每 tick 只构建一次索引）。
+bool ObservePairWithIndex(SimState& state, const RuntimeUnitState& observer, const RuntimeUnitState& target,
+                          const std::map<std::string, const model::TerrainElement*>& terrain_index) {
+    const TerrainSample terrain = terrain_sample_at(terrain_index, state.terrain_cells, target.x, target.y);
     const double smoke = smoke_concealment_at(state.smoke_areas, target.x, target.y);
     const double environment_visibility =
         state.scenario.raw.value("environment", nlohmann::json::object()).value("visibility_multiplier", 1.0);
+    double observer_ability = ObserverAbility(observer);
+    // M5：观瞄模块失效阻断观察；降级/压制按有效观察能力衰减（data-model §6）。
+    const EffectSeverity observation_effect = effective_observation_effect(observer, state.contact_config);
+    if (observation_effect == EffectSeverity::kDisabled) {
+        return false;
+    }
+    if (observation_effect == EffectSeverity::kDegraded) {
+        observer_ability *= state.intel_config.degraded_observation_factor;
+    }
     const ObservationResult observation = resolve_observation(
-        ObservationInput{observer.x, observer.y, ObserverAbility(observer), target.x, target.y, terrain.concealment,
+        ObservationInput{observer.x, observer.y, observer_ability, target.x, target.y, terrain.concealment,
                          target.is_vehicle, target.moving, environment_visibility, smoke > 0.0},
         state.intel_config);
     if (!observation.visible) {
@@ -303,17 +319,41 @@ bool observe_pair(SimState& state, const RuntimeUnitState& observer, const Runti
     return true;
 }
 
+}  // namespace
+
+bool observe_pair(SimState& state, const RuntimeUnitState& observer, const RuntimeUnitState& target) {
+    std::map<std::string, const model::TerrainElement*> terrain_index;
+    for (const model::TerrainElement& element : state.terrain_library) {
+        terrain_index.emplace(element.id, &element);
+    }
+    return ObservePairWithIndex(state, observer, target, terrain_index);
+}
+
 void step_intel(SimState& state) {
+    // M6：地形索引每 tick 构建一次，供全部观察对复用（消除逐单位 map 重建）。
+    std::map<std::string, const model::TerrainElement*> terrain_index;
+    for (const model::TerrainElement& element : state.terrain_library) {
+        terrain_index.emplace(element.id, &element);
+    }
+    // 距离粗筛上界：最高观察能力下的有效可视距离（平方比较，避免 sqrt）。
+    const double max_range =
+        state.intel_config.base_visibility_range_km * (kAbilityFloor + state.intel_config.observer_ability_scale);
+    const double max_range_sq = max_range * max_range;
     // 全量观察：固定单位顺序（观察方在外层，目标在内层）。
     for (const RuntimeUnitState& observer : state.units) {
         if (observer.destroyed || observer.out_of_contact) {
             continue;  // 失联/摧毁单位不能上报新情报。
         }
         for (const RuntimeUnitState& target : state.units) {
-            if (target.node_id == observer.node_id || target.destroyed) {
+            if (target.side == observer.side || target.destroyed) {
                 continue;
             }
-            observe_pair(state, observer, target);
+            const double delta_x = target.x - observer.x;
+            const double delta_y = target.y - observer.y;
+            if ((delta_x * delta_x) + (delta_y * delta_y) > max_range_sq) {
+                continue;  // 距离粗筛：超出最大可视距离不采样地形。
+            }
+            ObservePairWithIndex(state, observer, target, terrain_index);
         }
     }
 

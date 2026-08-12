@@ -9,8 +9,10 @@
   "type": "task_type",
   "target": {"kind": "unit|zone|point", "ref": "..."},
   "completion": {
-    "condition": "secure_zone|destroy_unit|drive_out|...",
-    "params": {"zone": "...", "duration_ticks": 1200, "target_unit": "..."}
+    "condition": "secure_zone|destroy_unit|drive_out|clear|hold|reach_point|patrol|fortify|recon",
+    "params": {"zone": "...", "duration_ticks": 1200, "target_unit": "...",
+               "cycle_ticks": 1200, "construction_ticks": 1200,
+               "point": {"x": 1.0, "y": 1.0}, "exit_point": {"x": 0.5, "y": 0.5}}
   },
   "intent": "自由文本，供展示与 AI 理解背景",
   "behavior": {
@@ -22,6 +24,16 @@
   "deadline": {"game_time": "tick_count"}
 }
 ```
+
+完成条件参数（语义校验基线，M1）：
+
+- `secure_zone`/`drive_out`/`clear`：`zone`（区域 id）；
+- `destroy_unit`：`target_unit`（单位 id）；
+- `hold`：`duration_ticks`（驻留 tick）；
+- `reach_point`：`point`（坐标对象）；
+- `patrol`：`cycle_ticks`（巡逻周期 tick）；
+- `fortify`：`construction_ticks`（构筑时长 tick）；
+- `recon`：`point`（侦察目标点，必填），`exit_point`（渗透撤离点，可选）。
 
 ## 2. 语义校验规则（双重校验管道）
 

@@ -32,14 +32,23 @@ namespace {
 struct ConditionSpec {
     const char* name;
     std::vector<std::string> required_params;
+    std::vector<std::string> optional_params;  // 存在时同样校验形状（M1）。
 };
 
 const std::vector<ConditionSpec>& BuiltInConditions() {
     // 与 contracts/command-schema.md §1/§2 同步；T028 任务注册表落地后
     // 可改为数据驱动，此处仍保留确定性内置基线。
     static const std::vector<ConditionSpec> conditions = {
-        {"secure_zone", {"zone"}}, {"destroy_unit", {"target_unit"}}, {"drive_out", {"zone"}},
-        {"clear", {"zone"}},       {"hold", {"duration_ticks"}},      {"reach_point", {"point"}},
+        {"secure_zone", {"zone"}},
+        {"destroy_unit", {"target_unit"}},
+        {"drive_out", {"zone"}},
+        {"clear", {"zone"}},
+        {"hold", {"duration_ticks"}},
+        {"reach_point", {"point"}},
+        // M1：FR-042 全量任务类型可下达——巡逻/构筑/侦察完成条件注册。
+        {"patrol", {"cycle_ticks"}, {}},
+        {"fortify", {"construction_ticks"}, {}},
+        {"recon", {"point"}, {"exit_point"}},
     };
     return conditions;
 }
@@ -152,26 +161,42 @@ void CheckTarget(const nlohmann::json& command, const CommandValidationContext& 
 }
 
 // ---- 语义检查 3a：完成条件必需参数完整性。 ----
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 bool CollectMissingConditionParams(const ConditionSpec& spec, const nlohmann::json& params,
                                    std::vector<std::string>& missing) {
+    const auto invalid_point = [](const nlohmann::json& value) {
+        return !value.is_object() || !value.contains("x") || !value.contains("y") || !value["x"].is_number() ||
+               !value["y"].is_number();
+    };
     for (const std::string& required : spec.required_params) {
         if (!params.contains(required)) {
             missing.push_back(required);
             continue;
         }
         const nlohmann::json& value = params[required];
-        if (required == "duration_ticks") {
+        if (required == "duration_ticks" || required == "cycle_ticks" || required == "construction_ticks") {
             if (!value.is_number_integer() || value.get<std::int64_t>() <= 0) {
                 missing.push_back(required);
             }
         } else if (required == "point") {
             // T030：reach_point 的 point 参数为坐标对象（x/y，km）。
-            if (!value.is_object() || !value.contains("x") || !value.contains("y") || !value["x"].is_number() ||
-                !value["y"].is_number()) {
+            if (invalid_point(value)) {
                 missing.push_back(required);
             }
         } else if (!value.is_string() || value.get<std::string>().empty()) {
             missing.push_back(required);
+        }
+    }
+    // 可选参数：出现时必须满足形状要求（如 exit_point 为坐标对象）。
+    for (const std::string& optional : spec.optional_params) {
+        if (!params.contains(optional)) {
+            continue;
+        }
+        const nlohmann::json& value = params[optional];
+        if (optional == "exit_point") {
+            if (invalid_point(value)) {
+                missing.push_back(optional);
+            }
         }
     }
     return missing.empty();

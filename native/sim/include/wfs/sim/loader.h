@@ -37,6 +37,7 @@ struct ScenarioUnit {
     std::string id;
     std::string type;
     std::string node_id;
+    std::string side;  // 阵营（空 = 缺省按 node_id 分组，兼容旧场景，M3）。
     double x = 0.0;
     double y = 0.0;
     std::vector<std::string> ammo;

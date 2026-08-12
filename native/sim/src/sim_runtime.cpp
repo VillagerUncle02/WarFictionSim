@@ -98,6 +98,7 @@ RuntimeUnitState MakeRuntimeUnit(const ScenarioUnit& unit, const DataLibraryLoad
     runtime.id = unit.id;
     runtime.type = unit.type;
     runtime.node_id = unit.node_id;
+    runtime.side = unit.side.empty() ? unit.node_id : unit.side;  // M3：缺省按节点分组。
     runtime.x = unit.x;
     runtime.y = unit.y;
     runtime.formation = model::Formation::kMarch;

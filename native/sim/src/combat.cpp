@@ -771,8 +771,7 @@ void step_combat(SimState& state) {
         }
         std::vector<TargetCandidate> candidates;
         for (const RuntimeUnitState& target : original_units) {
-            if (target.id == attacker.id || target.node_id == attacker.node_id || target.destroyed ||
-                target.out_of_contact) {
+            if (target.id == attacker.id || target.side == attacker.side || target.destroyed || target.out_of_contact) {
                 continue;
             }
             const double distance_m = DistanceKm(attacker, target) * kMetersPerKilometer;

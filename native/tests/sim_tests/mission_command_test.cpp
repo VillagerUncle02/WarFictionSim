@@ -69,6 +69,16 @@ bool HasEvent(const wfs::sim::EventLog& log, const std::string& prefix) {
     return false;
 }
 
+std::vector<wfs::sim::SimEvent> EventsWith(const wfs::sim::EventLog& log, const std::string& text) {
+    std::vector<wfs::sim::SimEvent> matches;
+    for (const wfs::sim::SimEvent& event : log.events()) {
+        if (event.message.find(text) != std::string::npos) {
+            matches.push_back(event);
+        }
+    }
+    return matches;
+}
+
 // 步进直到任务生效（通讯延迟 60–200 tick 内），返回是否已生效。
 bool WaitMissionActive(SimState& state, const std::string& unit_id) {
     for (std::uint64_t i = 0U; i < 300U; ++i) {
@@ -110,8 +120,9 @@ TEST(WfsMissionCommandTest, PatrolCommandAcceptedAndJudged) {
     for (std::uint64_t i = 0U; i < 3U; ++i) {
         step_sim_state(state);
     }
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a type=PATROL"))
-        << "巡逻周期必须由任务判定系统推进完成";
+    const auto completed = EventsWith(state.event_log, "MISSION_COMPLETED unit=squad-a");
+    ASSERT_FALSE(completed.empty()) << "巡逻周期必须由任务判定系统推进完成";
+    EXPECT_NE(completed.front().message.find("type=PATROL"), std::string::npos);
 }
 
 TEST(WfsMissionCommandTest, FortifyCommandAcceptedAndJudged) {
@@ -122,8 +133,9 @@ TEST(WfsMissionCommandTest, FortifyCommandAcceptedAndJudged) {
     for (std::uint64_t i = 0U; i < 3U; ++i) {
         step_sim_state(state);
     }
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a type=FORTIFY"))
-        << "构筑工事必须按 construction_ticks 确定性完成";
+    const auto completed = EventsWith(state.event_log, "MISSION_COMPLETED unit=squad-a");
+    ASSERT_FALSE(completed.empty()) << "构筑工事必须按 construction_ticks 确定性完成";
+    EXPECT_NE(completed.front().message.find("type=FORTIFY"), std::string::npos);
 }
 
 TEST(WfsMissionCommandTest, HiddenReconCommandAcceptedAndJudged) {
@@ -135,7 +147,7 @@ TEST(WfsMissionCommandTest, HiddenReconCommandAcceptedAndJudged) {
     for (std::uint64_t i = 0U; i < 3U; ++i) {
         step_sim_state(state);
     }
-    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_COMPLETED unit=squad-a type=HIDDEN_RECON"))
-        << "隐蔽侦察必须按潜伏时长判定完成";
+    const auto completed = EventsWith(state.event_log, "MISSION_COMPLETED unit=squad-a");
+    ASSERT_FALSE(completed.empty()) << "隐蔽侦察必须按潜伏时长判定完成";
+    EXPECT_NE(completed.front().message.find("type=HIDDEN_RECON"), std::string::npos);
 }
-

@@ -29,11 +29,12 @@ struct RuntimeUnitState;  // 内部运行时单位（sim_state.h）。
 
 // 失联配置（FR-065；默认 60–180s @20Hz，场景 raw["contact"] 可覆盖）。
 struct ContactConfig {
-    double suppression_threshold = 0.8;    // 压制触发失联的阈值。
-    double damage_probability = 0.15;      // 重损伤触发失联概率基线。
-    double suppression_probability = 0.2;  // 压制触发失联概率基线。
-    std::uint64_t min_ticks = 1200U;       // 恢复最短时长（60s @20Hz）。
-    std::uint64_t max_ticks = 3600U;       // 恢复最长时长（180s @20Hz）。
+    double suppression_threshold = 0.8;          // 压制触发失联的阈值。
+    double damage_probability = 0.15;            // 重损伤触发失联概率基线。
+    double suppression_probability = 0.2;        // 压制触发失联概率基线。
+    double suppression_degrade_threshold = 0.5;  // 复合状态压制降级阈值（M9）。
+    std::uint64_t min_ticks = 1200U;             // 恢复最短时长（60s @20Hz）。
+    std::uint64_t max_ticks = 3600U;             // 恢复最长时长（180s @20Hz）。
 
     // 读取 raw["contact"]；无该节时兼容 raw["combat"].contact_loss_* 旧键。
     // 非法值（概率越界/max<min）显式抛 std::invalid_argument（宪法 17）。
@@ -42,7 +43,7 @@ struct ContactConfig {
     bool is_valid() const noexcept {
         return suppression_threshold >= 0.0 && suppression_threshold <= 1.0 && damage_probability >= 0.0 &&
                damage_probability <= 1.0 && suppression_probability >= 0.0 && suppression_probability <= 1.0 &&
-               max_ticks >= min_ticks;
+               suppression_degrade_threshold >= 0.0 && suppression_degrade_threshold <= 1.0 && max_ticks >= min_ticks;
     }
 };
 
@@ -100,12 +101,15 @@ void from_json(const nlohmann::json& json, EffectSeverity& severity);
 // 取最严叠加：kDisabled 压过 kDegraded，kDegraded 压过 kNone。
 EffectSeverity worst_effect(EffectSeverity lhs, EffectSeverity rhs) noexcept;
 
-// 压制/失联/模块损伤各自维度取最严后的有效效果。
-EffectSeverity effective_mobility_effect(const RuntimeUnitState& unit) noexcept;
-EffectSeverity effective_observation_effect(const RuntimeUnitState& unit) noexcept;
-EffectSeverity effective_command_effect(const RuntimeUnitState& unit) noexcept;
+// 压制/失联/模块损伤各自维度取最严后的有效效果（压制降级阈值数据驱动，M9）。
+EffectSeverity effective_mobility_effect(const RuntimeUnitState& unit,
+                                         const ContactConfig& config = ContactConfig{}) noexcept;
+EffectSeverity effective_observation_effect(const RuntimeUnitState& unit,
+                                            const ContactConfig& config = ContactConfig{}) noexcept;
+EffectSeverity effective_command_effect(const RuntimeUnitState& unit,
+                                        const ContactConfig& config = ContactConfig{}) noexcept;
 // 三个维度的最严叠加（FR-065：复合状态取最严）。
-EffectSeverity compound_effect(const RuntimeUnitState& unit) noexcept;
+EffectSeverity compound_effect(const RuntimeUnitState& unit, const ContactConfig& config = ContactConfig{}) noexcept;
 
 // 推进一 tick 的失联恢复：倒计时接触恢复时长，到期产生 CONTACT_RESTORED。
 void step_contact(SimState& state);

@@ -539,7 +539,11 @@ void CommandChain::ProcessDue(SimState& state) {
                     Log(state, EventCategory::kCommand, EventSeverity::kInfo,
                         "COMMAND_WITHDRAWN command=" + target->command_id + " unit=" + target->unit_id +
                             " type=" + target->type + " priority=" + std::to_string(target->priority));
-                    if (was_effective && unit->mission_active) {
+                    // M2：循环中的持续任务命令可能已非 effective，但单位仍
+                    // 以 mission_command_id 引用该活动任务——撤回必须按活动
+                    // 任务匹配强制取消（FR-044 明确终止）。
+                    if (unit != nullptr && unit->mission_active &&
+                        (was_effective || unit->mission_command_id == target->command_id)) {
                         CancelMission(*unit);
                     }
                     winner->state = CommandState::kCompleted;

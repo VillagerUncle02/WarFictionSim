@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -103,6 +104,9 @@ std::vector<TerrainCell> terrain_cells_from_scenario(const nlohmann::json& raw);
 // 在 (x, y)（km）采样地形：库条目按 id 查表，网格单元按声明顺序取首个
 // 包含该点的单元；无匹配时返回平原默认。
 TerrainSample terrain_sample_at(const std::vector<model::TerrainElement>& library,
+                                const std::vector<TerrainCell>& cells, double x, double y);
+// 使用预建 id → 条目索引采样（M6：每 tick 构建一次索引复用，消除逐次重建）。
+TerrainSample terrain_sample_at(const std::map<std::string, const model::TerrainElement*>& library_index,
                                 const std::vector<TerrainCell>& cells, double x, double y);
 
 // 烟幕遮蔽强度：位于任一烟幕半径内返回配置值，否则 0。

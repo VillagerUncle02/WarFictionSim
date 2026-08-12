@@ -67,15 +67,16 @@ bool UnitInZone(const RuntimeUnitState& unit, const ZoneCenter& zone) {
     return std::sqrt((delta_x * delta_x) + (delta_y * delta_y)) <= zone.radius_km;
 }
 
-bool EnemyInZone(const SimState& state, const ZoneCenter& zone, const std::string& friendly_node) {
+// M3：敌我判定按阵营（side），同阵营其他节点单位不算敌人。
+bool EnemyInZone(const SimState& state, const ZoneCenter& zone, const std::string& friendly_side_id) {
     return std::ranges::any_of(state.units, [&](const RuntimeUnitState& unit) {
-        return unit.node_id != friendly_node && !unit.destroyed && UnitInZone(unit, zone);
+        return unit.side != friendly_side_id && !unit.destroyed && UnitInZone(unit, zone);
     });
 }
 
-bool FriendlyInZone(const SimState& state, const ZoneCenter& zone, const std::string& friendly_node) {
+bool FriendlyInZone(const SimState& state, const ZoneCenter& zone, const std::string& friendly_side_id) {
     return std::ranges::any_of(state.units, [&](const RuntimeUnitState& unit) {
-        return unit.node_id == friendly_node && !unit.destroyed && UnitInZone(unit, zone);
+        return unit.side == friendly_side_id && !unit.destroyed && UnitInZone(unit, zone);
     });
 }
 
@@ -148,6 +149,12 @@ OutcomeConfig OutcomeConfig::FromScenario(
             config.zone_centers[zone_id] = center;
         }
     }
+    // M4：启用部署阶段必须同时配置 deadline 与部署区，否则 tick 0 就会触发
+    // 部署超时失败（默认 deadline=0）；非法配置显式拒绝（宪法第 17 条）。
+    if (config.deployment_enabled && (config.deployment_deadline_ticks == 0U || config.deployment_zone.empty())) {
+        throw std::invalid_argument(
+            "outcome 配置非法（deployment_enabled 必须同时配置 deployment_deadline_ticks 与 deployment_zone）");
+    }
     if (!config.is_valid()) {
         throw std::invalid_argument("outcome 配置非法（partial_victory_threshold 须在 [0,1]）");
     }
@@ -209,8 +216,8 @@ bool objective_completed(SimState& state, ObjectiveRuntimeState& objective) {
         if (zone == nullptr) {
             return false;  // 区域几何缺失：不可求值。
         }
-        if (EnemyInZone(state, *zone, state.scenario.player_node_id) ||
-            !FriendlyInZone(state, *zone, state.scenario.player_node_id)) {
+        const std::string friendly = friendly_side(state);
+        if (EnemyInZone(state, *zone, friendly) || !FriendlyInZone(state, *zone, friendly)) {
             objective.hold_ticks = 0U;
             return false;
         }
@@ -237,7 +244,7 @@ bool failure_condition_triggered(const SimState& state, const ScenarioObjective&
         if (zone == nullptr) {
             return false;
         }
-        return EnemyInZone(state, *zone, state.scenario.player_node_id);
+        return EnemyInZone(state, *zone, friendly_side(state));
     }
     return false;
 }
@@ -273,7 +280,7 @@ void step_outcome(SimState& state) {
     if (state.outcome_config.deployment_enabled && !state.outcome_config.deployment_zone.empty() &&
         state.clock.tick() >= state.outcome_config.deployment_deadline_ticks) {
         const ZoneCenter* zone = FindZone(state.outcome_config, state.outcome_config.deployment_zone);
-        bool still_deploying = zone != nullptr && FriendlyInZone(state, *zone, state.scenario.player_node_id);
+        bool still_deploying = zone != nullptr && FriendlyInZone(state, *zone, friendly_side(state));
         if (still_deploying) {
             Decide(state, OutcomeKind::kDefeat, ratio, "DEPLOYMENT_TIMEOUT");
             return;

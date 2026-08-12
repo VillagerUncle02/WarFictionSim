@@ -94,15 +94,16 @@ bool UnitInZone(const RuntimeUnitState& unit, const ZoneGeometry& zone) {
     return std::sqrt((delta_x * delta_x) + (delta_y * delta_y)) <= zone.radius_km;
 }
 
-bool EnemyInZone(const SimState& state, const ZoneGeometry& zone, const std::string& friendly_node) {
+// M3：敌我判定按阵营（side），同阵营其他节点单位不算敌人。
+bool EnemyInZone(const SimState& state, const ZoneGeometry& zone, const std::string& friendly_side_id) {
     return std::ranges::any_of(state.units, [&](const RuntimeUnitState& unit) {
-        return unit.node_id != friendly_node && !unit.destroyed && UnitInZone(unit, zone);
+        return unit.side != friendly_side_id && !unit.destroyed && UnitInZone(unit, zone);
     });
 }
 
-bool FriendlyInZone(const SimState& state, const ZoneGeometry& zone, const std::string& friendly_node) {
+bool FriendlyInZone(const SimState& state, const ZoneGeometry& zone, const std::string& friendly_side_id) {
     return std::ranges::any_of(state.units, [&](const RuntimeUnitState& unit) {
-        return unit.node_id == friendly_node && !unit.destroyed && UnitInZone(unit, zone);
+        return unit.side == friendly_side_id && !unit.destroyed && UnitInZone(unit, zone);
     });
 }
 
@@ -208,7 +209,7 @@ MissionEvaluation evaluate_mission(SimState& state, RuntimeUnitState& unit) {
     } else if (condition == "secure_zone") {
         const ZoneGeometry zone = MissionZone(unit.mission_params);
         const std::uint64_t duration = unit.mission_params.value("duration_ticks", 0U);
-        if (zone.valid && FriendlyInZone(state, zone, unit.node_id) && !EnemyInZone(state, zone, unit.node_id)) {
+        if (zone.valid && FriendlyInZone(state, zone, unit.side) && !EnemyInZone(state, zone, unit.side)) {
             ++unit.recon_hold_ticks;
             if (duration > 0U && unit.recon_hold_ticks >= duration) {
                 result.completed = true;
@@ -228,7 +229,7 @@ MissionEvaluation evaluate_mission(SimState& state, RuntimeUnitState& unit) {
     } else if (condition == "drive_out" || condition == "clear") {
         const ZoneGeometry zone = MissionZone(unit.mission_params);
         const std::uint64_t duration = unit.mission_params.value("duration_ticks", 0U);
-        if (zone.valid && !EnemyInZone(state, zone, unit.node_id)) {
+        if (zone.valid && !EnemyInZone(state, zone, unit.side)) {
             if (duration == 0U) {
                 result.completed = true;
                 result.reason = condition == "drive_out" ? "ZONE_CLEARED" : "CLEARED";
@@ -316,7 +317,6 @@ void complete_mission(SimState& state, RuntimeUnitState& unit, const std::string
     LogMission(state, EventSeverity::kInfo,
                "MISSION_COMPLETED unit=" + unit.id + " command=" + unit.mission_command_id +
                    " type=" + unit.mission_type + " reason=" + reason);
-    state.command_chain.MarkCompleted(unit.mission_command_id);
     report_mission_status(state, unit, "COMPLETED", reason);
     bool continuous = false;
     try {
@@ -325,11 +325,14 @@ void complete_mission(SimState& state, RuntimeUnitState& unit, const std::string
         continuous = false;
     }
     if (continuous && unit.mission_loops) {
+        // M2：循环任务重启时命令保持 kEffective（不 MarkCompleted），
+        // 使 WITHDRAW/MODIFY 仍能寻址并终止该持续任务（FR-044）。
         unit.recon_progress_ticks = 0U;
         unit.recon_hold_ticks = 0U;
         LogMission(state, EventSeverity::kInfo,
                    "MISSION_LOOP_RESTARTED unit=" + unit.id + " command=" + unit.mission_command_id);
     } else {
+        state.command_chain.MarkCompleted(unit.mission_command_id);
         CancelMission(unit);
     }
 }

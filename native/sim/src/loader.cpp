@@ -233,6 +233,7 @@ bool ExtractScenarioData(const nlohmann::json& root, const detail::SchemaFileRes
         entry.id = unit["id"].get<std::string>();
         entry.type = unit["type"].get<std::string>();
         entry.node_id = unit["node_id"].get<std::string>();
+        entry.side = unit.value("side", std::string());
         entry.x = unit["x"].get<double>();
         entry.y = unit["y"].get<double>();
         for (const nlohmann::json& ammo : unit["ammo"]) {

@@ -53,6 +53,7 @@ struct IntelConfig {
     double moving_concealment_reduction = 0.15;  // 移动时隐蔽略降（FR-033）。
     double vehicle_size_bonus = 0.15;            // 载具体积大：最低档可识别。
     double smoke_obscuration = 0.9;              // 烟幕遮蔽（FR-023）。
+    double degraded_observation_factor = 0.5;    // 观瞄降级/压制观察能力衰减（M5）。
     std::uint64_t memory_ticks = 3600U;          // 脱离识别保留记忆时长。
     std::uint64_t source_expiry_ticks = 2400U;   // 情报来源标注过期时长。
 
@@ -60,7 +61,8 @@ struct IntelConfig {
 
     bool is_valid() const noexcept {
         return base_visibility_range_km > 0.0 && t1_threshold > 0.0 && t2_threshold >= t1_threshold &&
-               t3_threshold >= t2_threshold && t3_threshold <= 1.0 && memory_ticks > 0U && source_expiry_ticks > 0U;
+               t3_threshold >= t2_threshold && t3_threshold <= 1.0 && degraded_observation_factor >= 0.0 &&
+               degraded_observation_factor <= 1.0 && memory_ticks > 0U && source_expiry_ticks > 0U;
     }
 };
 
