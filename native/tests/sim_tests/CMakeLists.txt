@@ -29,6 +29,11 @@ add_executable(sim_tests
     mission_registry_test.cpp
     data_library_test.cpp
     tutorial_scenario_test.cpp
+    contact_test.cpp
+    intel_test.cpp
+    mission_exec_test.cpp
+    recon_tasks_test.cpp
+    outcome_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)
