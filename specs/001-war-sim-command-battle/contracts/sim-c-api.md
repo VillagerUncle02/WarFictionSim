@@ -27,21 +27,29 @@ wfs_sim_result    wfs_sim_load_save(wfs_sim_handle* h, const char* path);
 - 错误以 `wfs_sim_result` 错误码返回，禁止静默吞错（宪法第 17 条）；
 - 快照为只读 JSON 结构，调用方负责缓冲生命周期；
 - `threads` 只影响性能，不影响状态哈希（多线程确定性分区并行）；
-- ABI 版本号 `wfs_sim_version` 防 C# 端与核心错配；
+- ABI 版本号 `wfs_sim_version` 防 C# 端与核心错配：UI 端按精确匹配校验，
+  错配（如旧 DLL 缺少 `wfs_sim_query_events` 入口）在启动时拒绝并提示升级；
+  当前 ABI 版本为 `0.2.0`（新增事件查询入口时小版本 +1，不破坏既有符号
+  与内存布局）；
 - 细节实现见 `sim/src/c_api.cpp`（T012）。
 
 ## 事件日志查询（FR-044）
 
-`wfs_sim_query_events` 把事件日志按过滤器查询为只读 JSON 文本，供表现层实现回看、过滤、搜索、置顶与分页。`query_json` 为 JSON 对象，四个字段全部可选：
+`wfs_sim_query_events` 把事件日志按过滤器查询为只读 JSON 文本，供表现层实现回看、过滤、搜索、置顶与分页。`query_json` 为 JSON 对象，全部字段可选：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `category` | string | 分类稳定名称：`command` / `combat` / `intel` / `mission` / `logistics` / `system`；缺省或 `null` = 不过滤；未知名称返回 `INVALID_DATA` |
 | `min_severity` | string | 最低严重级稳定名称：`debug` / `info` / `warning` / `critical`（含本级及以上）；缺省或 `null` = 不过滤；未知名称返回 `INVALID_DATA` |
 | `text` | string | 区分大小写的消息子串搜索；空串或 `null` = 不过滤 |
+| `unit_id` | string | 单位筛选（v1）：区分大小写的消息子串匹配，语义与 `text` 一致；空串或 `null` = 不过滤；非字符串返回 `INVALID_DATA` |
 | `limit` | 非负整数 | 返回条数上限；`0` 或缺省 = 不限制 |
 
-未知字段忽略（前向兼容）；任何字段类型错误或负数 `limit` 返回 `INVALID_DATA`。过滤条件可任意组合。
+`text` 与 `unit_id` 同时给定取交集。未知字段忽略（前向兼容）；任何字段类型错误（含 `unit_id` 非字符串）或负数 `limit` 返回 `INVALID_DATA`。过滤条件可任意组合，过滤顺序固定（category → min_severity → text → unit_id → limit），同一查询输出字节级一致。
+
+> FR-044「按单位筛选」的 v1 实现：事件当前无结构化 unit 字段，`unit_id`
+> 采用 message 子串匹配（与 `text` 同语义）实现单位维度；给 `SimEvent`
+> 增加结构化 unit 字段并改为精确单位匹配已登记为后续事项。
 
 成功（`OK`）时 `out_buf` 内容为：
 
@@ -63,7 +71,7 @@ wfs_sim_result    wfs_sim_load_save(wfs_sim_handle* h, const char* path);
 错误码语义：
 
 - `INVALID_ARGUMENT`：`h`、`query_json`、`out_buf` 或 `out_len` 为空指针；
-- `INVALID_DATA`：`query_json` 不是合法 JSON 对象、含未知分类/严重级名称、字段类型错误或 `limit` 为负/非整数；
+- `INVALID_DATA`：`query_json` 不是合法 JSON 对象、含未知分类/严重级名称、字段类型错误（含 `unit_id` 非字符串）或 `limit` 为负/非整数；
 - `BUFFER_TOO_SMALL`：`out_buf` 不足以容纳文本（含 NUL），`out_len` 写出所需字节数（含 NUL），调用方可按该值扩容后重试（两段式读取，与 `wfs_sim_get_snapshot` 一致）；
 - `INTERNAL_ERROR`：序列化等内部失败。
 
