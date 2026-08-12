@@ -12,6 +12,12 @@ namespace WarFictionSim.Ui.BattleMap;
 /// <summary>地图上一个可见兵牌。</summary>
 public sealed partial class UnitMarkerViewModel : ObservableObject
 {
+    /// <summary>框选命中的兵牌半宽（px）：锚点向外扩展的近似兵牌边界（N4）。</summary>
+    public const double ScreenHitHalfWidth = 12.0;
+
+    /// <summary>框选命中的兵牌半高（px）：锚点向外扩展的近似兵牌边界（N4）。</summary>
+    public const double ScreenHitHalfHeight = 10.0;
+
     private string _unitType = string.Empty;
     private string _displayName = string.Empty;
     private bool _isFriendly;

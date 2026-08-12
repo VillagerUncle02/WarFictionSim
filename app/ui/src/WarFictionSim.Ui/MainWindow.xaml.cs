@@ -1,12 +1,11 @@
 // 文件总览：主窗口代码后置（应用壳）。
 //
-// 装配两个解耦循环：后台 SimulationPump（按时间控制档位步进模拟 tick）与
-// UI DispatcherTimer（50ms 拉快照刷新面板）——渲染独立于模拟 tick
-// （FR-025）。窗口关闭时停表并释放客户端句柄。
+// 装配解耦的渲染循环：UI DispatcherTimer（50ms 拉快照刷新面板）——渲染
+// 独立于模拟 tick（FR-025）。后台步进泵由 MainWindowViewModel 按战斗主屏
+// 生命周期启停（N5），窗口关闭时停表并释放 ViewModel（含泵与客户端句柄）。
 
 using System.Windows;
 using System.Windows.Threading;
-using WarFictionSim.Ui.GameControls;
 using WarFictionSim.Ui.Interop;
 using WarFictionSim.Ui.ViewModels;
 
@@ -16,7 +15,6 @@ namespace WarFictionSim.Ui;
 public partial class MainWindow : Window
 {
     private readonly DispatcherTimer _renderTimer;
-    private SimulationPump? _pump;
 
     /// <summary>初始化主窗口并装配表现层循环。</summary>
     public MainWindow()
@@ -35,13 +33,8 @@ public partial class MainWindow : Window
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        // 步进泵：每 50ms 由时间控制状态机决定步进数（暂停=0），在后台线程
-        // 推进核心；渲染定时器只读快照，两者共享桥内锁保证句柄串行访问。
-        _pump = new SimulationPump(
-            () => ViewModel?.Game?.TimeControls.StepsPerFrame ?? 0,
-            () => ViewModel?.Game?.StepOneTick(),
-            TimeSpan.FromMilliseconds(50));
-        _pump.Start();
+        // 渲染定时器只读快照；步进泵由 MainWindowViewModel 在进入战斗时
+        // 启动、返回主菜单时停止（N5），两者共享桥内锁保证句柄串行访问。
         _renderTimer.Start();
     }
 
@@ -67,8 +60,6 @@ public partial class MainWindow : Window
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
         _renderTimer.Stop();
-        _pump?.Dispose();
-        _pump = null;
         ViewModel?.Dispose();
     }
 }

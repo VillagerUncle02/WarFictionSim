@@ -2,9 +2,12 @@
 //
 // 主菜单只产出启动请求；这里完成真正的句柄创建（读档在进入前执行）并持有
 // ISimClient 生命周期。创建/读档失败回填主菜单内联错误，绝不静默（宪法 17）。
+// 步进泵生命周期随战斗主屏（N5）：进入战斗启动、返回主菜单先停泵再释放
+// 句柄（等待在途 step），不在主菜单空转。
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using WarFictionSim.Ui.GameControls;
 using WarFictionSim.Ui.Interop;
 using WarFictionSim.Ui.MainMenu;
 
@@ -14,6 +17,7 @@ namespace WarFictionSim.Ui.ViewModels;
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     private readonly ISimClientFactory _clientFactory;
+    private SimulationPump? _pump;
     private object? _currentView;
     private bool _disposed;
 
@@ -63,7 +67,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _disposed = true;
         Menu.GameStartRequested -= OnGameStartRequested;
-        DisposeGame();
+        // 释放顺序：先停泵（等待在途 step）再释放句柄，与 F3/N5 一致。
+        _pump?.Dispose();
+        _pump = null;
+        Game?.Dispose();
+        Game = null;
     }
 
     private void OnGameStartRequested(object? sender, GameStartRequestedEventArgs e)
@@ -78,6 +86,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
             DisposeGame();
             Game = new GameScreenViewModel(client, e.Request.Scenario);
+            StartPump();
             CurrentView = Game;
             BackToMenuCommand.NotifyCanExecuteChanged();
         }
@@ -87,8 +96,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>启动随战斗主屏运行的表现层步进泵（复用已停止的实例）。</summary>
+    private void StartPump()
+    {
+        _pump ??= new SimulationPump(
+            () => Game?.TimeControls.StepsPerFrame ?? 0,
+            () => Game?.StepOneTick(),
+            TimeSpan.FromMilliseconds(50));
+        _pump.Start();
+    }
+
     private void DisposeGame()
     {
+        // 先停泵（等待在途 step 退出），再释放 ISimClient 句柄——返回主菜单
+        // 后泵不再空转，也不会有线程池回调触碰已释放的原生句柄（F3/N5）。
+        _pump?.Stop();
         Game?.Dispose();
         Game = null;
     }

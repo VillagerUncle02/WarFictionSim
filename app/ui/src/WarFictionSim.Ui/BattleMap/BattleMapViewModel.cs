@@ -117,6 +117,11 @@ public sealed partial class BattleMapViewModel : ObservableObject
     }
 
     /// <summary>框选屏幕矩形内的兵牌（默认只取己方单位，供命令执行单位派生）。</summary>
+    /// <remarks>
+    /// 命中判定用兵牌矩形与框选矩形相交（N4）：兵牌以屏幕坐标为锚点、按
+    /// UnitMarkerViewModel.ScreenHitHalfWidth/HalfHeight 扩展边界，锚点落在
+    /// 矩形外但兵牌与矩形相交时同样命中。
+    /// </remarks>
     /// <param name="left">屏幕矩形左边界（px）。</param>
     /// <param name="top">屏幕矩形上边界（px）。</param>
     /// <param name="right">屏幕矩形右边界（px）。</param>
@@ -125,8 +130,10 @@ public sealed partial class BattleMapViewModel : ObservableObject
     public void SelectUnitsInScreenRect(double left, double top, double right, double bottom, bool friendlyOnly = true)
     {
         List<string> hitIds = Markers
-            .Where(marker => marker.ScreenX >= left && marker.ScreenX <= right &&
-                             marker.ScreenY >= top && marker.ScreenY <= bottom)
+            .Where(marker => marker.ScreenX + UnitMarkerViewModel.ScreenHitHalfWidth >= left &&
+                             marker.ScreenX - UnitMarkerViewModel.ScreenHitHalfWidth <= right &&
+                             marker.ScreenY + UnitMarkerViewModel.ScreenHitHalfHeight >= top &&
+                             marker.ScreenY - UnitMarkerViewModel.ScreenHitHalfHeight <= bottom)
             .Where(marker => !friendlyOnly || marker.IsFriendly)
             .Select(marker => marker.UnitId)
             .ToList();

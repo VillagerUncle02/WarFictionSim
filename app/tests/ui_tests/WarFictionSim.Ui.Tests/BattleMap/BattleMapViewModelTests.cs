@@ -131,6 +131,26 @@ public class BattleMapViewModelTests
     }
 
     [Fact]
+    public void BoxSelect_HitsMarkerByRectangleIntersection_WhenAnchorOutside()
+    {
+        UnitState friendly = SnapshotFactory.Unit("friendly-a", "node-player", "side-a", 1, 1);
+        UnitState other = SnapshotFactory.Unit("friendly-b", "node-player", "side-a", 3, 3);
+        var viewModel = new BattleMapViewModel(5, 5);
+        viewModel.ApplySnapshot(SnapshotFactory.Create(0, [friendly, other]));
+        viewModel.Markers.Single(marker => marker.UnitId == "friendly-a").SetScreenPosition(10, 10);
+        viewModel.Markers.Single(marker => marker.UnitId == "friendly-b").SetScreenPosition(100, 100);
+        IReadOnlyList<string>? selected = null;
+        viewModel.UnitsSelected += (_, unitIds) => selected = unitIds;
+
+        // 锚点 (10,10) 在矩形 [16,26]×[0,20] 之外，但兵牌矩形相交 → 命中（N4）。
+        viewModel.SelectUnitsInScreenRect(16, 0, 26, 20);
+
+        Assert.Equal(["friendly-a"], selected);
+        Assert.True(viewModel.Markers.Single(marker => marker.UnitId == "friendly-a").IsSelected);
+        Assert.False(viewModel.Markers.Single(marker => marker.UnitId == "friendly-b").IsSelected);
+    }
+
+    [Fact]
     public void RefreshPositions_ProjectsWorldToScreen()
     {
         UnitState friendly = SnapshotFactory.Unit("friendly-1", "node-player", "side-a", 2, 1);
