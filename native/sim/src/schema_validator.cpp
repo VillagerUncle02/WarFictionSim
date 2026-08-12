@@ -5,9 +5,12 @@
 // 本文件只负责调用、收集与排序，不引入任何不确定来源。
 
 // 必须先于任何 nlohmann 头文件定义：nlohmann 默认把 JSON_ASSERT 映射为
-// assert()（Debug 下畸形 Schema 直接中止进程，Release 下为未定义行为）。
-// 覆盖为抛异常后，畸形 Schema 在 Debug/Release 下统一以异常形式暴露，
-// 由调用方转换为结构化 SCHEMA_INVALID（宪法第 12/17 条，PR #107 review F1）。
+// assert()（Debug 下中止进程，Release 下为未定义行为）。覆盖为抛异常后，
+// 仅保护本编译单元内 nlohmann/json.hpp 的内部断言。
+// 锁定版本 json-schema-validator（2.4.0）的解析器位于预编译 DLL，畸形 Schema
+// （如 required 非数组）由解析器抛 type_error；真正把畸形 Schema 统一映射为
+// 结构化 SCHEMA_INVALID 的是下方 try/catch 的异常转换（宪法第 12/17 条，
+// PR #107 review F1/F3）。
 #include <stdexcept>
 
 #define JSON_ASSERT(x)                                    \
@@ -21,6 +24,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <new>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -53,6 +57,9 @@ SchemaFileResult load_schema_file(const std::filesystem::path& schema_path) {
         return {"", "", std::move(schema)};
     } catch (const nlohmann::json::parse_error& error) {
         return {"INVALID_JSON", std::string("Schema 不是合法 JSON: ") + error.what(), nlohmann::json{}};
+    } catch (const std::bad_alloc&) {
+        // 内存耗尽属内部故障，不得伪装成"非法数据"，重新抛出以便调用方定位（宪法第 17 条）。
+        throw;
     } catch (const std::exception& error) {
         return {"SCHEMA_INVALID", std::string("Schema 解析失败: ") + error.what(), nlohmann::json{}};
     }
@@ -64,6 +71,9 @@ std::vector<SchemaViolation> SchemaFileResult::validate(const nlohmann::json& in
         nlohmann::json_schema::json_validator validator;
         validator.set_root_schema(schema);
         validator.validate(instance, handler);
+    } catch (const std::bad_alloc&) {
+        // 内存耗尽属内部故障，不得映射为数据错误，重新抛出以便调用方定位（宪法第 17 条）。
+        throw;
     } catch (const std::exception& error) {
         // Schema 本身非法（或校验器内部失败）：映射为可转换的异常，
         // 调用方转为 SCHEMA_INVALID，绝不跨边界抛出/崩溃。

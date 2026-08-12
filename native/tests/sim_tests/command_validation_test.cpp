@@ -44,6 +44,16 @@ const nlohmann::json& CommandSchemaJson() {
     return schema;
 }
 
+nlohmann::json LaxSchema() {
+    // 刻意不约束 schema_version 类型（无 type:integer 约束），让非法版本值
+    // 穿透 JSON Schema 层，直接命中语义层的取数防护（PR #107 review F2）。
+    return nlohmann::json{
+        {"schema_version", 1},
+        {"type", "object"},
+        {"properties", nlohmann::json::object()},
+    };
+}
+
 CommandValidationContext DefaultContext() {
     CommandValidationContext context;
     context.commander_node_id = "platoon-alpha";
@@ -255,4 +265,56 @@ TEST(WfsCommandValidationTest, MalformedSchemaReturnsStructuredError) {
     ASSERT_FALSE(result.ok());
     ASSERT_FALSE(result.errors.empty());
     EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+}
+
+TEST(WfsCommandValidationTest, MissingSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // 公开 json 重载 + 未约束版本类型的 Schema：schema_version 缺失时
+    // 必须返回结构化 SCHEMA_INVALID，不得让 nlohmann type_error 逃逸
+    // （PR #107 review F2）。
+    nlohmann::json command = ValidCommandJson();
+    command.erase("schema_version");
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(command, DefaultContext(), LaxSchema()));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, StringSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // schema_version 为字符串时同样走结构化错误路径，不抛异常（PR #107 review F2）。
+    nlohmann::json command = ValidCommandJson();
+    command["schema_version"] = "v1";
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(command, DefaultContext(), LaxSchema()));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, FloatSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // schema_version 为浮点（如 1.5）时同样返回结构化错误，不抛异常
+    // （PR #107 review F2）。
+    nlohmann::json command = ValidCommandJson();
+    command["schema_version"] = 1.5;
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(command, DefaultContext(), LaxSchema()));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, NonIntegerSchemaVersionInSchemaReturnsStructuredErrorWithoutThrow) {
+    // Schema 侧 schema_version 非整数时同样返回结构化错误，不抛异常
+    // （修复要求先检查两边字段，任一不满足即结构化报错）。
+    nlohmann::json lax_schema = LaxSchema();
+    lax_schema["schema_version"] = "v1";
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(ValidCommandJson(), DefaultContext(), lax_schema));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
 }

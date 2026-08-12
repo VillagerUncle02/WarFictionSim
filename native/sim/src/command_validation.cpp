@@ -261,6 +261,13 @@ CommandValidationResult validate_command(const nlohmann::json& command, const Co
     }
 
     // 数据契约：命令 schema_version 必须与 Schema 一致（T007 约定）。
+    // 公开 json 重载允许调用方传入未约束 schema_version 类型的 Schema，
+    // 取数前先确认两边均为整数，避免 nlohmann type_error 逃逸或浮点被
+    // 静默截断（PR #107 review F2）。
+    if (!command["schema_version"].is_number_integer() || !schema["schema_version"].is_number_integer()) {
+        return CommandValidationResult{
+            {Error("SCHEMA_INVALID", "schema_version 缺失或类型非法（命令与 Schema 均须为整数）")}};
+    }
     if (command["schema_version"].get<std::int64_t>() != schema["schema_version"].get<std::int64_t>()) {
         return CommandValidationResult{{Error("SCHEMA_VERSION_MISMATCH", "命令 schema_version 与 Schema 不一致")}};
     }
