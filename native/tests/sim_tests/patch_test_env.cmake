@@ -7,14 +7,21 @@
 # 因此 ENVIRONMENT_MODIFICATION 的两条 path_list_prepend 无法直接传透。本脚本
 # 在构建后把最终目录写入追加 include；该 include 由 CTest 按 TEST_INCLUDE_FILES
 # 顺序在测试发现之后执行，基于文档化的 TEST_LIST 变量重设属性为单值双条目。
+# VALIDATOR_DIR 为 json-schema-validator DLL 目录（T013/T014），可与 GTEST_DIR
+# 一样为空/静态，脚本按定义与否决定是否追加。
 
 if(NOT DEFINED TEST_INCLUDE_OUT OR NOT DEFINED TEST_LIST_NAME OR NOT DEFINED GTEST_DIR OR NOT DEFINED EXE_DIR)
     message(FATAL_ERROR
-        "patch_test_env.cmake requires TEST_INCLUDE_OUT/TEST_LIST_NAME/GTEST_DIR/EXE_DIR")
+        "patch_test_env.cmake requires TEST_INCLUDE_OUT/TEST_LIST_NAME/GTEST_DIR/EXE_DIR (VALIDATOR_DIR optional)")
+endif()
+
+set(_env_modifications "PATH=path_list_prepend:${GTEST_DIR};PATH=path_list_prepend:${EXE_DIR}")
+if(DEFINED VALIDATOR_DIR AND VALIDATOR_DIR)
+    string(APPEND _env_modifications ";PATH=path_list_prepend:${VALIDATOR_DIR}")
 endif()
 
 file(WRITE "${TEST_INCLUDE_OUT}"
     "if(DEFINED ${TEST_LIST_NAME} AND ${TEST_LIST_NAME})\n"
     "    set_tests_properties(\${${TEST_LIST_NAME}} PROPERTIES ENVIRONMENT_MODIFICATION\n"
-    "        \"PATH=path_list_prepend:${GTEST_DIR};PATH=path_list_prepend:${EXE_DIR}\")\n"
+    "        \"${_env_modifications}\")\n"
     "endif()\n")

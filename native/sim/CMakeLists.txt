@@ -1,17 +1,27 @@
 # sim —— C++20 确定性模拟核心（宪法第 15 条：无头可测）
-# T009–T011：STATIC 确定性核心源码（统一 RNG / 游戏时钟 / 事件命令队列）；
-# 继续链接 core_c（T008）。
+# T008–T014：STATIC 确定性核心源码（core_c / RNG / 时钟 / 队列 / C ABI /
+# 场景加载校验 / 命令双重校验）；JSON 与 JSON Schema 校验依赖按 vcpkg 清单
+# 锁定版本（宪法第 18 条）。
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(nlohmann_json_schema_validator CONFIG REQUIRED)
+
 add_library(sim STATIC
     src/rng.cpp
     src/clock.cpp
     src/queue.cpp
+    src/loader.cpp
+    src/schema_validator.cpp
 )
 
 target_include_directories(sim PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-target_link_libraries(sim PUBLIC core_c)
+target_link_libraries(sim PUBLIC
+    core_c
+    nlohmann_json::nlohmann_json
+    nlohmann_json_schema_validator::validator
+)
 
 if (MSVC)
     target_compile_options(sim PRIVATE /utf-8)
