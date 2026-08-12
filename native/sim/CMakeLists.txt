@@ -20,6 +20,7 @@ add_library(sim STATIC
     src/c_api.cpp
     src/sim_runtime.cpp
     src/ai/decision_log.cpp
+    src/ai/script_backend.cpp
     src/ai_inject.cpp
 )
 
