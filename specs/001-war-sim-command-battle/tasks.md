@@ -88,7 +88,7 @@ description: "Task list template for feature implementation"
 - [x] T030 [US1] 实现机动系统（sim/src/movement.cpp：路径移动、地形速度系数/通行限制、行军/战斗队形自动选择与切换耗时、烟幕区域遮蔽）
 - [x] T031 [US1] 实现战斗结算系统（sim/src/combat.cpp：动能/化学能穿深与伤害查表、过穿衰减、班组区域结算→个人防护衔接、自动目标选择/选弹与不匹配降级、压制量化、模块损伤、弃车与乘员/载员结算（FR-062））
 - [x] T032 [US1] 实现失联机制（sim/src/contact.cpp：失联概率统一 RNG、最后已知状态、恢复 60–180s、压制/失联/模块损伤复合状态取最严叠加）
-- [x] T033 [US1] 实现迷雾/情报识别系统（sim/src/intel.cpp：可视距离与观察能力、识别分档 T1–T3、记忆保留、最后动向、情报来源标注与过期）
+- [x] T033 [US1] 实现迷雾/情报识别系统（sim/src/intel.cpp：可视距离与观察能力、识别分档 T1–T3、记忆保留、最后动向、情报来源标注与过期）。待办登记：核心 intel to_json 补输出识别档位核心字段 observed_count/type_name/composition（US1 UI 第 2 轮审查 F5）。
 - [x] T034 [US1] 实现任务判定与事件上报（sim/src/mission_exec.cpp：确定性完成/失败判定、超时处置、失败后处置、持续任务循环、任务状态事件上报上级）
 - [x] T035 [US1] 实现侦察类任务判定机制（sim/src/recon_tasks.cpp：HIDDEN_RECON/INFILTRATE_RECON/OBSERVATION_POST/FIRE_RECON 判定机制实现，并按 CHK064 登记"实现阶段判定机制"待办）
 - [x] T036 [US1] 实现基础胜负判定（sim/src/outcome.cpp：关键目标/关键失败条件/时间上限、完成度加权、失败优先、部署超时兜底）
@@ -96,7 +96,7 @@ description: "Task list template for feature implementation"
 - [x] T038 [P] [US1] 创建连排级新手教程场景（data/scenarios/scn-tutorial-platoon.json：小规模战斗、目标/失败条件/时间上限、教程独立存档标识）
 - [ ] T039 [P] [US1] 实现主菜单与作战规模选择 UI（ui/src/MainMenu/：选择连排/营级与扮演节点、教程入口、新游戏/读档入口）
 - [ ] T040 [P] [US1] 实现 2D 兵牌地图视图（ui/src/BattleMap/：平移/缩放、迷雾生效、兵牌渲染、识别档位信息与来源标注显示、最后已知状态）
-- [ ] T041 [US1] 实现命令面板与三级校验提示（ui/src/CommandPanel/：点选/框选目标、类型/完成条件/优先级/时限、错误/警告/建议内嵌提示、全键盘可操作）
+- [ ] T041 [US1] 实现命令面板与三级校验提示（ui/src/CommandPanel/：点选/框选目标、类型/完成条件/优先级/时限、错误/警告/建议内嵌提示、全键盘可操作）。待办登记：FR-045 地图点选/区域目标框选（point/zone 目标）仍未实现，当前为表单式下拉/坐标输入（US1 UI 第 2 轮审查 F12）。
 - [ ] T042 [US1] 实现暂停/加速与事件日志面板（ui/src/GameControls/ + EventLogPanel/：1x/2x/4x/8x 档位与暂停独立状态、日志回看/过滤/搜索、关键事件置顶）
 - [ ] T043 [US1] 实现 UI↔核心互操作封装（ui/src/Interop/：P/Invoke 封装 wfs_sim_*、快照只读消费、命令注入为唯一写路径，见 contracts/sim-c-api.md）
 - [ ] T044 [US1] 集成连排级闭环端到端验证（quickstart §3.1–3.3：同输入哈希一致、命令链路、战斗结算、无头 CLI 与 UI 状态哈希一致）
@@ -245,7 +245,7 @@ description: "Task list template for feature implementation"
 - [ ] T100 [P] [US3] 实现战场抢修（sim/src/repair.cpp：修复模块损伤与未摧毁载具击穿、无法恢复未受损状态、彻底修复需维修设施/车辆，测试 tests/sim_tests/repair_test.cpp，FR-078）
 - [ ] T101 [US3] 实现油料与给养补给（扩展 sim/src/logistics.cpp：弹药/油料/给养三类按缺额计算补充量与耗时、油料耗尽无法机动、给养长期缺乏降低作战状态，并入 T056/T062 验收，FR-066）
 - [ ] T102 [P] [US1] 实现构筑工事系统（sim/src/fortify.cpp：构筑时间、效果叠加、依托建筑构筑、专用工事"适用武器类别"，测试 tests/sim_tests/fortify_test.cpp，FR-067）
-- [ ] T103 [P] [US3] 实现中途切换扮演节点机制（sim/src/node_switch.cpp：切换原子操作、原节点立即 AI 接管、新节点情报按 FR-028 同步与授权/任务摘要交接，测试 tests/cli_tests/test_node_switch.jsonl，FR-002）
+- [ ] T103 [P] [US3] 实现中途切换扮演节点机制（sim/src/node_switch.cpp：切换原子操作、原节点立即 AI 接管、新节点情报按 FR-028 同步与授权/任务摘要交接，测试 tests/cli_tests/test_node_switch.jsonl，FR-002）。待办登记：v1 开局按玩家选择覆盖扮演节点（FR-001/002）需核心节点参数通道，与中途切换共用（US1 UI 第 2 轮审查 F6）。
 
 ---
 

@@ -143,10 +143,10 @@ public static class MapVisibilityModel
     /// <returns>识别档位裁剪后的显示名。</returns>
     private static string BuildDisplayName(IntelRecordState intel, UnitState unit)
     {
-        // TODO(F5/核心 T058 后置)：native intel_records 快照尚未输出
+        // TODO(F5/核心 T033 后置)：native intel_records 快照尚未输出
         // observed_count/type_name/composition 档位化字段，当前只能显示
         // 可得信息（不明步兵/载具、数据目录 type id），核心补齐字段后
-        // 下方分支自动生效；不编造数量/类型/构成。
+        // 下方分支自动生效；不编造数量/类型/构成（tasks.md T033 已登记）。
         return intel.Tier switch
         {
             IntelTier.T1 when intel.ObservedCount is { } count =>
