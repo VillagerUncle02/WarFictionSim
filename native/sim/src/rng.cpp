@@ -33,23 +33,10 @@ Rng::Rng(std::uint64_t seed, std::uint64_t stream) {
 
 Rng::Rng(const State& state) {
     ValidateStream(state.stream);
-    state_ = state.state;
-    stream_ = state.stream;
+    pcg_ = detail::Pcg32Random{state.state, state.stream};
 }
 
-namespace {
-// PCG32 参考实现常量（与 vendor 头文件一致，集中命名便于确定性审查）。
-constexpr std::uint64_t kPcgMultiplier = 6364136223846793005ULL;
-constexpr std::uint32_t kPcgRotMask = 31U;
-}  // namespace
-
-std::uint32_t Rng::next() noexcept {
-    const std::uint64_t oldstate = state_;
-    state_ = (oldstate * kPcgMultiplier) + stream_;
-    const std::uint32_t xorshifted = static_cast<std::uint32_t>(((oldstate >> 18U) ^ oldstate) >> 27U);
-    const std::uint32_t rot = static_cast<std::uint32_t>(oldstate >> 59U);
-    return (xorshifted >> rot) | (xorshifted << ((0U - rot) & kPcgRotMask));
-}
+std::uint32_t Rng::next() noexcept { return detail::pcg32_random_r(pcg_); }
 
 std::uint32_t Rng::next_bounded(std::uint32_t bound) noexcept {
     if (bound == 0U) {
@@ -65,20 +52,16 @@ std::uint32_t Rng::next_bounded(std::uint32_t bound) noexcept {
 }
 
 Rng::State Rng::state() const noexcept {
-    return State{state_, stream_};
+    return State{pcg_.state, pcg_.inc};
 }
 
 void Rng::restore(const State& state) {
     ValidateStream(state.stream);
-    state_ = state.state;
-    stream_ = state.stream;
+    pcg_ = detail::Pcg32Random{state.state, state.stream};
 }
 
 void Rng::reset(std::uint64_t seed, std::uint64_t stream) {
-    detail::Pcg32Random pcg{};
-    detail::pcg32_srandom_r(pcg, seed, stream);
-    state_ = pcg.state;
-    stream_ = pcg.inc;
+    detail::pcg32_srandom_r(pcg_, seed, stream);
 }
 
 }  // namespace wfs::sim

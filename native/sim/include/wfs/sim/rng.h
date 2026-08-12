@@ -23,6 +23,8 @@
 
 #include <cstdint>
 
+#include "wfs/sim/detail/pcg32.hpp"
+
 namespace wfs::sim {
 
 class Rng {
@@ -47,8 +49,9 @@ class Rng {
     void reset(std::uint64_t seed, std::uint64_t stream);
 
    private:
-    std::uint64_t state_;
-    std::uint64_t stream_;
+    // 唯一实现：PCG-XSH-RR 核心只存在于 vendor 头文件（detail/pcg32.hpp），
+    // 本类持有其状态并按需调用，避免确定性算法双实现漂移（审查 F1）。
+    detail::Pcg32Random pcg_;
 };
 
 }  // namespace wfs::sim
