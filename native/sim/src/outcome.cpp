@@ -155,6 +155,12 @@ OutcomeConfig OutcomeConfig::FromScenario(
         throw std::invalid_argument(
             "outcome 配置非法（deployment_enabled 必须同时配置 deployment_deadline_ticks 与 deployment_zone）");
     }
+    // F2：部署区必须存在于 zone_centers，否则 FindZone 返回 nullptr → 部署
+    // 超时兜底被静默禁用；与 M4 同语义显式拒绝（宪法第 17 条）。
+    if (config.deployment_enabled && !config.zone_centers.contains(config.deployment_zone)) {
+        throw std::invalid_argument(
+            "outcome 配置非法（deployment_zone 不存在于 outcome.zones: " + config.deployment_zone + "）");
+    }
     if (!config.is_valid()) {
         throw std::invalid_argument("outcome 配置非法（partial_victory_threshold 须在 [0,1]）");
     }

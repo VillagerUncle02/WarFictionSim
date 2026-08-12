@@ -292,8 +292,7 @@ TEST(WfsSaveTest, LegacyV1SaveWithoutSideKeepsFactionSemantics) {
     Handle restored;
     ASSERT_NE(restored.get(), nullptr);
     EXPECT_EQ(wfs_sim_load_save(restored.get(), legacy_path.string().c_str()), WFS_SIM_RESULT_OK);
-    EXPECT_EQ(StateHash(restored.get()), hash_before)
-        << "旧存档加载后 side 必须按 node_id 兜底（状态哈希语义一致）";
+    EXPECT_EQ(StateHash(restored.get()), hash_before) << "旧存档加载后 side 必须按 node_id 兜底（状态哈希语义一致）";
 
     // 敌我语义显式断言：每个单位的 side 非空且等于其 node_id（旧场景分组）。
     const nlohmann::json snapshot = SnapshotJson(restored.get());

@@ -252,11 +252,10 @@ TEST(WfsOutcomeTest, DeploymentEnabledRequiresZoneInZoneCenters) {
                                        {"deployment_deadline_ticks", 100U},
                                        {"deployment_zone", "zone-start"},
                                        {"zones", valid_zones}};
-    EXPECT_THROW(wfs::sim::OutcomeConfig::FromScenario(nlohmann::json{
-                     {"outcome",
-                      nlohmann::json{{"deployment_enabled", true},
-                                     {"deployment_deadline_ticks", 100U},
-                                     {"deployment_zone", "zone-typo"}}}}),
+    EXPECT_THROW(wfs::sim::OutcomeConfig::FromScenario(
+                     nlohmann::json{{"outcome", nlohmann::json{{"deployment_enabled", true},
+                                                               {"deployment_deadline_ticks", 100U},
+                                                               {"deployment_zone", "zone-typo"}}}}),
                  std::invalid_argument);
     EXPECT_NO_THROW(wfs::sim::OutcomeConfig::FromScenario(nlohmann::json{{"outcome", valid_outcome}}));
 }

@@ -217,7 +217,9 @@ inline void from_json(const nlohmann::json& json, RuntimeUnitState& unit) {
     unit.id = json.at("id").get<std::string>();
     unit.type = json.at("type").get<std::string>();
     unit.node_id = json.at("node_id").get<std::string>();
-    unit.side = json.value("side", std::string());
+    // F1：旧存档（无 side 字段）加载后必须按 node_id 兜底阵营，否则 side==""
+    // 会使敌我判定恒同阵营（战斗/侦察/任务/胜负静默失效）；node_id 已先行解析。
+    unit.side = json.value("side", unit.node_id);
     unit.x = json.at("x").get<double>();
     unit.y = json.at("y").get<double>();
     unit.formation = json.at("formation").get<model::Formation>();
