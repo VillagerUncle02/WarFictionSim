@@ -99,7 +99,7 @@ description: "Task list template for feature implementation"
 - [x] T041 [US1] 实现命令面板与三级校验提示（ui/src/CommandPanel/：点选/框选目标、类型/完成条件/优先级/时限、错误/警告/建议内嵌提示、全键盘可操作）。待办登记：FR-045 地图点选/区域目标框选（point/zone 目标）仍未实现，当前为表单式下拉/坐标输入（US1 UI 第 2 轮审查 F12）。
 - [x] T042 [US1] 实现暂停/加速与事件日志面板（ui/src/GameControls/ + EventLogPanel/：1x/2x/4x/8x 档位与暂停独立状态、日志回看/过滤/搜索、关键事件置顶）。待办登记：事件查询的"按单位筛选"现为 message 子串匹配，结构化 unit 字段需核心 SimEvent 增维并同步快照/存档（US1 UI 第 3 轮审查 N3）。
 - [x] T043 [US1] 实现 UI↔核心互操作封装（ui/src/Interop/：P/Invoke 封装 wfs_sim_*、快照只读消费、命令注入为唯一写路径，见 contracts/sim-c-api.md）
-- [ ] T044 [US1] 集成连排级闭环端到端验证（quickstart §3.1–3.3：同输入哈希一致、命令链路、战斗结算、无头 CLI 与 UI 状态哈希一致）
+- [x] T044 [US1] 集成连排级闭环端到端验证（quickstart §3.1–3.3：同输入哈希一致、命令链路、战斗结算、无头 CLI 与 UI 状态哈希一致）
 
 **Checkpoint**: 至此 User Story 1 可独立完整演示（MVP：基础战斗可玩、可暂停/加速、可存档读档基础路径）
 
