@@ -9,6 +9,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- T044 E2E：构建后把 sim_headless.exe 复制到测试输出目录
+         （规则在 app/Directory.Build.targets，依赖 DLL 同步复制）。 -->
+    <WfsCopyHeadlessExe>true</WfsCopyHeadlessExe>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
