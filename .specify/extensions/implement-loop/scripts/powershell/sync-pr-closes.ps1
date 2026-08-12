@@ -51,7 +51,7 @@ if (-not $PR) {
 }
 
 # 已完成任务 → issue 映射
-$taskIds = @(Get-NewCompletedTaskIds -TasksFile $TasksFile -RepoRoot $repoRoot)
+$taskIds = @(Get-TaskIdsFromTasksFile -TasksFile $TasksFile -CompletedOnly)
 if ($taskIds.Count -eq 0) {
     Write-Host "tasks.md 中没有已完成（[X]）任务，无需同步 Closes。"
     exit 0
