@@ -16,6 +16,7 @@ add_library(sim STATIC
     src/parallel.cpp
     src/loader.cpp
     src/command_validation.cpp
+    src/mission_registry.cpp
     src/schema_validator.cpp
     src/c_api.cpp
     src/sim_runtime.cpp

@@ -23,6 +23,7 @@ add_executable(sim_tests
     command_model_test.cpp
     combat_model_test.cpp
     terrain_model_test.cpp
+    mission_registry_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)
