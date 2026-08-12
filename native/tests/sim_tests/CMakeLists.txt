@@ -25,6 +25,7 @@ add_executable(sim_tests
     terrain_model_test.cpp
     mission_registry_test.cpp
     data_library_test.cpp
+    tutorial_scenario_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)

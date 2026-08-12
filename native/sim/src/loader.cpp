@@ -171,6 +171,10 @@ bool ExtractScenarioData(const nlohmann::json& root, const detail::SchemaFileRes
     }
 
     ExtractObjectiveList(root["objectives"], "目标", unit_ids, zone_ids, scenario.objectives, issues);
+    if (root.contains("failure_conditions")) {
+        ExtractObjectiveList(root["failure_conditions"], "失败条件", unit_ids, zone_ids, scenario.failure_conditions,
+                             issues);
+    }
 
     if (!scenario.player_node_id.empty()) {
         const bool exists = std::any_of(scenario.units.begin(), scenario.units.end(), [&](const ScenarioUnit& unit) {

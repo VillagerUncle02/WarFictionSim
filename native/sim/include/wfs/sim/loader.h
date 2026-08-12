@@ -64,6 +64,12 @@ struct Scenario {
     std::vector<std::string> zones;
     std::vector<ScenarioUnit> units;
     std::vector<ScenarioObjective> objectives;
+    // T038：关键失败条件、时间上限与教程独立存档标识
+    // （FR-043；contracts/save-format.md：教程不写入主游戏存档）。
+    std::uint64_t time_limit_ticks = 0U;  // 0 = 未设置时间上限。
+    std::vector<ScenarioObjective> failure_conditions;
+    bool tutorial = false;
+    std::string save_slot;  // 空 = 主游戏存档；非空 = 独立存档槽位。
     // 原始 JSON 纯数据：快照/存档/决策日志可直接复用，不跨语言共享对象。
     nlohmann::json raw = nlohmann::json::object();
 };

@@ -56,6 +56,48 @@
       "type": "integer",
       "minimum": 0
     },
+    "time_limit_ticks": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tutorial": {
+      "type": "boolean"
+    },
+    "save_slot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "failure_conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "target_ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "unit",
+              "zone"
+            ]
+          },
+          "target_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "duration_ticks": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
     "zones": {
       "type": "array",
       "items": {
