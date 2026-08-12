@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "LLDB: sim_headless (Debug)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/native/build/clang-cl-debug/sim/sim_headless.exe",
+      "args": [
+        "run",
+        "--scenario",
+        "${workspaceFolder}/data/scenarios/scn-battalion-v1.json",
+        "--seed", "42",
+        "--ai-backend", "script"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "LLDB: sim_tests (Debug)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/native/build/clang-cl-debug/tests/sim_tests/sim_tests.exe",
+      "args": ["--gtest_filter=*"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": ".NET: WarFictionSim.Ui (Debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-ui",
+      "program": "${workspaceFolder}/app/ui/src/WarFictionSim.Ui/bin/Debug/net10.0-windows/WarFictionSim.Ui.dll",
+      "cwd": "${workspaceFolder}/app/ui/src/WarFictionSim.Ui"
+    },
+    {
+      "name": ".NET: WarFictionSim.Tools (Debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-tools",
+      "program": "${workspaceFolder}/app/tools/src/WarFictionSim.Tools/bin/Debug/net10.0/WarFictionSim.Tools.dll",
+      "cwd": "${workspaceFolder}/app/tools/src/WarFictionSim.Tools"
+    }
+  ]
+}

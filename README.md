@@ -13,6 +13,8 @@
 ## 技术栈（规划）
 
 - 语言：C / C++（确定性模拟核心）、C#（界面与工具）
+- 构建：C/C++ 使用 CMake + Ninja + clang-cl + vcpkg；C# 使用 .NET SDK（dotnet）
+- 开发环境：VS Code + clangd + CodeLLDB + C# Dev Kit
 - 版本管理：Git + GitHub
 - CI/CD：GitHub Actions（构建、测试、Windows 打包）
 - AI 接入：云端 API / 本地模型 / 无 AI 脚本模式
@@ -20,12 +22,48 @@
 ## 项目结构
 
 ```
+app/          C# 侧：UI 与工具（WPF / 控制台，由 dotnet 构建）
+  WarFictionSim.sln
+  ui/         游戏界面（WPF）
+  tools/      数据编辑与校验工具
+  tests/      C# 单元测试
+native/       C/C++ 侧：确定性模拟核心（由 CMake 构建）
+  CMakeLists.txt / CMakePresets.json
+  core_c/     C11 底层数学库
+  sim/        C++20 确定性模拟核心（含 C ABI 桥接 sim_core.dll）
+  tests/      C++ 单元测试与黄金测试（CTest / GoogleTest）
+contracts/    跨语言契约：JSON Schema 与 C ABI 头（两侧唯一依赖）
+data/         剧本与单位/地形数据
+docs/         设计参考与归档
 .agents/     Speckit 代理技能定义
 .claude/     Claude 代理配置
 .codex/      Codex 代理配置
 .specify/    Spec-kit 工作流（模板、宪法、脚本、扩展）
-docs/        设计参考与归档（DeepSeek 资料、spec 输入、设计存档）
+specs/        功能规格（spec / plan / tasks）
 ```
+
+## 本地构建
+
+原生侧（C/C++）：
+
+```powershell
+# 先设置 vcpkg 根目录（本机示例）
+$env:VCPKG_ROOT = 'C:\Users\ASUS\vcpkg'
+
+cd native
+cmake --preset clang-cl-debug     # 或 clang-cl-release
+cmake --build --preset clang-cl-debug
+ctest --preset clang-cl-debug
+```
+
+C# 侧（UI / 工具）：
+
+```powershell
+dotnet build app/WarFictionSim.sln -c Debug
+dotnet test  app/WarFictionSim.sln -c Debug --no-build
+```
+
+工具链细节与注意事项见 [docs/toolchain.md](docs/toolchain.md)。
 
 ## 开发工作流
 
@@ -33,4 +71,5 @@ docs/        设计参考与归档（DeepSeek 资料、spec 输入、设计存�
 
 ## 当前状态
 
-项目脚手架阶段：spec-kit 工作流已就绪，宪法已生效（v2.0.0），尚未开始代码实现。
+项目脚手架阶段：spec-kit 工作流已就绪，宪法已生效（v2.0.0）；C/C++ 与 C# 已按
+`native/` + `app/` 分离，正在按任务合入基础功能。

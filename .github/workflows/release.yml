@@ -47,16 +47,51 @@ jobs:
           }
           Write-Host "vcpkg ready: $vcpkgDir @ c4d9956"
 
-      - name: Configure & build Release
-        run: |
-          cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-          cmake --build build --config Release --parallel
-          dotnet publish ui/ -c Release -o publish/
+      - name: Locate toolchain (clang-cl / ninja / CMake 3.31)
         shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $addPath = @()
+          foreach ($cand in @((Join-Path $vsPath 'VC\Tools\Llvm\x64\bin'), 'C:\Program Files\LLVM\bin')) {
+            if (Test-Path $cand) { $addPath += $cand }
+          }
+          $ninjaDir = Join-Path $vsPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja'
+          if (Test-Path $ninjaDir) { $addPath += $ninjaDir }
+          if ($addPath.Count -eq 0) { throw 'clang-cl 未找到（VS C++ Clang 工具组件缺失）' }
+          "PATH=$($addPath -join ';');$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $vsCmake = Join-Path $vsPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+          if (Test-Path $vsCmake) {
+            "CMAKE_BIN=$vsCmake" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            "CMAKE_BIN=cmake" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          "VCPKG_ROOT=C:/vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Configure & build native (clang-cl Release)
+        shell: pwsh
+        working-directory: native
+        run: |
+          & $env:CMAKE_BIN --preset clang-cl-release
+          if ($LASTEXITCODE -ne 0) { throw "CMake 配置失败" }
+          & $env:CMAKE_BIN --build --preset clang-cl-release
+          if ($LASTEXITCODE -ne 0) { throw "C++ 构建失败" }
+
+      - name: Publish C# app
+        shell: pwsh
+        run: |
+          dotnet publish app/ui/src/WarFictionSim.Ui -c Release -o publish/
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失败" }
 
       - name: Package Windows build
-        run: Compress-Archive -Path build\Release\*, publish\* -DestinationPath wfs-windows.zip -Force
         shell: pwsh
+        run: |
+          $native = 'native/build/clang-cl-release'
+          if (Test-Path $native) {
+            Compress-Archive -Path "$native\**", 'publish\*' -DestinationPath wfs-windows.zip -Force
+          } else {
+            Compress-Archive -Path 'publish\*' -DestinationPath wfs-windows.zip -Force
+          }
 
       - name: Create GitHub Release
         env:

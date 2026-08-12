@@ -1,0 +1,68 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "clang-cl-debug",
+      "displayName": "clang-cl Debug (Ninja)",
+      "description": "Debug 构建：含 DWARF 调试信息，供 clangd / CodeLLDB 使用",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/clang-cl-debug",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_MANIFEST_MODE": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    },
+    {
+      "name": "clang-cl-release",
+      "displayName": "clang-cl Release (Ninja)",
+      "description": "Release 构建（确定性产物，CI 使用）",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/clang-cl-release",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_MANIFEST_MODE": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "clang-cl-debug",
+      "configurePreset": "clang-cl-debug"
+    },
+    {
+      "name": "clang-cl-release",
+      "configurePreset": "clang-cl-release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "clang-cl-debug",
+      "configurePreset": "clang-cl-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "clang-cl-release",
+      "configurePreset": "clang-cl-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+# 项目级 clangd 配置：编译数据库来自 native 的 Ninja 构建目录（clang-cl）。
+# 默认使用 Debug preset；若只构建了 Release，请把路径改为 clang-cl-release。
+CompileFlags:
+  CompilationDatabase: native/build/clang-cl-debug

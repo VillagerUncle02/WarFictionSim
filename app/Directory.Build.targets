@@ -1,0 +1,27 @@
+<Project>
+  <!-- 原生 DLL 产物契约：C# 工程构建后从 native 构建目录复制 sim_core 等 DLL。
+       CI 中 native job 上传的产物按相同相对路径解压，本规则本地/CI 通用。
+       未找到原生 DLL 时跳过（骨架期 C ABI 尚未合入），不阻断 C# 构建。 -->
+  <PropertyGroup>
+    <WfsNativeConfig>clang-cl-$(Configuration.ToLower())</WfsNativeConfig>
+    <WfsNativeBuildDir>$(MSBuildThisFileDirectory)..\native\build\$(WfsNativeConfig)</WfsNativeBuildDir>
+  </PropertyGroup>
+  <Target Name="WfsCopyNativeDlls" AfterTargets="Build" Condition="'$(WfsCopyNativeDlls)' != 'false'">
+    <ItemGroup>
+      <WfsNativeDll Include="$(WfsNativeBuildDir)\**\*.dll" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(WfsNativeDll)"
+      DestinationFolder="$(OutDir)"
+      SkipUnchangedFiles="true"
+      Condition="'@(WfsNativeDll)' != ''" />
+    <Message
+      Importance="normal"
+      Text="WFS: 已复制 @(WfsNativeDll->Count()) 个原生 DLL 到 $(OutDir)"
+      Condition="'@(WfsNativeDll)' != ''" />
+    <Message
+      Importance="normal"
+      Text="WFS: 未找到原生 DLL（$(WfsNativeBuildDir)），跳过复制。先执行 cmake --preset $(WfsNativeConfig)"
+      Condition="'@(WfsNativeDll)' == ''" />
+  </Target>
+</Project>

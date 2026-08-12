@@ -3,34 +3,22 @@ name: CI
 on:
   push:
     paths:
-      - 'sim/**'
-      - 'core_c/**'
-      - 'ui/**'
-      - 'tools/**'
-      - 'tests/**'
-      - 'data/**'
+      - 'native/**'
+      - 'app/**'
       - 'contracts/**'
-      - 'CMakeLists.txt'
-      - 'vcpkg.json'
-      - '*.sln'
+      - 'data/**'
       - 'Directory.Build.*'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/*.yml'
       - '.clang-format'
       - '.editorconfig'
   pull_request:
     paths:
-      - 'sim/**'
-      - 'core_c/**'
-      - 'ui/**'
-      - 'tools/**'
-      - 'tests/**'
-      - 'data/**'
+      - 'native/**'
+      - 'app/**'
       - 'contracts/**'
-      - 'CMakeLists.txt'
-      - 'vcpkg.json'
-      - '*.sln'
+      - 'data/**'
       - 'Directory.Build.*'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/*.yml'
       - '.clang-format'
       - '.editorconfig'
 
@@ -53,12 +41,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./scripts/check-pr-order.ps1 -Repo ${{ github.repository }} -PRNumber ${{ github.event.pull_request.number }}
-  build-test:
-    name: Build & Test (Windows)
-    # 固定镜像而非 windows-latest：latest 会滚动升级导致构建环境漂移，
-    # 破坏"同一提交产生相同产物"（宪法第 18 条）。如需新镜像可显式升级到 windows-2025。
-    runs-on: windows-2022
+          # 默认忽略前序 PR 已合并检查（链式多 PR 并行时不阻断后续 PR CI）；
+          # 如需强制按序合并，移除 -IgnoreOrder。
+          ./scripts/check-pr-order.ps1 -Repo ${{ github.repository }} -PRNumber ${{ github.event.pull_request.number }} -IgnoreOrder
+
+  native-build:
+    name: Native C/C++ (Ninja + clang-cl)
+    runs-on: windows-2022   # 固定镜像而非 windows-latest：latest 会滚动升级导致构建环境漂移
     steps:
       - name: Print runner image version（可复现性审计）
         run: |
@@ -68,18 +57,10 @@ jobs:
 
       - uses: actions/checkout@v5
 
-      - name: Setup .NET SDK (10.0 LTS)
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'   # 锁大版本；如需要更强稳定可改为精确 build 号
-
-      # 固定 vcpkg 到 vcpkg.json builtin-baseline 对应提交（宪法第 18 条）：
-      # 预装版本或全新克隆都强制检出到 baseline 提交，保证可复现。
+      # 固定 vcpkg 到 vcpkg.json builtin-baseline 对应提交（宪法第 18 条）
       - name: Setup vcpkg (manifest 锁版本)
         shell: pwsh
         run: |
-          # runner 镜像可能预装 C:/vcpkg（旧提交），必须强制对齐到 vcpkg.json 的
-          # builtin-baseline 提交；不存在时才全新克隆（宪法第 18 条）。
           $vcpkgDir = 'C:/vcpkg'
           if (-not (Test-Path "$vcpkgDir/.git")) {
             git clone https://github.com/microsoft/vcpkg $vcpkgDir
@@ -99,64 +80,58 @@ jobs:
           }
           Write-Host "vcpkg ready: $vcpkgDir @ c4d9956"
 
-      - name: Configure CMake (vcpkg manifest 锁版本)
+      - name: Locate toolchain (clang-cl / ninja / CMake 3.31)
         shell: pwsh
         run: |
-          if (Test-Path CMakeLists.txt) {
-            cmake -B build -S . -DVCPKG_MANIFEST_MODE=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-            if ($LASTEXITCODE -ne 0) { throw "CMake 配置失败" }
-          } else {
-            Write-Host "跳过 CMake 配置（无 CMakeLists.txt）"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $addPath = @()
+          foreach ($cand in @((Join-Path $vsPath 'VC\Tools\Llvm\x64\bin'), 'C:\Program Files\LLVM\bin')) {
+            if (Test-Path $cand) { $addPath += $cand }
           }
+          $ninjaDir = Join-Path $vsPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja'
+          if (Test-Path $ninjaDir) { $addPath += $ninjaDir }
+          if ($addPath.Count -eq 0) { throw 'clang-cl 未找到（VS C++ Clang 工具组件缺失）' }
+          "PATH=$($addPath -join ';');$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $vsCmake = Join-Path $vsPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+          if (Test-Path $vsCmake) {
+            $cmakeDir = Split-Path $vsCmake
+            "CMAKE_BIN=$vsCmake" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "CTEST_BIN=$cmakeDir\ctest.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            "CMAKE_BIN=cmake" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "CTEST_BIN=ctest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          "VCPKG_ROOT=C:/vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Configure CMake (clang-cl Release)
+        shell: pwsh
+        working-directory: native
+        run: |
+          & $env:CMAKE_BIN --preset clang-cl-release
+          if ($LASTEXITCODE -ne 0) { throw "CMake 配置失败" }
 
       - name: Build C++ core & C11 math lib (Release)
         shell: pwsh
+        working-directory: native
         run: |
-          if (Test-Path build/CMakeCache.txt) {
-            cmake --build build --config Release --parallel
-            if ($LASTEXITCODE -ne 0) { throw "C++ 构建失败" }
-          } else {
-            Write-Host "跳过 C++ 构建（尚未配置）"
-          }
+          & $env:CMAKE_BIN --build --preset clang-cl-release
+          if ($LASTEXITCODE -ne 0) { throw "C++ 构建失败" }
 
       - name: Run C++ unit + golden tests (CTest)
         shell: pwsh
+        working-directory: native
         run: |
-          if (Test-Path build) {
-            ctest --test-dir build -C Release --output-on-failure
-            if ($LASTEXITCODE -ne 0) { throw "CTest 失败" }
-          } else {
-            Write-Host "跳过 CTest（尚未配置）"
-          }
+          & $env:CTEST_BIN --preset clang-cl-release
+          if ($LASTEXITCODE -ne 0) { throw "CTest 失败" }
 
-      - name: Build C# UI & tools
-        shell: pwsh
-        run: |
-          if (Test-Path WarFictionSim.sln) {
-            dotnet build WarFictionSim.sln -c Release
-            if ($LASTEXITCODE -ne 0) { throw "dotnet 构建失败" }
-          } else {
-            Write-Host "跳过 dotnet 构建（无解决方案）"
-          }
-
-      - name: Run C# tests (xUnit)
-        shell: pwsh
-        run: |
-          if (Test-Path WarFictionSim.sln) {
-            dotnet test WarFictionSim.sln -c Release --no-build
-            if ($LASTEXITCODE -ne 0) { throw "dotnet 测试失败" }
-          } else {
-            Write-Host "跳过 dotnet 测试"
-          }
-
-      # 云端 AI 不进 CI：测试一律用无 AI 脚本模式（确定性），
-      # 云端后端集成由本地/手动验证，避免密钥与不确定性进入流水线。
       - name: Headless golden determinism (1 vs 4 threads)
         shell: pwsh
         run: |
-          if ((Test-Path build\Release\sim_headless.exe) -and (Test-Path data/scenarios/scn-battalion-v1.json)) {
-            $h1 = & build\Release\sim_headless.exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --threads 1 --hash
-            $h4 = & build\Release\sim_headless.exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --threads 4 --hash
+          $exe = 'native/build/clang-cl-release/sim/sim_headless.exe'
+          if ((Test-Path $exe) -and (Test-Path data/scenarios/scn-battalion-v1.json)) {
+            $h1 = & $exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --threads 1 --hash
+            $h4 = & $exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --threads 4 --hash
             if ($h1 -ne $h4) { throw "Thread determinism broken: $h1 != $h4" }
             Write-Host "Thread determinism OK: $h1"
           } else {
@@ -166,63 +141,120 @@ jobs:
       - name: Headless integration (script AI full run + save roundtrip)
         shell: pwsh
         run: |
-          if ((Test-Path build\Release\sim_headless.exe) -and (Test-Path data/scenarios/scn-battalion-v1.json)) {
-            & build\Release\sim_headless.exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --ai-backend script --out full.jsonl
-            & build\Release\sim_headless.exe save --scenario data/scenarios/scn-battalion-v1.json --seed 42 --out save.wfs
-            & build\Release\sim_headless.exe load-save --path save.wfs --verify-hash
+          $exe = 'native/build/clang-cl-release/sim/sim_headless.exe'
+          if ((Test-Path $exe) -and (Test-Path data/scenarios/scn-battalion-v1.json)) {
+            & $exe run --scenario data/scenarios/scn-battalion-v1.json --seed 42 --ai-backend script --out full.jsonl
+            & $exe save --scenario data/scenarios/scn-battalion-v1.json --seed 42 --out save.wfs
+            & $exe load-save --path save.wfs --verify-hash
           } else {
             Write-Host "跳过无头集成验证（sim_headless 或剧本尚未实现）"
           }
 
-      - name: Lint & style checks（宪法代码风格）
+      - name: Lint & style checks（C/C++）
         shell: pwsh
         run: |
-          # C++：先收集源码列表；为空时跳过（避免 clang-format 无参数从 stdin 挂起）
-          $cppAll = @(Get-ChildItem sim,core_c -Recurse -Include *.cpp,*.h,*.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
+          $cppAll = @(Get-ChildItem native/sim,native/core_c -Recurse -Include *.cpp,*.h,*.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
           if ($cppAll.Count -gt 0) {
-            # clang-format 强制风格（.clang-format 为唯一风格来源）
             clang-format --dry-run --Werror $cppAll
             if ($LASTEXITCODE -ne 0) { throw "clang-format 发现格式问题" }
           } else {
             Write-Host "暂无 C++ 源码，跳过 clang-format"
           }
-          # C++：clang-tidy 静态分析（bugprone/performance/readability/clang-analyzer）
           if (Get-Command clang-tidy -ErrorAction SilentlyContinue) {
-            if ($cppAll.Count -gt 0) {
-              clang-tidy -p build $cppAll --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --quiet
+            $repoRoot = (Get-Location).Path
+            $cppSrc = @(Get-ChildItem native/sim -Recurse -Include *.cpp,*.cc,*.cxx -ErrorAction SilentlyContinue | ForEach-Object FullName)
+            $cSrc = @(Get-ChildItem native/core_c -Recurse -Include *.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
+            # Ninja + clang-cl 已产出 compile_commands.json：直接按编译数据库分析
+            if ($cppSrc.Count -gt 0) {
+              clang-tidy $cppSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$repoRoot/(native/sim|native/core_c)/" --quiet
               if ($LASTEXITCODE -ne 0) { throw "clang-tidy 发现代码问题" }
-            } else {
-              Write-Host "暂无 C++ 源码，跳过 clang-tidy"
+            }
+            if ($cSrc.Count -gt 0) {
+              clang-tidy $cSrc -p native/build/clang-cl-release --checks=-*,clang-analyzer-*,bugprone-*,performance-*,readability-* --header-filter="$repoRoot/(native/sim|native/core_c)/" --quiet
+              if ($LASTEXITCODE -ne 0) { throw "clang-tidy 发现代码问题" }
+            }
+            if ($cppSrc.Count -eq 0 -and $cSrc.Count -eq 0) {
+              Write-Host "暂无 C/C++ 源码，跳过 clang-tidy"
             }
           } else {
-            Write-Host "clang-tidy 不可用，跳过（保留 clang-format 强制风格）"
+            Write-Host "clang-tidy 不可用，跳过"
           }
-          # C#：dotnet format 强制风格 + .NET 分析器
-          if (Test-Path WarFictionSim.sln) {
-            dotnet format style WarFictionSim.sln --verify-no-changes
-            if ($LASTEXITCODE -ne 0) { throw "dotnet format style 失败" }
-            dotnet format analyzers WarFictionSim.sln --verify-no-changes
-            if ($LASTEXITCODE -ne 0) { throw "dotnet format analyzers 失败" }
-          } else {
-            Write-Host "跳过 dotnet format（无解决方案）"
-          }
+
+      - name: Upload native build artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType File -Path 'native/build/clang-cl-release/.wfs-artifact' -Force | Out-Null
+        # 标记文件保证骨架期（无 DLL/exe）也能生成 artifact，app job 下载不失败
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wfs-native-build
+          path: |
+            native/build/clang-cl-release/.wfs-artifact
+            native/build/clang-cl-release/**/*.dll
+            native/build/clang-cl-release/**/*.exe
+          if-no-files-found: warn
+
+  app-build:
+    name: App C# (dotnet)
+    needs: native-build
+    runs-on: windows-2022
+    steps:
+      - name: Print runner image version（可复现性审计）
+        run: |
+          Write-Host "ImageOS: $env:ImageOS"
+          Write-Host "ImageVersion: $env:ImageVersion"
+        shell: pwsh
+
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET SDK (10.0 LTS)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Download native artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: wfs-native-build
+          path: native/build/clang-cl-release
+
+      - name: Build C# UI & tools
+        shell: pwsh
+        run: |
+          dotnet build app/WarFictionSim.sln -c Release
+          if ($LASTEXITCODE -ne 0) { throw "dotnet 构建失败" }
+
+      - name: Run C# tests (xUnit)
+        shell: pwsh
+        run: |
+          dotnet test app/WarFictionSim.sln -c Release --no-build
+          if ($LASTEXITCODE -ne 0) { throw "dotnet 测试失败" }
 
       - name: Data schema validation
         shell: pwsh
         run: |
-          if (Test-Path tools/src/DataValidator) {
-            dotnet run --project tools/src/DataValidator -- data/ --all
+          if (Test-Path app/tools/src/DataValidator) {
+            dotnet run --project app/tools/src/DataValidator -- data/ --all
             if ($LASTEXITCODE -ne 0) { throw "数据校验失败" }
           } else {
             Write-Host "跳过数据校验（DataValidator 尚未实现）"
           }
 
-      - name: Upload build artifacts
-        if: hashFiles('build/Release/**', 'ui/bin/Release/**') != ''
+      - name: C# lint（dotnet format）
+        shell: pwsh
+        run: |
+          dotnet format style app/WarFictionSim.sln --verify-no-changes
+          if ($LASTEXITCODE -ne 0) { throw "dotnet format style 失败" }
+          dotnet format analyzers app/WarFictionSim.sln --verify-no-changes
+          if ($LASTEXITCODE -ne 0) { throw "dotnet format analyzers 失败" }
+
+      - name: Upload CI artifacts
+        if: hashFiles('app/**/bin/Release/**', 'native/build/clang-cl-release/**/*.dll') != ''
         uses: actions/upload-artifact@v7
         with:
           name: wfs-windows-ci
           path: |
-            build/Release/
-            ui/bin/Release/
+            app/ui/src/WarFictionSim.Ui/bin/Release/
+            app/tools/src/WarFictionSim.Tools/bin/Release/
+            native/build/clang-cl-release/**/*.dll
           if-no-files-found: warn

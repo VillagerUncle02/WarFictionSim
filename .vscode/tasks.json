@@ -1,0 +1,31 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cmake: configure debug",
+      "type": "shell",
+      "command": "cmake --preset clang-cl-debug",
+      "options": { "cwd": "${workspaceFolder}/native" },
+      "problemMatcher": []
+    },
+    {
+      "label": "cmake: build debug",
+      "type": "shell",
+      "command": "cmake --build --preset clang-cl-debug",
+      "options": { "cwd": "${workspaceFolder}/native" },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "build-ui",
+      "type": "shell",
+      "command": "dotnet build ${workspaceFolder}/app/ui/src/WarFictionSim.Ui/WarFictionSim.Ui.csproj",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-tools",
+      "type": "shell",
+      "command": "dotnet build ${workspaceFolder}/app/tools/src/WarFictionSim.Tools/WarFictionSim.Tools.csproj",
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}
