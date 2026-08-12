@@ -14,6 +14,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <stdexcept>
@@ -70,8 +71,10 @@ struct OrganizationUnit {
 
     // 数值域校验（F7）：能力/协调 [0,1]；subordinate_ids 无重复、无自引用。
     bool is_valid() const noexcept {
-        if (soldier_capability < 0.0 || soldier_capability > 1.0 || minimum_soldier_capability < 0.0 ||
-            minimum_soldier_capability > 1.0 || coordination < 0.0 || coordination > 1.0) {
+        if (!std::isfinite(soldier_capability) || soldier_capability < 0.0 || soldier_capability > 1.0 ||
+            !std::isfinite(minimum_soldier_capability) || minimum_soldier_capability < 0.0 ||
+            minimum_soldier_capability > 1.0 || !std::isfinite(coordination) || coordination < 0.0 ||
+            coordination > 1.0) {
             return false;
         }
         for (std::size_t i = 0; i < subordinate_ids.size(); ++i) {
@@ -328,6 +331,9 @@ inline bool OrganizationTree::AddUnit(OrganizationUnit unit) {
     if (Contains(unit.id)) {
         return false;
     }
+    if (!unit.subordinate_ids.empty()) {
+        return false;  // 下级接线统一走 SetParent/AddSubordinate（F6）。
+    }
     const std::string parent_id = unit.parent_id;
     if (!parent_id.empty()) {
         if (parent_id == unit.id || !Contains(parent_id)) {
@@ -393,6 +399,7 @@ inline void from_json(const nlohmann::json& json, OrganizationTree& tree) {
         }
         OrganizationUnit detached = unit;
         detached.parent_id.clear();
+        detached.subordinate_ids.clear();
         if (!candidate.AddUnit(detached)) {
             throw std::invalid_argument("编制树包含重复 id: " + unit.id);
         }

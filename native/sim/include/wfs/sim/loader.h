@@ -91,6 +91,11 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path);
 // 加载并校验场景：显式指定 Schema 路径（测试/临时数据使用）。
 ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path);
 
+// 加载并校验场景：显式指定 Schema 路径与数据目录。data_root 指向仓库 data/
+// 目录（如 D:/repo/data），场景单位 type/ammo 会与数据目录交叉校验（F4）。
+ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path,
+                                 const std::filesystem::path& data_root);
+
 // T037：数据目录条目（units/、terrain/ 基线 JSON 的原子单位）。
 struct DataEntry {
     std::string id;

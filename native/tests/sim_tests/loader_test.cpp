@@ -256,3 +256,40 @@ TEST(WfsLoaderTest, ScenarioUnitAmmoMustExistInDataCatalog) {
     ASSERT_FALSE(result.ok());
     EXPECT_EQ(result.issues.front().code, "UNIT_AMMO_NOT_FOUND");
 }
+
+TEST(WfsLoaderTest, ScenarioUnitAmmoMustMatchSquadTypeWeapons) {
+    nlohmann::json root = ValidScenarioJson();
+    root["units"][0]["ammo"] = nlohmann::json::array({"ammo-127"});  // 与班类型武器兼容集不匹配。
+    TempDir dir;
+    const std::filesystem::path file = dir.Write("incompatible-unit-ammo.json", root.dump());
+    const ScenarioLoadResult result = load_scenario(file, ScenarioSchema());
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "UNIT_AMMO_INCOMPATIBLE");
+}
+
+TEST(WfsLoaderTest, CustomSchemaPathSkipsLibraryValidationForBackCompat) {
+    // F6：Schema 不在仓库 contracts/schemas 下时，双路径重载不推导数据根
+    // （旧 API 兼容），未知弹药不会被拒绝。
+    nlohmann::json root = ValidScenarioJson();
+    root["units"][0]["ammo"] = nlohmann::json::array({"ghost-ammo"});
+    TempDir dir;
+    std::ifstream schema_in(ScenarioSchema());
+    const std::filesystem::path schema_path =
+        dir.Write("custom-scenario.schema.json", nlohmann::json::parse(schema_in).dump());
+    const std::filesystem::path file = dir.Write("custom-schema-scenario.json", root.dump());
+    const ScenarioLoadResult result = load_scenario(file, schema_path);
+    ASSERT_TRUE(result.ok()) << (result.issues.empty() ? "" : result.issues.front().message);
+}
+
+TEST(WfsLoaderTest, ExplicitDataRootEnablesLibraryValidation) {
+    nlohmann::json root = ValidScenarioJson();
+    root["units"][0]["ammo"] = nlohmann::json::array({"ghost-ammo"});
+    TempDir dir;
+    std::ifstream schema_in(ScenarioSchema());
+    const std::filesystem::path schema_path =
+        dir.Write("custom-scenario.schema.json", nlohmann::json::parse(schema_in).dump());
+    const std::filesystem::path file = dir.Write("custom-schema-scenario.json", root.dump());
+    const ScenarioLoadResult result = load_scenario(file, schema_path, RepoRoot() / "data");
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "UNIT_AMMO_NOT_FOUND");
+}

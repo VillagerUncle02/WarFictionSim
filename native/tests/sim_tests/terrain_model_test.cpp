@@ -7,6 +7,7 @@
 // 与静态天气/光照效果。
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -160,6 +161,41 @@ TEST(WfsFacilityModelTest, DestroyWithoutReconLeavesNoResidue) {
     EXPECT_FALSE(facility.is_visible());
 }
 
+TEST(WfsFacilityModelTest, FixedVisibleDestroyLeavesResidue) {
+    Facility facility{"fac-fixed",
+                      "Fixed Facility",
+                      FacilityKind::kFunctional,
+                      FacilityVisibility::kFixedVisible,
+                      FacilityLifecycleState::kDeployed,
+                      5.0,
+                      5.0,
+                      false,
+                      false,
+                      0.0,
+                      0.0};
+    facility.Destroy();  // 固定可见设施默认可见，摧毁同样留下旧位置信息（FR-014）。
+    EXPECT_TRUE(facility.recon_residue);
+    EXPECT_DOUBLE_EQ(facility.old_x, 5.0);
+    EXPECT_TRUE(facility.is_valid());
+    EXPECT_FALSE(facility.is_visible());
+}
+
+TEST(WfsFacilityModelTest, RedeployToSameCoordinatesClearsResidue) {
+    Facility facility = MakeDeployableFacility("fac-same-pos");
+    facility.ConfirmRecon();
+    facility.Cancel();
+    EXPECT_TRUE(facility.recon_residue);
+
+    facility.Deploy(facility.x, facility.y);  // 同坐标重布置：旧位置即当前位置。
+    EXPECT_EQ(facility.lifecycle, FacilityLifecycleState::kDeployed);
+    EXPECT_FALSE(facility.recon_residue);
+    EXPECT_TRUE(facility.is_valid());
+    EXPECT_FALSE(facility.is_visible());  // 新部署需再次侦察确认。
+
+    const Facility restored = RoundTrip(nlohmann::json(facility)).get<Facility>();
+    EXPECT_EQ(restored, facility);
+}
+
 TEST(WfsFacilityModelTest, ConfirmReconDoesNotResurrectCancelledFacility) {
     Facility facility = MakeDeployableFacility("fac-cancelled");
     facility.ConfirmRecon();
@@ -260,4 +296,24 @@ TEST(WfsTerrainModelTest, InvalidNumericRangesRejected) {
     state.visibility_multiplier = 1.5;
     EXPECT_FALSE(state.is_valid());
     EXPECT_THROW(RoundTrip(nlohmann::json(state)).get<EnvironmentState>(), std::invalid_argument);
+}
+
+TEST(WfsTerrainModelTest, NaNValuesRejected) {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+
+    Passability passability;
+    passability.speed_multiplier = nan;
+    EXPECT_FALSE(passability.is_valid());
+    EXPECT_THROW(nlohmann::json(passability).get<Passability>(), std::invalid_argument);
+
+    TerrainElement element;
+    element.id = "terrain-nan";
+    element.concealment = nan;
+    EXPECT_FALSE(element.is_valid());
+    EXPECT_THROW(nlohmann::json(element).get<TerrainElement>(), std::invalid_argument);
+
+    EnvironmentState state;
+    state.mobility_multiplier = nan;
+    EXPECT_FALSE(state.is_valid());
+    EXPECT_THROW(nlohmann::json(state).get<EnvironmentState>(), std::invalid_argument);
 }

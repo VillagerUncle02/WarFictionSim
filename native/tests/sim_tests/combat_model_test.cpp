@@ -7,6 +7,7 @@
 // 以及全部类型的 JSON 序列化往返。
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -256,4 +257,28 @@ TEST(WfsCombatModelTest, InvalidNumericRangesRejected) {
     DirectionalArmor bad_armor{-5.0, 0.0};
     EXPECT_FALSE(bad_armor.is_valid());
     EXPECT_THROW(RoundTrip(nlohmann::json(bad_armor)).get<DirectionalArmor>(), std::invalid_argument);
+}
+
+TEST(WfsCombatModelTest, NaNValuesRejected) {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+
+    Ammo ammo = MakeKineticAmmo();
+    ammo.weight_kg = nan;
+    EXPECT_FALSE(ammo.is_valid());
+    EXPECT_THROW(nlohmann::json(ammo).get<Ammo>(), std::invalid_argument);
+
+    Weapon weapon;
+    weapon.id = "w-nan";
+    weapon.accuracy = nan;
+    EXPECT_FALSE(weapon.is_valid());
+    EXPECT_THROW(nlohmann::json(weapon).get<Weapon>(), std::invalid_argument);
+
+    Soldier soldier = MakeSoldier("s-nan");
+    soldier.carry_weight_kg = nan;
+    EXPECT_FALSE(soldier.is_valid());
+    EXPECT_THROW(nlohmann::json(soldier).get<Soldier>(), std::invalid_argument);
+
+    DirectionalArmor armor{nan, 0.0};
+    EXPECT_FALSE(armor.is_valid());
+    EXPECT_THROW(nlohmann::json(armor).get<DirectionalArmor>(), std::invalid_argument);
 }

@@ -32,6 +32,20 @@
       ]
     },
     {
+      "id": "rifle-762",
+      "name": "7.62mm Rifle",
+      "category": "rifle",
+      "warhead_kind": "kinetic",
+      "effective_range_m": 500,
+      "accuracy": 0.78,
+      "weight_kg": 4.1,
+      "heavy_equipment": false,
+      "min_crew": 1,
+      "compatible_ammo": [
+        "ammo-762"
+      ]
+    },
+    {
       "id": "hmg-127",
       "name": "Heavy Machine Gun",
       "category": "mg",

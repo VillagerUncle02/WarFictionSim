@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -56,7 +57,7 @@ struct MinEquippedUnit {
     double weight_kg = 0.0;
     bool heavy_equipment = false;
 
-    bool is_valid() const noexcept { return weight_kg >= 0.0; }
+    bool is_valid() const noexcept { return std::isfinite(weight_kg) && weight_kg >= 0.0; }
 
     bool operator==(const MinEquippedUnit&) const = default;
 };

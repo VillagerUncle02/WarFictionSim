@@ -55,6 +55,14 @@ TEST(WfsMissionRegistryTest, AllThirteenTypesRegistered) {
     EXPECT_THROW(model::mission_type_from_string("FIRE_GUIDANCE"), std::invalid_argument);
 }
 
+TEST(WfsMissionRegistryTest, UnknownMissionTypeThrowsExplicitly) {
+    // F9 回归：未知枚举与 mission_type_spec 一致显式抛错，不静默降级。
+    const auto unknown = static_cast<MissionType>(0xFF);
+    EXPECT_THROW(model::mission_type_spec(unknown), std::invalid_argument);
+    EXPECT_THROW(model::is_continuous_mission(unknown), std::invalid_argument);
+    EXPECT_THROW(model::is_recon_mission(unknown), std::invalid_argument);
+}
+
 TEST(WfsMissionRegistryTest, ContinuousAndReconFlags) {
     EXPECT_TRUE(model::is_continuous_mission(MissionType::kPatrol));
     EXPECT_TRUE(model::is_continuous_mission(MissionType::kObservationPost));

@@ -7,6 +7,7 @@
 // 兵员能力）、MinCommandUnit/MinEquippedUnit 构成与序列化。
 
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -263,6 +264,17 @@ TEST(WfsOrganizationTreeTest, BuildsTreeAndRoundTrips) {
     EXPECT_EQ(restored.Find("s1")->parent_id, "p1");
 }
 
+TEST(WfsOrganizationTreeTest, AddUnitRejectsDeclaredSubordinates) {
+    model::OrganizationTree tree;
+    OrganizationUnit parent = MakePlatoon("p1", OrganizationKind::kInfantry, 0.0);
+    parent.subordinate_ids = {"s1"};  // 下级接线统一走 AddSubordinate（F6）。
+    EXPECT_FALSE(tree.AddUnit(parent));
+    EXPECT_TRUE(tree.AddUnit(MakePlatoon("p1", OrganizationKind::kInfantry, 0.0)));
+    EXPECT_TRUE(tree.AddUnit(MakeSquad("s1", OrganizationKind::kInfantry, 0.8)));
+    EXPECT_TRUE(tree.AddSubordinate("p1", "s1"));
+    EXPECT_EQ(tree.SubordinatesOf("p1"), std::vector<std::string>{"s1"});
+}
+
 TEST(WfsOrganizationTreeTest, RejectsInconsistentJson) {
     // 非互反：p1 声明下级 s1，但 s1 的 parent_id 缺失。
     OrganizationUnit parent_claims = MakePlatoon("p1", OrganizationKind::kInfantry, 0.0);
@@ -311,6 +323,23 @@ TEST(WfsCommandNodeModelTest, InvalidNumericRangesRejected) {
     unit.coordination = -0.2;
     EXPECT_FALSE(unit.is_valid());
     EXPECT_THROW(RoundTrip(nlohmann::json(unit)).get<OrganizationUnit>(), std::invalid_argument);
+}
+
+TEST(WfsCommandNodeModelTest, NaNValuesRejected) {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+
+    const Experience bad_experience{nan, 0.0, 0.0};
+    EXPECT_FALSE(bad_experience.is_valid());
+    EXPECT_THROW(nlohmann::json(bad_experience).get<Experience>(), std::invalid_argument);
+
+    CommandNode node = MakePlayerNode("node-nan");
+    node.coordination = nan;
+    EXPECT_FALSE(node.is_valid());
+    EXPECT_THROW(nlohmann::json(node).get<CommandNode>(), std::invalid_argument);
+
+    OrganizationUnit unit = MakeSquad("s-nan", OrganizationKind::kInfantry, nan);
+    EXPECT_FALSE(unit.is_valid());
+    EXPECT_THROW(nlohmann::json(unit).get<OrganizationUnit>(), std::invalid_argument);
 }
 
 TEST(WfsMinUnitModelTest, MinCommandUnitRoundTrip) {

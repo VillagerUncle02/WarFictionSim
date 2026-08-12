@@ -117,23 +117,53 @@ std::filesystem::path RepoDataRoot(const std::filesystem::path& schema_path) {
     return schema_path.parent_path().parent_path().parent_path() / "data";
 }
 
-// F4：场景单位 type/ammo 必须存在于数据目录（宪法第 12 条：数据引用必须存在）。
+// Schema 是否位于仓库 contracts/schemas 下（决定能否自动推导数据根目录，F6）。
+bool IsRepoContractSchema(const std::filesystem::path& schema_path) {
+    return schema_path.parent_path().filename() == "schemas" &&
+           schema_path.parent_path().parent_path().filename() == "contracts";
+}
+
+// F4：场景单位 type/ammo 必须存在于数据目录，且弹药必须与班类型的武器
+// 兼容弹药集合匹配（宪法第 12 条：数据引用必须存在且自洽）。
 void CheckScenarioUnitReferences(const Scenario& scenario, const DataLibrary& library, std::vector<DataIssue>& issues) {
-    std::set<std::string> squad_ids;
     std::set<std::string> ammo_ids;
-    for (const DataEntry& entry : library.squads.entries) {
-        squad_ids.insert(entry.id);
-    }
+    std::map<std::string, std::set<std::string>> weapon_compatible;
     for (const DataEntry& entry : library.ammo.entries) {
         ammo_ids.insert(entry.id);
     }
+    for (const DataEntry& entry : library.weapons.entries) {
+        for (const nlohmann::json& ref : entry.raw.value("compatible_ammo", nlohmann::json::array())) {
+            weapon_compatible[entry.id].insert(ref.get<std::string>());
+        }
+    }
+    const auto find_squad = [&library](const std::string& squad_id) -> const DataEntry* {
+        for (const DataEntry& entry : library.squads.entries) {
+            if (entry.id == squad_id) {
+                return &entry;
+            }
+        }
+        return nullptr;
+    };
     for (const ScenarioUnit& unit : scenario.units) {
-        if (!squad_ids.contains(unit.type)) {
+        const DataEntry* squad = find_squad(unit.type);
+        if (squad == nullptr) {
             issues.push_back(Issue("UNIT_TYPE_NOT_FOUND", "场景单位 " + unit.id + " 引用不存在的班类型: " + unit.type));
+            continue;
+        }
+        std::set<std::string> squad_compatible;
+        for (const nlohmann::json& weapon_ref : squad->raw.value("weapons", nlohmann::json::array())) {
+            const std::string weapon_id = weapon_ref.get<std::string>();
+            const auto compatible = weapon_compatible.find(weapon_id);
+            if (compatible != weapon_compatible.end()) {
+                squad_compatible.insert(compatible->second.begin(), compatible->second.end());
+            }
         }
         for (const std::string& ammo : unit.ammo) {
             if (!ammo_ids.contains(ammo)) {
                 issues.push_back(Issue("UNIT_AMMO_NOT_FOUND", "场景单位 " + unit.id + " 引用不存在的弹药: " + ammo));
+            } else if (!squad_compatible.contains(ammo)) {
+                issues.push_back(Issue("UNIT_AMMO_INCOMPATIBLE", "场景单位 " + unit.id + " 的弹药 " + ammo +
+                                                                     " 与班类型 " + unit.type + " 武器不兼容"));
             }
         }
     }
@@ -243,20 +273,43 @@ std::filesystem::path resolve_schema_path(const std::filesystem::path& data_file
     }
 }
 
+// 内部实现：data_root 为空时跳过数据目录交叉校验（旧 API 兼容路径，F6）。
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ScenarioLoadResult LoadScenarioInternal(const std::filesystem::path& scenario_path,
+                                        const std::filesystem::path& schema_path,
+                                        const std::filesystem::path* data_root);
+
 ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path) {
     const std::filesystem::path schema_path = resolve_schema_path(scenario_path, kScenarioSchemaFile);
     if (schema_path.empty()) {
         return Failure({Issue("SCHEMA_NOT_FOUND", "无法按仓库约定从 " + scenario_path.string() +
                                                       " 解析 contracts/schemas/scenario.schema.json")});
     }
-    return load_scenario(scenario_path, schema_path);
+    return load_scenario(scenario_path, schema_path, RepoDataRoot(schema_path));
 }
 
-// 双路径重载是 loader.h 公开 API：固定"数据文件在前、Schema 在后"，
-// 参数名即语义（scenario_path/schema_path），调用方无需猜测；
-// 为两个路径引入包装结构体会降低可读性，故保留显式参数并禁止换序。
+// 双路径重载（旧 API 兼容）：仅当 Schema 位于仓库 contracts/schemas 下时
+// 自动推导数据根目录并做数据目录交叉校验；否则跳过该层（调用方可改用
+// 三路径重载显式传入 data_root，F6）。
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path) {
+    if (IsRepoContractSchema(schema_path)) {
+        return load_scenario(scenario_path, schema_path, RepoDataRoot(schema_path));
+    }
+    return LoadScenarioInternal(scenario_path, schema_path, nullptr);
+}
+
+// 三路径重载：显式 data_root，始终执行数据目录交叉校验（F4/F6）。
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path,
+                                 const std::filesystem::path& data_root) {
+    return LoadScenarioInternal(scenario_path, schema_path, &data_root);
+}
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ScenarioLoadResult LoadScenarioInternal(const std::filesystem::path& scenario_path,
+                                        const std::filesystem::path& schema_path,
+                                        const std::filesystem::path* data_root) {
     std::vector<DataIssue> issues;
     nlohmann::json root;
     if (!ReadJsonDocument(scenario_path, root, issues)) {
@@ -286,17 +339,19 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, con
         return Failure(std::move(issues));
     }
 
-    // 第三层：数据目录引用校验（F4）。Schema 路径同时定位仓库数据根目录。
-    const std::filesystem::path data_root = RepoDataRoot(schema_path);
-    const DataLibraryLoadResult library = load_data_library(data_root);
-    for (const DataIssue& issue : library.issues) {
-        issues.push_back(issue);
-    }
-    if (library.ok()) {
-        CheckScenarioUnitReferences(scenario, library.library, issues);
-    }
-    if (!issues.empty()) {
-        return Failure(std::move(issues));
+    // 第三层：数据目录引用校验（F4）。data_root 为空表示调用方未提供，
+    // 跳过该层（旧 API 兼容路径）。
+    if (data_root != nullptr) {
+        const DataLibraryLoadResult library = load_data_library(*data_root);
+        for (const DataIssue& issue : library.issues) {
+            issues.push_back(issue);
+        }
+        if (library.ok()) {
+            CheckScenarioUnitReferences(scenario, library.library, issues);
+        }
+        if (!issues.empty()) {
+            return Failure(std::move(issues));
+        }
     }
 
     scenario.raw = std::move(root);

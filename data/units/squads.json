@@ -30,11 +30,11 @@
       "soldier_capability": 0.6,
       "footprint_radius_m": 15,
       "weapons": [
-        "rifle-556",
+        "rifle-762",
         "rpg-7"
       ],
       "ammo": [
-        "ammo-556",
+        "ammo-762",
         "ammo-rpg"
       ],
       "crewed_equipment": []

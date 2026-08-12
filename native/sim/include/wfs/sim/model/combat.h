@@ -18,6 +18,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -118,7 +119,10 @@ struct AntiArmorProfile {
     double penetration_mm = 0.0;
     double base_damage = 0.0;
 
-    bool is_valid() const noexcept { return penetration_mm >= 0.0 && base_damage >= 0.0; }
+    bool is_valid() const noexcept {
+        return std::isfinite(penetration_mm) && penetration_mm >= 0.0 && std::isfinite(base_damage) &&
+               base_damage >= 0.0;
+    }
 
     bool operator==(const AntiArmorProfile&) const = default;
 };
@@ -130,7 +134,8 @@ struct AntiPersonnelProfile {
     double lethality = 0.0;
 
     bool is_valid() const noexcept {
-        return blast_radius_m >= 0.0 && fragment_radius_m >= 0.0 && lethality >= 0.0 && lethality <= 1.0;
+        return std::isfinite(blast_radius_m) && blast_radius_m >= 0.0 && std::isfinite(fragment_radius_m) &&
+               fragment_radius_m >= 0.0 && std::isfinite(lethality) && lethality >= 0.0 && lethality <= 1.0;
     }
 
     bool operator==(const AntiPersonnelProfile&) const = default;
@@ -145,7 +150,9 @@ struct Ammo {
     bool special_effect = false;  // 烟幕等基础特种弹药（data-model §8）。
     double weight_kg = 0.0;
 
-    bool is_valid() const noexcept { return anti_armor.is_valid() && anti_personnel.is_valid() && weight_kg >= 0.0; }
+    bool is_valid() const noexcept {
+        return anti_armor.is_valid() && anti_personnel.is_valid() && std::isfinite(weight_kg) && weight_kg >= 0.0;
+    }
 
     bool operator==(const Ammo&) const = default;
 };
@@ -169,7 +176,8 @@ struct Weapon {
     }
 
     bool is_valid() const noexcept {
-        if (effective_range_m < 0.0 || accuracy < 0.0 || accuracy > 1.0 || weight_kg < 0.0 || min_crew == 0U) {
+        if (!std::isfinite(effective_range_m) || effective_range_m < 0.0 || !std::isfinite(accuracy) ||
+            accuracy < 0.0 || accuracy > 1.0 || !std::isfinite(weight_kg) || weight_kg < 0.0 || min_crew == 0U) {
             return false;
         }
         for (std::size_t i = 0; i < compatible_ammo.size(); ++i) {
@@ -224,7 +232,9 @@ struct Soldier {
     bool can_swim() const noexcept { return !carries_heavy_equipment; }
     bool is_casualty() const noexcept { return status == SoldierStatus::kCasualty; }
 
-    bool is_valid() const noexcept { return experience.is_valid() && carry_weight_kg >= 0.0; }
+    bool is_valid() const noexcept {
+        return experience.is_valid() && std::isfinite(carry_weight_kg) && carry_weight_kg >= 0.0;
+    }
 
     bool operator==(const Soldier&) const = default;
 };
@@ -274,7 +284,7 @@ struct Squad {
     }
 
     bool is_valid() const noexcept {
-        if (footprint_radius_m < 0.0) {
+        if (!std::isfinite(footprint_radius_m) || footprint_radius_m < 0.0) {
             return false;
         }
         for (std::size_t i = 0; i < soldiers.size(); ++i) {
@@ -304,7 +314,9 @@ struct DirectionalArmor {
     double kinetic_mm = 0.0;
     double chemical_mm = 0.0;
 
-    bool is_valid() const noexcept { return kinetic_mm >= 0.0 && chemical_mm >= 0.0; }
+    bool is_valid() const noexcept {
+        return std::isfinite(kinetic_mm) && kinetic_mm >= 0.0 && std::isfinite(chemical_mm) && chemical_mm >= 0.0;
+    }
 
     bool operator==(const DirectionalArmor&) const = default;
 };

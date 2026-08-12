@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -61,7 +62,8 @@ struct Experience {
     double combat = 0.0;
 
     bool is_valid() const noexcept {
-        return training >= 0.0 && training <= 1.0 && service >= 0.0 && service <= 1.0 && combat >= 0.0 && combat <= 1.0;
+        return std::isfinite(training) && training >= 0.0 && training <= 1.0 && std::isfinite(service) &&
+               service >= 0.0 && service <= 1.0 && std::isfinite(combat) && combat >= 0.0 && combat <= 1.0;
     }
 
     bool operator==(const Experience&) const = default;
@@ -83,7 +85,8 @@ struct CommandNode {
     bool is_root() const noexcept { return parent_id.empty(); }
 
     bool is_valid() const noexcept {
-        return owner.is_valid() && coordination >= 0.0 && coordination <= 1.0 && experience.is_valid();
+        return owner.is_valid() && std::isfinite(coordination) && coordination >= 0.0 && coordination <= 1.0 &&
+               experience.is_valid();
     }
 
     bool operator==(const CommandNode&) const = default;

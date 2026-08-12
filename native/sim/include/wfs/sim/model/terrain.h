@@ -19,6 +19,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -148,7 +149,7 @@ struct Passability {
         return true;
     }
 
-    bool is_valid() const noexcept { return speed_multiplier >= 0.0; }
+    bool is_valid() const noexcept { return std::isfinite(speed_multiplier) && speed_multiplier >= 0.0; }
 
     bool operator==(const Passability&) const = default;
 };
@@ -164,7 +165,8 @@ struct TerrainElement {
     double cover = 0.0;        // 掩蔽（阻挡伤害与射击）。
 
     bool is_valid() const noexcept {
-        return passability.is_valid() && concealment >= 0.0 && concealment <= 1.0 && cover >= 0.0 && cover <= 1.0;
+        return passability.is_valid() && std::isfinite(concealment) && concealment >= 0.0 && concealment <= 1.0 &&
+               std::isfinite(cover) && cover >= 0.0 && cover <= 1.0;
     }
 
     bool operator==(const TerrainElement&) const = default;
@@ -196,13 +198,16 @@ struct Facility {
         return false;
     }
 
-    // 部署/重布置：位置变化时旧位置信息残留，新位置需重新侦察确认。
+    // 部署/重布置：位置变化时旧位置信息残留，新位置需重新侦察确认；
+    // 同坐标重布置时旧位置即当前位置，清残留（保证 is_valid 与存档往返）。
     void Deploy(const double new_x, const double new_y) {
         if (new_x != x || new_y != y) {
             old_x = x;
             old_y = y;
             recon_residue = true;
             recon_confirmed = false;
+        } else {
+            recon_residue = false;
         }
         x = new_x;
         y = new_y;
@@ -225,9 +230,10 @@ struct Facility {
         recon_residue = false;
     }
 
-    // 摧毁：仅当旧位置已被侦察确认时才保留侦察残留（FR-014）。
+    // 摧毁：侦察确认过，或固定可见设施（默认地图可见，摧毁同样留下旧位置
+    // 信息）时保留侦察残留（FR-014）。
     void Destroy() {
-        if (recon_confirmed) {
+        if (recon_confirmed || visibility == FacilityVisibility::kFixedVisible) {
             old_x = x;
             old_y = y;
             recon_residue = true;
@@ -263,8 +269,9 @@ struct Fortification {
     }
 
     bool is_valid() const noexcept {
-        return concealment_bonus >= 0.0 && concealment_bonus <= 1.0 && cover_bonus >= 0.0 && cover_bonus <= 1.0 &&
-               detection_reduction >= 0.0 && detection_reduction <= 1.0;
+        return std::isfinite(concealment_bonus) && concealment_bonus >= 0.0 && concealment_bonus <= 1.0 &&
+               std::isfinite(cover_bonus) && cover_bonus >= 0.0 && cover_bonus <= 1.0 &&
+               std::isfinite(detection_reduction) && detection_reduction >= 0.0 && detection_reduction <= 1.0;
     }
 
     bool operator==(const Fortification&) const = default;
@@ -279,8 +286,9 @@ struct EnvironmentState {
     double accuracy_multiplier = 1.0;
 
     bool is_valid() const noexcept {
-        return visibility_multiplier >= 0.0 && visibility_multiplier <= 1.0 && mobility_multiplier >= 0.0 &&
-               mobility_multiplier <= 1.0 && accuracy_multiplier >= 0.0 && accuracy_multiplier <= 1.0;
+        return std::isfinite(visibility_multiplier) && visibility_multiplier >= 0.0 && visibility_multiplier <= 1.0 &&
+               std::isfinite(mobility_multiplier) && mobility_multiplier >= 0.0 && mobility_multiplier <= 1.0 &&
+               std::isfinite(accuracy_multiplier) && accuracy_multiplier >= 0.0 && accuracy_multiplier <= 1.0;
     }
 
     bool operator==(const EnvironmentState&) const = default;
