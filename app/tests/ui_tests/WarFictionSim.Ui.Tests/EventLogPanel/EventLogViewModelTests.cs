@@ -4,7 +4,8 @@
 // wfs_sim_query_events 拉取（快照更新时按需、默认最近 500 条窗口），
 // 分类/严重级/文本/单位过滤下推给 native 查询（text 与 unit_id 取交集），
 // 游戏时间过滤在窗口内本地执行，关键事件=severity critical 置顶；状态栏
-// 计数仍来自快照 summary。
+// 计数仍来自快照 summary。刷新策略（N1）：tick 前进按 250ms 节流、按 seq
+// 增量合并去重、全量重建外发滚动锚点、查询失败重试一次后显示中文错误。
 
 using WarFictionSim.Ui.EventLogPanel;
 using WarFictionSim.Ui.Interop;
@@ -54,15 +55,75 @@ public class EventLogViewModelTests
     }
 
     [Fact]
-    public void ApplySummary_AdvancedTick_RepullsEvents()
+    public void ApplySummary_AdvancedTick_AfterThrottleInterval_RepullsEvents()
     {
         var client = Client(Event(1));
-        var viewModel = new EventLogViewModel(client);
+        var timeProvider = new MutableTimeProvider();
+        var viewModel = new EventLogViewModel(client, timeProvider: timeProvider);
 
         viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 5);
+        timeProvider.Advance(EventLogViewModel.RefreshThrottle);
         viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 6);
 
         Assert.Equal(2, client.EventQueries.Count);
+    }
+
+    [Fact]
+    public void ApplySummary_RapidTickAdvance_IsThrottledAndDrainsPendingPull()
+    {
+        var client = Client(Event(1));
+        var timeProvider = new MutableTimeProvider();
+        var viewModel = new EventLogViewModel(client, timeProvider: timeProvider);
+
+        viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 1);
+        viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 2);
+        viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 3);
+
+        // 节流窗口内不再每帧全量拉取（N1）。
+        Assert.Single(client.EventQueries);
+
+        // 被节流挂起的 tick 前进到期补拉（即使 tick 未再前进）。
+        timeProvider.Advance(EventLogViewModel.RefreshThrottle);
+        viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 3);
+
+        Assert.Equal(2, client.EventQueries.Count);
+    }
+
+    [Fact]
+    public void ApplySummary_MergesNewEventsIncrementallyWithoutDuplicates()
+    {
+        var client = Client(Event(1), Event(2), Event(3));
+        var timeProvider = new MutableTimeProvider();
+        var viewModel = new EventLogViewModel(client, timeProvider: timeProvider);
+        viewModel.ApplySummary(new EventLogSummaryState(3, 5000, 0), snapshotTick: 1);
+        EventLogEntryViewModel first = viewModel.Entries[0];
+        client.Events.AddRange([Event(4), Event(5)]);
+
+        timeProvider.Advance(EventLogViewModel.RefreshThrottle);
+        viewModel.ApplySummary(new EventLogSummaryState(5, 5000, 0), snapshotTick: 2);
+
+        Assert.Equal([1uL, 2uL, 3uL, 4uL, 5uL], viewModel.Entries.Select(entry => entry.Seq));
+        Assert.Same(first, viewModel.Entries[0]); // 增量合并：既有条目实例复用，不清空重建。
+    }
+
+    [Fact]
+    public void ApplySummary_EvictsOldestEntriesFromWindow_WithoutDuplicates()
+    {
+        List<SimEventDto> events = Enumerable.Range(0, 500).Select(seq => Event((ulong)seq)).ToList();
+        var client = Client([.. events]);
+        var timeProvider = new MutableTimeProvider();
+        var viewModel = new EventLogViewModel(client, timeProvider: timeProvider);
+        viewModel.ApplySummary(new EventLogSummaryState(500, 5000, 0), snapshotTick: 1);
+        Assert.Equal(500, viewModel.Entries.Count);
+
+        client.Events.AddRange([Event(500), Event(501)]);
+        timeProvider.Advance(EventLogViewModel.RefreshThrottle);
+        viewModel.ApplySummary(new EventLogSummaryState(502, 5000, 0), snapshotTick: 2);
+
+        // 窗口右移：头部驱逐 seq 0/1，尾部追加 500/501，总数恒定且无重复。
+        Assert.Equal(500, viewModel.Entries.Count);
+        Assert.Equal(Enumerable.Range(2, 500).Select(seq => (ulong)seq), viewModel.Entries.Select(entry => entry.Seq));
+        Assert.Equal(500, viewModel.Entries.Select(entry => entry.Seq).Distinct().Count());
     }
 
     [Fact]
@@ -174,6 +235,59 @@ public class EventLogViewModelTests
     }
 
     [Fact]
+    public void FilterChange_RebuildsEntriesAndRaisesScrollAnchor()
+    {
+        var client = Client(
+            Event(1, message: "接敌"),
+            Event(2, message: "移动"),
+            Event(3, message: "接敌"));
+        var viewModel = new EventLogViewModel(client);
+        viewModel.ApplySummary(new EventLogSummaryState(3, 5000, 0), snapshotTick: 1);
+        ulong? anchor = null;
+        viewModel.ScrollAnchorChanged += (_, seq) => anchor = seq;
+
+        viewModel.SearchText = "接敌";
+
+        // 过滤变化触发带滚动锚点的全量重建：锚点 = 重建前最后一个展示条目。
+        Assert.Equal((ulong)3, anchor);
+        Assert.Equal([1uL, 3uL], viewModel.Entries.Select(entry => entry.Seq));
+    }
+
+    [Fact]
+    public void QueryFailure_RetriesOnce_ThenRecovers()
+    {
+        var client = Client(Event(1));
+        client.QueryEventsErrors.Enqueue(new InvalidOperationException("瞬断"));
+        var viewModel = new EventLogViewModel(client);
+
+        viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 1);
+
+        Assert.Equal(2, client.EventQueries.Count); // 第一次失败 + 重试成功。
+        Assert.Single(viewModel.Entries);
+        Assert.Null(viewModel.QueryErrorText);
+    }
+
+    [Fact]
+    public void QueryFailure_AfterRetry_ShowsChineseErrorAndKeepsLastWindow()
+    {
+        var client = Client(Event(1));
+        var timeProvider = new MutableTimeProvider();
+        var viewModel = new EventLogViewModel(client, timeProvider: timeProvider);
+        viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 1);
+        Assert.Single(viewModel.Entries);
+        client.QueryEventsErrors.Enqueue(new InvalidOperationException("boom"));
+        client.QueryEventsErrors.Enqueue(new InvalidOperationException("boom"));
+
+        timeProvider.Advance(EventLogViewModel.RefreshThrottle);
+        viewModel.ApplySummary(new EventLogSummaryState(1, 5000, 0), snapshotTick: 2);
+
+        // 重试一次后仍失败：保留上次成功窗口、显示中文错误、不抛向渲染循环。
+        Assert.Single(viewModel.Entries);
+        Assert.Contains("查询事件日志失败", viewModel.QueryErrorText, StringComparison.Ordinal);
+        Assert.Contains("boom", viewModel.QueryErrorText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NativeSummaryText_UsesSnapshotCounts()
     {
         var viewModel = new EventLogViewModel(Client(Event(1)));
@@ -236,4 +350,13 @@ public class EventLogViewModelTests
         query.Contains("\"category\"", StringComparison.Ordinal) &&
         query.Contains("\"min_severity\"", StringComparison.Ordinal) &&
         query.Contains("\"text\"", StringComparison.Ordinal);
+
+    private sealed class MutableTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan delta) => _now = _now.Add(delta);
+    }
 }

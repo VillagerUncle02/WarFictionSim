@@ -45,7 +45,7 @@ public sealed class FakeSimClient : ISimClient
 
     public Exception? NextStepError { get; set; }
 
-    public Exception? NextQueryEventsError { get; set; }
+    public Queue<Exception> QueryEventsErrors { get; } = new();
 
     public bool Disposed { get; private set; }
 
@@ -90,9 +90,9 @@ public sealed class FakeSimClient : ISimClient
     public string QueryEvents(string queryJson)
     {
         EventQueries.Add(queryJson);
-        if (NextQueryEventsError is not null)
+        if (QueryEventsErrors.Count > 0)
         {
-            throw NextQueryEventsError;
+            throw QueryEventsErrors.Dequeue();
         }
 
         // 镜像 native：category/min_severity/text/unit_id 精确过滤（text 与

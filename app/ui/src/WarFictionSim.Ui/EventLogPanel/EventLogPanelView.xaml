@@ -1,6 +1,7 @@
 <!-- 文件总览：事件日志面板视图（T042）。
      回看/过滤（分类、最低严重级、文本、单位）/关键置顶；时间戳统一为游戏时间
-     （FR-044：加速/暂停不改变日志时序语义）。 -->
+     （FR-044：加速/暂停不改变日志时序语义）。刷新按节流+增量合并（N1），
+     全量重建时由代码后置按滚动锚点恢复滚动位置。 -->
 <UserControl x:Class="WarFictionSim.Ui.EventLogPanel.EventLogPanelView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -45,7 +46,10 @@
 
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding NativeSummaryText}"
                    Foreground="#AAAAAA" Margin="0,4,0,0"/>
-        <ListBox ItemsSource="{Binding Entries}" HorizontalContentAlignment="Stretch"
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding QueryErrorText}" TextWrapping="Wrap"
+                   Foreground="#B3261E" Margin="0,4,0,0"/>
+
+        <ListBox x:Name="EntriesList" ItemsSource="{Binding Entries}" HorizontalContentAlignment="Stretch"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
                 <DataTemplate>
