@@ -191,3 +191,40 @@ TEST(WfsContactTest, StepSimIntegratesContactRecovery) {
     step_sim_state(state);
     EXPECT_FALSE(FindUnit(state, "squad-a")->out_of_contact) << "step_sim_state 必须执行失联恢复";
 }
+
+TEST(WfsContactTest, RecoveryDurationCoversMaxTickInclusive) {
+    // Code Reviewer M7（💭）：恢复时长抽样必须包含 max（60–180s 契约闭区间）。
+    ContactConfig config = AlwaysLostConfig();
+    config.min_ticks = 10U;
+    config.max_ticks = 11U;
+    bool saw_max = false;
+    for (std::uint64_t seed = 1U; seed <= 100U && !saw_max; ++seed) {
+        Rng rng(seed, 0U);
+        const ContactLossResult result =
+            wfs::sim::resolve_contact_loss(ContactLossInput{1.0, 1.0, true}, config, rng);
+        ASSERT_TRUE(result.lost);
+        EXPECT_GE(result.duration_ticks, config.min_ticks);
+        EXPECT_LE(result.duration_ticks, config.max_ticks);
+        saw_max = result.duration_ticks == config.max_ticks;
+    }
+    EXPECT_TRUE(saw_max) << "恢复时长必须能取到 max（旧实现抽样区间为 [min, max-1]）";
+}
+
+TEST(WfsContactTest, SuppressionDegradeThresholdIsDataDriven) {
+    // Code Reviewer M9（💭）：压制降级阈值并入 ContactConfig 数据驱动。
+    const ContactConfig config =
+        ContactConfig::FromScenario(nlohmann::json{{"contact", nlohmann::json{{"suppression_degrade_threshold", 0.8}}}});
+    EXPECT_DOUBLE_EQ(config.suppression_degrade_threshold, 0.8);
+
+    SimState state = MakeState();
+    RuntimeUnitState* unit = FindUnit(state, "squad-a");
+    ASSERT_NE(unit, nullptr);
+    unit->suppression = 0.6;
+    EXPECT_EQ(wfs::sim::effective_mobility_effect(*unit, config), EffectSeverity::kNone)
+        << "压制 0.6 低于数据阈值 0.8 不得降级";
+    EXPECT_EQ(wfs::sim::effective_command_effect(*unit, config), EffectSeverity::kNone);
+
+    EXPECT_THROW(ContactConfig::FromScenario(
+                     nlohmann::json{{"contact", nlohmann::json{{"suppression_degrade_threshold", 1.5}}}}),
+                 std::invalid_argument);
+}

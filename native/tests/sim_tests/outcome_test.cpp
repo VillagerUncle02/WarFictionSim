@@ -226,3 +226,20 @@ TEST(WfsOutcomeTest, NewSystemStateRoundTripsThroughSave) {
     EXPECT_EQ(wfs::sim::serialize_state_json(original).dump(), wfs::sim::serialize_state_json(restored).dump())
         << "新增确定性状态必须完整存档往返";
 }
+
+TEST(WfsOutcomeTest, DeploymentEnabledRequiresDeadlineAndZone) {
+    // Code Reviewer M4（🟡）：deployment_enabled 而漏配 deadline（默认 0）
+    // 会在 tick 0 触发部署超时失败；非法配置必须显式拒绝。
+    EXPECT_THROW(wfs::sim::OutcomeConfig::FromScenario(
+                     nlohmann::json{{"outcome", nlohmann::json{{"deployment_enabled", true}}}}),
+                 std::invalid_argument);
+    EXPECT_THROW(wfs::sim::OutcomeConfig::FromScenario(
+                     nlohmann::json{{"outcome", nlohmann::json{{"deployment_enabled", true},
+                                                               {"deployment_deadline_ticks", 100U}}}}),
+                 std::invalid_argument);
+    EXPECT_NO_THROW(wfs::sim::OutcomeConfig::FromScenario(nlohmann::json{
+        {"outcome",
+         nlohmann::json{{"deployment_enabled", true},
+                        {"deployment_deadline_ticks", 100U},
+                        {"deployment_zone", "zone-start"}}}}));
+}

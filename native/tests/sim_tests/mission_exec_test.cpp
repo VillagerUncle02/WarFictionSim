@@ -40,6 +40,10 @@ std::filesystem::path SampleScenario() {
     return RepoRoot() / "data" / "scenarios" / "scn-smoke-test.json";
 }
 
+std::filesystem::path CommandSchema() {
+    return RepoRoot() / "contracts" / "schemas" / "command.schema.json";
+}
+
 SimState MakeState(std::uint64_t seed = 42U) {
     const auto load = load_scenario(SampleScenario());
     EXPECT_TRUE(load.ok()) << (load.issues.empty() ? "" : load.issues.front().message);
@@ -83,6 +87,12 @@ void SetMission(RuntimeUnitState& unit, const std::string& type, const std::stri
     unit.mission_loops = false;
     unit.failure_action = "report";
     unit.failure_target.clear();
+}
+
+std::string WithdrawCommand(const std::string& unit_id, const std::string& target_command_id) {
+    return R"({"schema_version": 1, "type": "WITHDRAW_COMMAND", "target": {"kind": "unit", "ref": ")" + unit_id +
+           R"("}, "completion": {"condition": "withdraw"}, "intent": "测试撤回", "behavior": {"engagement": "balanced"}, "priority": 2, "deadline": {"game_time": 0}, "withdraw_command_id": ")" +
+           target_command_id + R"("})";
 }
 
 }  // namespace
@@ -188,4 +198,49 @@ TEST(WfsMissionExecTest, TimeoutResolutionContinueExtendsDeadline) {
     EXPECT_TRUE(HasEvent(state.event_log, "MISSION_TIMEOUT_CONTINUED unit=squad-a command=cmd-test"));
     EXPECT_TRUE(FindUnit(state, "squad-a")->mission_active);
     EXPECT_GT(FindUnit(state, "squad-a")->mission_deadline_ticks, state.clock.tick());
+}
+
+TEST(WfsMissionExecTest, WithdrawTerminatesLoopingContinuousMission) {
+    // Code Reviewer M2（🟡）：持续任务周期完成并循环重启后，命令必须保持
+    // 有效（或撤回按 mission_command_id 匹配活动任务），WITHDRAW 才能终止。
+    SimState state = MakeState();
+    RuntimeUnitState* unit = FindUnit(state, "squad-a");
+    ASSERT_NE(unit, nullptr);
+    SetMission(*unit, "PATROL", "patrol", nlohmann::json{{"cycle_ticks", 2}});
+    unit->mission_loops = true;
+
+    const nlohmann::json command_json{{"command_id", "cmd-patrol"},
+                                      {"seq", 0U},
+                                      {"type", "PATROL"},
+                                      {"unit_id", "squad-a"},
+                                      {"priority", 1},
+                                      {"issue_tick", 0U},
+                                      {"delay_ticks", 0U},
+                                      {"arrival_tick", 0U},
+                                      {"state", "effective"},
+                                      {"payload", nlohmann::json{{"type", "PATROL"},
+                                                                {"priority", 1},
+                                                                {"loops", true},
+                                                                {"behavior", nlohmann::json{{"failure_action", "report"}}}}},
+                                      {"parent_command_id", ""},
+                                      {"target_command_id", ""},
+                                      {"batch", false}};
+    state.command_chain =
+        nlohmann::json{{"commands", nlohmann::json::array({command_json})}}.get<wfs::sim::CommandChain>();
+
+    // 完成一个巡逻周期 → 循环重启（命令保持对 WITHDRAW 可寻址）。
+    step_missions(state);
+    step_missions(state);
+    ASSERT_TRUE(FindUnit(state, "squad-a")->mission_active);
+    EXPECT_TRUE(HasEvent(state.event_log, "MISSION_LOOP_RESTARTED unit=squad-a command=cmd-patrol"));
+
+    const auto withdraw =
+        wfs::sim::inject_player_command(state, WithdrawCommand("squad-a", "cmd-patrol"), CommandSchema());
+    ASSERT_TRUE(withdraw.accepted) << (withdraw.errors.empty() ? "" : withdraw.errors.front().message);
+    for (std::uint64_t i = 0U; i < 300U && FindUnit(state, "squad-a")->mission_active; ++i) {
+        step_sim_state(state);
+    }
+    EXPECT_FALSE(FindUnit(state, "squad-a")->mission_active)
+        << "循环重启后的持续任务必须可被 WITHDRAW 终止（FR-044）";
+    EXPECT_TRUE(HasEvent(state.event_log, "COMMAND_WITHDRAWN command=cmd-patrol"));
 }
