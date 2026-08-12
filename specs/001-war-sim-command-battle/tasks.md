@@ -45,17 +45,17 @@ description: "Task list template for feature implementation"
 
 **⚠️ CRITICAL**: Foundational 未完成前不得开始任何用户故事
 
-- [ ] T008 [P] 实现 C11 确定性数学库 core_c（core_c/include/wfs/core/math.h、core_c/src/math.c：开方/取整/三角确定性封装，IEEE-754 double）
-- [ ] T009 [P] 实现统一确定性 RNG（sim/include/wfs/sim/rng.h、sim/src/rng.cpp：PCG32、显式种子、RNG 流仅由模拟核心消费）
-- [ ] T010 实现离散 tick 与游戏时钟模型（sim/include/wfs/sim/clock.h、sim/src/clock.cpp：20 Hz 固定 tick、游戏时间戳、禁止现实时钟参与结算）
-- [ ] T011 实现事件/命令确定性队列（sim/src/queue.cpp：按（game_tick, 单调序列号）排序、玩家命令与 AI 决策同一队列）
-- [ ] T012 实现 C ABI 边界层（sim/src/c_api.cpp：wfs_sim_* 系列、不透明句柄、wfs_sim_result 错误码、快照缓冲生命周期、wfs_sim_version ABI 版本号，见 contracts/sim-c-api.md）
-- [ ] T013 实现场景/数据加载与校验框架（sim/src/loader.cpp：JSON Schema + 语义校验、非法数据报错而非崩溃、启动校验预算 ≤5s）
-- [ ] T014 实现命令 Schema 与双重校验管道（sim/src/command_validation.cpp：JSON Schema + 语义校验，含越权命令拒绝/未注册类型/条件可求值/弹药存在性，见 contracts/command-schema.md §2）
-- [ ] T015 [P] 实现事件日志基础设施（sim/src/event_log.cpp：分类/严重级、5000 条环形保留、关键事件优先、过滤与搜索接口）
-- [ ] T016 实现状态快照与状态哈希（sim/src/snapshot.cpp：wfs_sim_get_snapshot 只读 JSON 快照、wfs_sim_get_state_hash SHA-256）
-- [ ] T017 实现存档序列化框架（sim/src/save.cpp：magic "WFS-SAVE" + format_version + header_json + state_blob、migrate 迁移链骨架、wfs_sim_save/load_save，见 contracts/save-format.md）
-- [ ] T018 实现确定性分区并行框架（sim/src/parallel.cpp：按空间区域/实体分桶、固定边界同步、确定性调度与固定归约顺序、线程数不影响状态哈希）
+- [x] T008 [P] 实现 C11 确定性数学库 core_c（core_c/include/wfs/core/math.h、core_c/src/math.c：开方/取整/三角确定性封装，IEEE-754 double）
+- [x] T009 [P] 实现统一确定性 RNG（sim/include/wfs/sim/rng.h、sim/src/rng.cpp：PCG32、显式种子、RNG 流仅由模拟核心消费）
+- [x] T010 实现离散 tick 与游戏时钟模型（sim/include/wfs/sim/clock.h、sim/src/clock.cpp：默认 20 Hz、可配置（1–1,000,000 Hz）、游戏时间戳、禁止现实时钟参与结算）
+- [x] T011 实现事件/命令确定性队列（sim/include/wfs/sim/queue.h、sim/src/queue.cpp：按（game_tick, 单调序列号）排序、玩家命令与 AI 决策同一队列）
+- [x] T012 实现 C ABI 边界层（sim/src/c_api.cpp：wfs_sim_* 系列、不透明句柄、wfs_sim_result 错误码、快照缓冲生命周期、wfs_sim_version ABI 版本号，见 contracts/sim-c-api.md）
+- [x] T013 实现场景/数据加载与校验框架（sim/src/loader.cpp：JSON Schema + 语义校验、非法数据报错而非崩溃、启动校验预算 ≤5s）
+- [x] T014 实现命令 Schema 与双重校验管道（sim/src/command_validation.cpp：JSON Schema + 语义校验，含越权命令拒绝/未注册类型/条件可求值/弹药存在性，见 contracts/command-schema.md §2）
+- [x] T015 [P] 实现事件日志基础设施（sim/src/event_log.cpp：分类/严重级、5000 条环形保留、关键事件优先、过滤与搜索接口）
+- [x] T016 实现状态快照与状态哈希（sim/src/snapshot.cpp：wfs_sim_get_snapshot 只读 JSON 快照、wfs_sim_get_state_hash SHA-256）
+- [x] T017 实现存档序列化框架（sim/src/save.cpp：magic "WFS-SAVE" + format_version + header_json + state_blob、migrate 迁移链骨架、wfs_sim_save/load_save，见 contracts/save-format.md）
+- [x] T018 实现确定性分区并行框架（sim/src/parallel.cpp：按空间区域/实体分桶、固定边界同步、确定性调度与固定归约顺序、线程数不影响状态哈希）
 - [ ] T019 实现无头 CLI（sim/headless/main.cpp：sim_headless run/inject/save 子命令、--scenario/--seed/--script/--out/--hash/--threads/--ai-backend，JSONL 事件输出）
 - [ ] T020 实现 AI 后端抽象与决策注入通道（sim/include/wfs/sim/ai/ia_backend.h、sim/src/ai_inject.cpp：wfs_sim_inject_ai_decision 经校验入队、到达 tick+序列号记录，支持 CHK052 回放）
 - [ ] T021 实现无 AI 脚本后端（sim/src/ai/script_backend.cpp：确定性脚本 AI，输出与 LLM 同构的命令 JSON，无 AI 模式完整驱动战斗）
