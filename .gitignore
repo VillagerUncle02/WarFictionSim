@@ -3,6 +3,11 @@
 .specify/presets/.cache/
 .specify/workflows/.cache/
 
+# 本地安装产物（specify 安装/更新生成，勿提交）
+.specify/extensions/implement-loop/.agents/
+.specify/extensions/implement-loop/.specify/
+.specify/extensions/implement-loop/.git/
+
 # 构建产物
 bin/
 obj/
