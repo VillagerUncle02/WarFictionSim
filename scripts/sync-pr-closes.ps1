@@ -5,8 +5,9 @@
 #   pwsh sync-pr-closes.ps1 [-TasksFile <tasks.md>] [-Repo owner/repo] [-PR <编号>] [-DryRun]
 #
 # 行为：
-#   - 收集 tasks.md 中所有 [X] 任务，通过 issue 标题映射真实 issue 号；
-#   - 读取当前分支 open PR 正文，移除旧 Closes 行，末尾追加完整 Closes 块；
+#   - 收集 tasks.md 中相对基线（默认 origin/main）新增完成的 [X] 任务，
+#     通过 issue 标题映射真实 issue 号（差集逻辑见 Get-NewCompletedTaskIds）；
+#   - 读取当前分支 open PR 正文，移除旧 Closes 行，末尾追加差集 Closes 块；
 #   - 正文无变化时不改；有变化则 gh pr edit --body（除非 -DryRun）。
 
 [CmdletBinding()]

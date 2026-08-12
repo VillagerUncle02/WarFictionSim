@@ -45,10 +45,10 @@ description: "Task list template for feature implementation"
 
 **⚠️ CRITICAL**: Foundational 未完成前不得开始任何用户故事
 
-- [x] T008 [P] 实现 C11 确定性数学库 core_c（core_c/include/wfs/core/math.h、core_c/src/math.c：开方/取整/三角确定性封装，IEEE-754 double）
-- [x] T009 [P] 实现统一确定性 RNG（sim/include/wfs/sim/rng.h、sim/src/rng.cpp：PCG32、显式种子、RNG 流仅由模拟核心消费）
-- [x] T010 实现离散 tick 与游戏时钟模型（sim/include/wfs/sim/clock.h、sim/src/clock.cpp：默认 20 Hz、可配置（1–1,000,000 Hz）、游戏时间戳、禁止现实时钟参与结算）
-- [x] T011 实现事件/命令确定性队列（sim/include/wfs/sim/queue.h、sim/src/queue.cpp：按（game_tick, 单调序列号）排序、玩家命令与 AI 决策同一队列）
+- [x] T008 [P] 实现 C11 确定性数学库 core_c（native/core_c/include/wfs/core/math.h、native/core_c/src/math.c：开方/取整/三角确定性封装，IEEE-754 double）
+- [x] T009 [P] 实现统一确定性 RNG（native/sim/include/wfs/sim/rng.h、native/sim/src/rng.cpp：PCG32、显式种子、RNG 流仅由模拟核心消费）
+- [x] T010 实现离散 tick 与游戏时钟模型（native/sim/include/wfs/sim/clock.h、native/sim/src/clock.cpp：默认 20 Hz、可配置（1–1,000,000 Hz）、游戏时间戳、禁止现实时钟参与结算）
+- [x] T011 实现事件/命令确定性队列（native/sim/include/wfs/sim/queue.h、native/sim/src/queue.cpp：按（game_tick, 单调序列号）排序、玩家命令与 AI 决策同一队列）
 - [x] T012 实现 C ABI 边界层（sim/src/c_api.cpp：wfs_sim_* 系列、不透明句柄、wfs_sim_result 错误码、快照缓冲生命周期、wfs_sim_version ABI 版本号，见 contracts/sim-c-api.md）
 - [x] T013 实现场景/数据加载与校验框架（sim/src/loader.cpp：JSON Schema + 语义校验、非法数据报错而非崩溃、启动校验预算 ≤5s）
 - [x] T014 实现命令 Schema 与双重校验管道（sim/src/command_validation.cpp：JSON Schema + 语义校验，含越权命令拒绝/未注册类型/条件可求值/弹药存在性，见 contracts/command-schema.md §2）
