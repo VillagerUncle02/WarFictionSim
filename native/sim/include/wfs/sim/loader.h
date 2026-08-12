@@ -85,4 +85,56 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path);
 // 加载并校验场景：显式指定 Schema 路径（测试/临时数据使用）。
 ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, const std::filesystem::path& schema_path);
 
+// T037：数据目录条目（units/、terrain/ 基线 JSON 的原子单位）。
+struct DataEntry {
+    std::string id;
+    std::string kind;  // "squad" | "weapon" | "ammo" | "terrain" | "fortification" | "facility"
+    nlohmann::json raw;
+};
+
+// 单个数据目录文件（如 data/units/weapons.json）。
+struct DataCatalog {
+    std::int64_t schema_version = 0;
+    std::string kind;
+    std::vector<DataEntry> entries;
+};
+
+struct DataCatalogLoadResult {
+    bool ok() const noexcept { return issues.empty(); }
+
+    std::vector<DataIssue> issues;
+    DataCatalog catalog;
+};
+
+// 加载并校验数据目录文件：Schema 按仓库约定从数据文件向上解析
+// （contracts/schemas/<文件名>.schema.json，如 weapons.json →
+// weapons.schema.json）；校验 schema_version 一致与条目 id 唯一。
+DataCatalogLoadResult load_data_catalog(const std::filesystem::path& data_file);
+DataCatalogLoadResult load_data_catalog(const std::filesystem::path& data_file,
+                                        const std::filesystem::path& schema_path);
+
+// T037：基础数据库（units/ + terrain/ 六类目录的汇总视图）。
+struct DataLibrary {
+    DataCatalog squads;
+    DataCatalog weapons;
+    DataCatalog ammo;
+    DataCatalog terrain;
+    DataCatalog fortifications;
+    DataCatalog facilities;
+};
+
+struct DataLibraryLoadResult {
+    bool ok() const noexcept { return issues.empty(); }
+
+    std::vector<DataIssue> issues;
+    DataLibrary library;
+};
+
+// 加载并校验整个基础数据目录（data_root/units、data_root/terrain）：
+// 先逐文件 Schema 校验，再按固定顺序做跨文件引用完整性检查
+// （班→武器/弹药、武器→弹药、工事→武器类别），错误序列确定。
+DataLibraryLoadResult load_data_library(const std::filesystem::path& data_root);
+DataLibraryLoadResult load_data_library(const std::filesystem::path& data_root,
+                                        const std::filesystem::path& schema_dir);
+
 }  // namespace wfs::sim

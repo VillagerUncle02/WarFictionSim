@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim weapon catalog",
+  "description": "Runtime schema for data/units/weapons.json (T037). Mirrors specs data-model.md section 8 and combat model (sim/include/wfs/sim/model/combat.h); compatible_ammo references are validated by load_data_library.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "const": "weapon"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "warhead_kind",
+          "effective_range_m",
+          "accuracy",
+          "weight_kg",
+          "heavy_equipment",
+          "min_crew",
+          "compatible_ammo"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "warhead_kind": {
+            "enum": [
+              "kinetic",
+              "chemical",
+              "special"
+            ]
+          },
+          "effective_range_m": {
+            "type": "number",
+            "minimum": 0
+          },
+          "accuracy": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "weight_kg": {
+            "type": "number",
+            "minimum": 0
+          },
+          "heavy_equipment": {
+            "type": "boolean"
+          },
+          "min_crew": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "compatible_ammo": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
