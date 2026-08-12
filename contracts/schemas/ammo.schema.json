@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim ammo catalog",
+  "description": "Runtime schema for data/units/ammo.json (T037). Mirrors specs data-model.md section 8: dual anti-armor / anti-personnel profiles and special effects.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "const": "ammo"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "warhead_kind",
+          "anti_armor",
+          "anti_personnel",
+          "special_effect",
+          "weight_kg"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "warhead_kind": {
+            "enum": [
+              "kinetic",
+              "chemical",
+              "special"
+            ]
+          },
+          "anti_armor": {
+            "type": "object",
+            "required": [
+              "penetration_mm",
+              "base_damage"
+            ],
+            "properties": {
+              "penetration_mm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "base_damage": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "anti_personnel": {
+            "type": "object",
+            "required": [
+              "blast_radius_m",
+              "fragment_radius_m",
+              "lethality"
+            ],
+            "properties": {
+              "blast_radius_m": {
+                "type": "number",
+                "minimum": 0
+              },
+              "fragment_radius_m": {
+                "type": "number",
+                "minimum": 0
+              },
+              "lethality": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "special_effect": {
+            "type": "boolean"
+          },
+          "weight_kg": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
