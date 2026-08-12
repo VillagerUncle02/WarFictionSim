@@ -44,9 +44,11 @@ nlohmann::json QueueToJson(const EventQueue& queue) {
     return events;
 }
 
-nlohmann::json EventLogToJson(const EventLog& log) {
+}  // namespace
+
+nlohmann::json events_to_json(const std::vector<SimEvent>& events) {
     nlohmann::json entries = nlohmann::json::array();
-    for (const SimEvent& event : log.events()) {
+    for (const SimEvent& event : events) {
         entries.push_back(nlohmann::json{
             {"seq", event.seq},
             {"tick", event.tick},
@@ -57,8 +59,6 @@ nlohmann::json EventLogToJson(const EventLog& log) {
     }
     return entries;
 }
-
-}  // namespace
 
 nlohmann::json build_snapshot_json(const SimState& state) {
     return nlohmann::json{
@@ -116,7 +116,7 @@ nlohmann::json serialize_state_json(const SimState& state) {
         {"event_log",
          nlohmann::json{
              {"capacity", state.event_log.capacity()},
-             {"entries", EventLogToJson(state.event_log)},
+             {"entries", events_to_json(state.event_log.events())},
          }},
     };
     // T020：AI 决策日志与编号游标是确定性状态的一部分（CHK052 回放依据）。

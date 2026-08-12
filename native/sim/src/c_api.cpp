@@ -16,14 +16,17 @@
 
 #include <cstring>
 #include <new>
+#include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
 #include "ai_inject.h"
 #include "sim_runtime.h"
 #include "wfs/sim/clock.h"
+#include "wfs/sim/event_log.h"
 #include "wfs/sim/loader.h"
 #include "wfs/sim/rng.h"
 
@@ -39,7 +42,46 @@ struct wfs_sim_handle : wfs::sim::SimState {
     wfs_sim_handle() = default;
 };
 
-namespace {}  // namespace
+namespace {
+
+// 解析 query_json（可选字段 category/min_severity/text/limit）为 EventFilter。
+// 未知名称/字段类型错误/负 limit 抛 std::invalid_argument（宪法第 17 条：
+// 显式报错，不静默吞错），由 wfs_sim_query_events 统一映射为
+// WFS_SIM_RESULT_INVALID_DATA；未知字段忽略（前向兼容），null 字段视同缺省。
+wfs::sim::EventFilter ParseEventQuery(const nlohmann::json& query) {
+    wfs::sim::EventFilter filter;
+    const auto category = query.find("category");
+    if (category != query.end() && !category->is_null()) {
+        if (!category->is_string()) {
+            throw std::invalid_argument("query.category 必须是字符串");
+        }
+        filter.category = wfs::sim::event_category_from_string(category->get<std::string>());
+    }
+    const auto min_severity = query.find("min_severity");
+    if (min_severity != query.end() && !min_severity->is_null()) {
+        if (!min_severity->is_string()) {
+            throw std::invalid_argument("query.min_severity 必须是字符串");
+        }
+        filter.min_severity = wfs::sim::event_severity_from_string(min_severity->get<std::string>());
+    }
+    const auto text = query.find("text");
+    if (text != query.end() && !text->is_null()) {
+        if (!text->is_string()) {
+            throw std::invalid_argument("query.text 必须是字符串");
+        }
+        filter.text = text->get<std::string>();
+    }
+    const auto limit = query.find("limit");
+    if (limit != query.end() && !limit->is_null()) {
+        if (!limit->is_number_unsigned()) {
+            throw std::invalid_argument("query.limit 必须是非负整数");
+        }
+        filter.limit = limit->get<std::size_t>();
+    }
+    return filter;
+}
+
+}  // namespace
 
 extern "C" {
 
@@ -150,6 +192,52 @@ wfs_sim_result wfs_sim_get_snapshot(wfs_sim_handle* handle, char* out_buf, std::
         out_buf[text.size()] = '\0';
         *out_len = text.size();
         return WFS_SIM_RESULT_OK;
+    } catch (...) {
+        return WFS_SIM_RESULT_INTERNAL_ERROR;
+    }
+}
+
+wfs_sim_result wfs_sim_query_events(wfs_sim_handle* handle, const char* query_json, char* out_buf, std::size_t buf_size,
+                                    std::size_t* out_len) {
+    if (handle == nullptr || query_json == nullptr || out_buf == nullptr || out_len == nullptr) {
+        return WFS_SIM_RESULT_INVALID_ARGUMENT;
+    }
+    try {
+        const nlohmann::json query = nlohmann::json::parse(query_json);
+        if (!query.is_object()) {
+            return WFS_SIM_RESULT_INVALID_DATA;
+        }
+        const wfs::sim::EventFilter filter = ParseEventQuery(query);
+        // 先全量过滤统计 count（limit 置 0 不限），再按 limit 截断；
+        // truncated = 过滤后总数超过 limit。事件日志保留集合有界（默认 5000），
+        // 全量扫描满足 FR-044 查询延迟预算且 count 为截断前总数。
+        wfs::sim::EventFilter counting = filter;
+        counting.limit = 0U;
+        std::vector<wfs::sim::SimEvent> matches = handle->event_log.query(counting);
+        const std::size_t count = matches.size();
+        const bool truncated = (filter.limit != 0U) && (matches.size() > filter.limit);
+        if (truncated) {
+            matches.resize(filter.limit);
+        }
+        const nlohmann::json response{
+            {"events", wfs::sim::events_to_json(matches)},
+            {"count", count},
+            {"truncated", truncated},
+        };
+        const std::string text = response.dump();
+        const std::size_t required = text.size() + 1U;  // 含 NUL 终止符
+        if (buf_size < required) {
+            *out_len = required;
+            return WFS_SIM_RESULT_BUFFER_TOO_SMALL;
+        }
+        std::memcpy(out_buf, text.data(), text.size());
+        out_buf[text.size()] = '\0';
+        *out_len = text.size();
+        return WFS_SIM_RESULT_OK;
+    } catch (const nlohmann::json::exception&) {
+        return WFS_SIM_RESULT_INVALID_DATA;
+    } catch (const std::invalid_argument&) {
+        return WFS_SIM_RESULT_INVALID_DATA;
     } catch (...) {
         return WFS_SIM_RESULT_INTERNAL_ERROR;
     }

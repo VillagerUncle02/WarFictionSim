@@ -27,6 +27,10 @@ nlohmann::json build_snapshot_json(const SimState& state);
 // 快照紧凑文本（dump()，键序确定）。
 std::string build_snapshot_text(const SimState& state);
 
+// 事件数组 JSON（事件查询响应与快照/存档权威序列化共用同一形状：
+// {seq,tick,category,severity,message}，按 seq 升序），避免多个通道口径漂移。
+nlohmann::json events_to_json(const std::vector<SimEvent>& events);
+
 // 权威状态 JSON（状态哈希与存档 state_blob 共用；不含线程数）。
 nlohmann::json serialize_state_json(const SimState& state);
 

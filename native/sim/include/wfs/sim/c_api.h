@@ -9,7 +9,7 @@
 //   调用方不得访问内部成员。
 // - 错误一律以 wfs_sim_result 错误码返回，禁止静默吞错（宪法第 17 条）；
 //   create 无错误码通道，失败时显式返回 nullptr。
-// - 快照缓冲生命周期：调用方负责分配与释放 out_buf（纯数据 JSON 文本）；
+// - 快照与事件查询缓冲生命周期：调用方负责分配与释放 out_buf（纯数据 JSON 文本）；
 //   缓冲区不足返回 WFS_SIM_RESULT_BUFFER_TOO_SMALL 并写出所需字节数。
 // - wfs_sim_version 返回 ABI 版本字符串，C# 端用于检测核心错配。
 // - 本头文件同时兼容 C 与 C++（extern "C"），由 c_api.cpp 实现。
@@ -66,6 +66,15 @@ wfs_sim_result wfs_sim_inject_ai_decision(wfs_sim_handle* h, const char* decisio
 
 // 输出只读 JSON 快照文本到调用方缓冲；out_len 为文本字节数（不含 NUL）。
 wfs_sim_result wfs_sim_get_snapshot(wfs_sim_handle* h, char* out_buf, size_t buf_size, size_t* out_len);
+
+// 查询事件日志（FR-044 回看/过滤/搜索/置顶的数据通道）：query_json 可选字段
+// category/min_severity/text/limit（见 contracts/sim-c-api.md），映射到
+// EventFilter 后输出只读 JSON 文本 {"events":[...],"count":N,"truncated":bool}。
+// 缓冲生命周期与两段式读取语义同 wfs_sim_get_snapshot（out_len 为不含 NUL 的
+// 文本字节数）；只读查询不改变状态（宪法第 7 条），同一句柄并发仍由调用方
+// 串行化（与全部 wfs_sim_* 一致）。
+wfs_sim_result wfs_sim_query_events(wfs_sim_handle* h, const char* query_json, char* out_buf, size_t buf_size,
+                                    size_t* out_len);
 
 // 输出状态哈希（SHA-256，T016）：对确定性状态 JSON 序列计算摘要，
 // 线程数只影响性能、不影响哈希结果（宪法第 7 条）。
