@@ -37,7 +37,17 @@ ScenarioLoadResult Failure(std::vector<DataIssue> issues) {
 }
 
 bool HasIntegerSchemaVersion(const nlohmann::json& document) {
-    return document.contains("schema_version") && document["schema_version"].is_number_integer();
+    if (!document.contains("schema_version") || !document["schema_version"].is_number_integer()) {
+        return false;
+    }
+    // 为什么需要范围防护：schema_version 最终存入 Scenario::schema_version
+    // （std::int64_t），而本版 nlohmann 的 is_number_integer() 对 number_unsigned
+    // 同样返回 true。若超大 unsigned（> INT64_MAX）漏判，后续 get<std::int64_t>()
+    // 会被环绕截断成负数（部分 nlohmann 版本直接抛 type_error），把非法数据
+    // 误报为版本不一致甚至逃出 load_scenario（宪法第 12/17 条）。必须先判
+    // is_number_unsigned 再 get<std::uint64_t>()，避免类型不符时抛异常。
+    const nlohmann::json& version = document["schema_version"];
+    return !(version.is_number_unsigned() && version.get<std::uint64_t>() > static_cast<std::uint64_t>(INT64_MAX));
 }
 
 // 读取并解析 JSON 文档；失败返回 false 并追加结构化 issue（不抛异常）。
@@ -60,6 +70,14 @@ bool ReadJsonDocument(const std::filesystem::path& path, nlohmann::json& documen
 // 失败时按固定顺序追加 issue 并返回 false。
 bool ExtractScenarioData(const nlohmann::json& root, const detail::SchemaFileResult& schema_file, Scenario& scenario,
                          std::vector<DataIssue>& issues) {
+    // 防御纵深：主链路由 JSON Schema 层拦截（scenario.schema.json 已约束 maximum），
+    // 但双路径重载允许传入未约束范围的 Schema；在两次 get 之前统一守卫，
+    // 缺失/类型非法/超出 int64 范围一律结构化 SCHEMA_INVALID，不触碰可能环绕
+    // 截断或抛 type_error 的裸 get（PR #107 review round 4；宪法第 12/17 条）。
+    if (!HasIntegerSchemaVersion(root) || !HasIntegerSchemaVersion(schema_file.schema)) {
+        issues.push_back(Issue("SCHEMA_INVALID", "场景/Schema schema_version 缺失、类型非法或超出 int64 范围"));
+        return false;
+    }
     const std::int64_t data_version = root["schema_version"].get<std::int64_t>();
     const std::int64_t schema_version = schema_file.schema["schema_version"].get<std::int64_t>();
     if (data_version != schema_version) {
@@ -194,7 +212,8 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, con
         return Failure({Issue(schema_file.code, schema_file.message)});
     }
     if (!HasIntegerSchemaVersion(schema_file.schema)) {
-        return Failure({Issue("SCHEMA_INVALID", "Schema 缺少整数 schema_version 字段: " + schema_path.string())});
+        return Failure({Issue("SCHEMA_INVALID",
+                              "Schema schema_version 缺失、类型非法或超出 int64 范围: " + schema_path.string())});
     }
 
     // 第一层：JSON Schema 结构校验（违规已确定性排序）。

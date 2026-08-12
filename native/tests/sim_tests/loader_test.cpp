@@ -142,6 +142,39 @@ TEST(WfsLoaderTest, SchemaVersionMismatchRejected) {
     EXPECT_EQ(result.issues.front().code, "SCHEMA_VERSION_MISMATCH");
 }
 
+TEST(WfsLoaderTest, OutOfRangeScenarioSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // schema_version 为超出 INT64_MAX 的无符号整数（JSON 解析为 number_unsigned）：
+    // is_number_integer() 对其同样为 true，若无范围防护，get<int64_t>() 会抛
+    // type_error 或环绕截断，把非法数据误报为内部故障/版本不一致；此处必须返回
+    // 结构化 SCHEMA_INVALID、不抛异常（PR #107 review round 4）。
+    nlohmann::json root = ValidScenarioJson();
+    root["schema_version"] = 9223372036854775808ULL;  // INT64_MAX + 1
+    TempDir dir;
+    const std::filesystem::path file = dir.Write("out-of-range-version.json", root.dump());
+    ScenarioLoadResult result;
+    EXPECT_NO_THROW(result = load_scenario(file, ScenarioSchema()));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.issues.empty());
+    EXPECT_EQ(result.issues.front().code, "SCHEMA_INVALID");
+}
+
+TEST(WfsLoaderTest, OutOfRangeScenarioSchemaVersionWithLaxSchemaReturnsStructuredErrorWithoutThrow) {
+    // 防御纵深：即使 Schema 未约束 schema_version 的 maximum（宽松/临时 Schema 或
+    // 公开双路径重载），ExtractScenarioData 也必须在 get<int64_t>() 之前做范围
+    // 守卫，返回结构化 SCHEMA_INVALID、不抛 type_error（PR #107 review round 4）。
+    nlohmann::json root = ValidScenarioJson();
+    root["schema_version"] = 9223372036854775808ULL;  // INT64_MAX + 1
+    TempDir dir;
+    const std::filesystem::path schema = dir.Write("lax-schema.json", R"({"schema_version":1,"type":"object"})");
+    const std::filesystem::path file = dir.Write("out-of-range-version-lax.json", root.dump());
+    ScenarioLoadResult result;
+    EXPECT_NO_THROW(result = load_scenario(file, schema));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.issues.empty());
+    EXPECT_EQ(result.issues.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.issues.front().message.find("schema_version"), std::string::npos);
+}
+
 TEST(WfsLoaderTest, DuplicateUnitIdRejected) {
     nlohmann::json root = ValidScenarioJson();
     root["units"].push_back(root["units"][0]);
