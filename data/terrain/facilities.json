@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "kind": "facility",
+  "entries": [
+    {
+      "id": "facility-hq-tent",
+      "name": "Command Post Tent",
+      "kind": "deployable",
+      "visibility": "hidden_until_recon"
+    },
+    {
+      "id": "facility-supply-point",
+      "name": "Supply Point",
+      "kind": "deployable",
+      "visibility": "hidden_until_recon"
+    },
+    {
+      "id": "facility-medical-point",
+      "name": "Medical Point",
+      "kind": "deployable",
+      "visibility": "hidden_until_recon"
+    },
+    {
+      "id": "facility-field-airfield",
+      "name": "Field Airfield",
+      "kind": "deployable",
+      "visibility": "hidden_until_recon"
+    },
+    {
+      "id": "facility-rally-point",
+      "name": "Rally Point",
+      "kind": "deployable",
+      "visibility": "coordinate_only"
+    },
+    {
+      "id": "facility-hospital",
+      "name": "Hospital",
+      "kind": "functional",
+      "visibility": "fixed_visible"
+    },
+    {
+      "id": "facility-power-station",
+      "name": "Power Station",
+      "kind": "functional",
+      "visibility": "fixed_visible"
+    },
+    {
+      "id": "facility-comms-station",
+      "name": "Communications Station",
+      "kind": "functional",
+      "visibility": "fixed_visible"
+    },
+    {
+      "id": "facility-railway-station",
+      "name": "Railway Station",
+      "kind": "functional",
+      "visibility": "fixed_visible"
+    },
+    {
+      "id": "facility-settlement",
+      "name": "Settlement",
+      "kind": "functional",
+      "visibility": "fixed_visible"
+    }
+  ]
+}
