@@ -7,6 +7,7 @@
 using System.Windows;
 using System.Windows.Threading;
 using WarFictionSim.Ui.GameControls;
+using WarFictionSim.Ui.Interop;
 using WarFictionSim.Ui.ViewModels;
 
 namespace WarFictionSim.Ui;
@@ -44,7 +45,24 @@ public partial class MainWindow : Window
         _renderTimer.Start();
     }
 
-    private void RenderTimer_Tick(object? sender, EventArgs e) => ViewModel?.Game?.OnPresentationFrame();
+    private void RenderTimer_Tick(object? sender, EventArgs e)
+    {
+        try
+        {
+            ViewModel?.Game?.OnPresentationFrame();
+        }
+        catch (ObjectDisposedException)
+        {
+            // 返回主菜单/关窗竞态：战斗主屏已释放，渲染循环失去数据源，停表即可。
+            _renderTimer.Stop();
+        }
+        catch (SnapshotParseException)
+        {
+            // 兜底：核心输出与快照契约漂移时，不再让 DispatcherTimer 未处理异常
+            // 崩溃进程（正常路径由 GameScreenViewModel 呈现中文提示）。
+            _renderTimer.Stop();
+        }
+    }
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {

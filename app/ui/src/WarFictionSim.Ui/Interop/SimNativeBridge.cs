@@ -183,11 +183,22 @@ public sealed class SimNativeBridge : ISimClient
     /// <inheritdoc />
     public void Dispose()
     {
-        IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        _disposed = true;
-        if (handle != IntPtr.Zero)
+        // 与全部 wfs_sim_* 调用共用同一把锁：销毁句柄与在途调用互斥（F3），
+        // 杜绝步进线程正在 wfs_sim_step/get_snapshot 内时被 use-after-free。
+        lock (_gate)
         {
-            NativeDestroy(handle);
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            IntPtr handle = _handle;
+            _handle = IntPtr.Zero;
+            if (handle != IntPtr.Zero)
+            {
+                NativeDestroy(handle);
+            }
         }
     }
 

@@ -94,6 +94,14 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         {
             StatusError = $"读取快照失败：{exception.Message}";
         }
+        catch (ObjectDisposedException)
+        {
+            StatusError = "模拟核心已释放：战斗已结束或正在返回主菜单，请返回主菜单后重新开始。";
+        }
+        catch (SnapshotParseException exception)
+        {
+            StatusError = $"快照解析失败：{exception.Message}（核心输出与 UI 契约可能不匹配，请检查版本是否一致）。";
+        }
     }
 
     /// <summary>步进一个 tick（由表现层步进泵按档位调用；暂停时不调用）。</summary>
@@ -107,6 +115,10 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         catch (SimNativeException exception)
         {
             _lastStepError = $"推进模拟失败：{exception.Message}";
+        }
+        catch (ObjectDisposedException)
+        {
+            _lastStepError = "模拟核心已释放，步进已停止。";
         }
     }
 
@@ -133,6 +145,10 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         catch (SimNativeException exception)
         {
             CommandPanel.ShowNativeRejection(exception);
+        }
+        catch (ObjectDisposedException)
+        {
+            StatusError = "模拟核心已释放，命令未能注入。";
         }
     }
 

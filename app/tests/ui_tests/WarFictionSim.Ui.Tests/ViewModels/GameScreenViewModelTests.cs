@@ -103,4 +103,50 @@ public class GameScreenViewModelTests
             issue => issue.Code == "TARGET_REQUIRED" && issue.Message.Contains("未选择执行单位", StringComparison.Ordinal));
         Assert.False(viewModel.CommandPanel.CanSubmit);
     }
+
+    [Fact]
+    public void OnPresentationFrame_CatchesSnapshotParseException()
+    {
+        (FakeSimClient client, _) = SnapshotWithUnits();
+        client.NextGetSnapshotError = new SnapshotParseException("字段漂移");
+        var viewModel = new GameScreenViewModel(client, Scenario());
+
+        viewModel.OnPresentationFrame();
+
+        Assert.Contains("快照解析失败", viewModel.StatusError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnPresentationFrame_CatchesObjectDisposedException()
+    {
+        (FakeSimClient client, _) = SnapshotWithUnits();
+        client.NextGetSnapshotError = new ObjectDisposedException("sim");
+        var viewModel = new GameScreenViewModel(client, Scenario());
+
+        viewModel.OnPresentationFrame();
+
+        Assert.Contains("已释放", viewModel.StatusError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StepOneTick_CatchesObjectDisposedException()
+    {
+        (FakeSimClient client, _) = SnapshotWithUnits();
+        client.NextStepError = new ObjectDisposedException("sim");
+        var viewModel = new GameScreenViewModel(client, Scenario());
+
+        viewModel.StepOneTick();
+        // 返回主菜单/关窗竞态：不得逃逸为线程池未处理异常（本测试通过即证明）。
+    }
+
+    [Fact]
+    public void Dispose_DisposesClient()
+    {
+        (FakeSimClient client, _) = SnapshotWithUnits();
+        var viewModel = new GameScreenViewModel(client, Scenario());
+
+        viewModel.Dispose();
+
+        Assert.True(client.Disposed);
+    }
 }
