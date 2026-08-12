@@ -93,6 +93,17 @@ bool ParseUint64(const std::string& text, std::uint64_t& value) {
 }
 
 bool ParseInt(const std::string& text, int& value) {
+    // 与 ParseUint64 对称：只接受纯十进制数字（拒绝空串、'-'/'+' 前缀及
+    // 任何非数字字符），非法值在参数解析层返回用法错误（退出码 2），
+    // 不把负线程数拖到驱动层才失败。
+    if (text.empty() || text[0] == '-') {
+        return false;
+    }
+    for (const char digit : text) {
+        if (digit < '0' || digit > '9') {
+            return false;
+        }
+    }
     try {
         std::size_t consumed = 0U;
         value = std::stoi(text, &consumed, kParseBase);

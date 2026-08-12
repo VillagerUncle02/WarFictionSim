@@ -136,6 +136,13 @@ if ($r.Code -eq 0) { Fail "save 不支持 --hash 应失败" }
 $r = Invoke-Cli @('save', '--scenario', $Scenario, '--out', (Join-Path $tempDir 'flag2.wfs'), '--ticks', '10')
 if ($r.Code -eq 0) { Fail "save 不支持 --ticks 应失败" }
 
+# 10. --threads 非法值：-1/+1 必须在参数解析层拒绝（用法错误退出码 2），
+#     而不是拖到驱动层才失败（与 --ticks -1 的 ParseUint64 校验对称）。
+$r = Invoke-Cli @('run', '--scenario', $Scenario, '--seed', '42', '--threads', '-1')
+if ($r.Code -ne 2) { Fail "--threads -1 应以用法错误退出码 2 失败（实际 $($r.Code)）" }
+$r = Invoke-Cli @('run', '--scenario', $Scenario, '--seed', '42', '--threads', '+1')
+if ($r.Code -ne 2) { Fail "--threads +1 应以用法错误退出码 2 失败（实际 $($r.Code)）" }
+
 Remove-Item -LiteralPath $tempDir -Recurse -Force
 Write-Host 'CLI TESTS PASSED'
 exit 0

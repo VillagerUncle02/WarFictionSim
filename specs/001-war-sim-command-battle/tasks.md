@@ -206,7 +206,7 @@ description: "Task list template for feature implementation"
 
 ### Implementation for User Story 6（云端/熔断含自动化测试，宪法第 2 条）
 
-- [ ] T080 [P] [US6] 实现云端 AI 后端（ui/src/Ai/CloudBackend.cs：OpenAI 兼容 REST、HttpClient、response_format json_schema 结构化输出、现实超时 15s）
+- [ ] T080 [P] [US6] 实现云端 AI 后端（ui/src/Ai/CloudBackend.cs：OpenAI 兼容 REST、HttpClient、response_format json_schema 结构化输出、现实超时 15s；前置跟踪 F1：T020 注入通道/step 加锁串行化、threads 接入并行计算路径）
 - [ ] T081 [P] [US6] 实现 AI 事件触发引擎（sim/src/ai/trigger.cpp：FR-036 触发清单、态势突变量化边界、每节点 60 游戏秒频率上限、事件风暴合并去重、决策按指挥链顺序排队、按规模 AI 节点构成（FR-048/053））
 - [ ] T082 [P] [US6] 实现 AI 决策输入裁剪与摘要生成（sim/src/ai/input.cpp：变化 ≤50 条/历史 ≤20 条/总 token ≤4000、统一裁剪规则、简报结构按 command-schema §4）
 - [ ] T083 [US6] 实现周期/紧急简报系统（sim/src/ai/briefing.cpp：周期简报按配置游戏时间间隔、紧急简报由上级要求或关键事件触发、视觉区分、进入可回看事件日志）
