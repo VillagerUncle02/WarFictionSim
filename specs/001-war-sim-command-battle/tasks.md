@@ -87,11 +87,11 @@ description: "Task list template for feature implementation"
 - [x] T029 [US1] 实现命令下达与通讯延迟链路（sim/src/command_chain.cpp：下达→确认接受→执行、连排 3–10s 延迟、生效前撤回/修改、（优先级,序列号）裁决、批量部分接受）
 - [x] T030 [US1] 实现机动系统（sim/src/movement.cpp：路径移动、地形速度系数/通行限制、行军/战斗队形自动选择与切换耗时、烟幕区域遮蔽）
 - [x] T031 [US1] 实现战斗结算系统（sim/src/combat.cpp：动能/化学能穿深与伤害查表、过穿衰减、班组区域结算→个人防护衔接、自动目标选择/选弹与不匹配降级、压制量化、模块损伤、弃车与乘员/载员结算（FR-062））
-- [ ] T032 [US1] 实现失联机制（sim/src/contact.cpp：失联概率统一 RNG、最后已知状态、恢复 60–180s、压制/失联/模块损伤复合状态取最严叠加）
-- [ ] T033 [US1] 实现迷雾/情报识别系统（sim/src/intel.cpp：可视距离与观察能力、识别分档 T1–T3、记忆保留、最后动向、情报来源标注与过期）
-- [ ] T034 [US1] 实现任务判定与事件上报（sim/src/mission_exec.cpp：确定性完成/失败判定、超时处置、失败后处置、持续任务循环、任务状态事件上报上级）
-- [ ] T035 [US1] 实现侦察类任务判定机制（sim/src/recon_tasks.cpp：HIDDEN_RECON/INFILTRATE_RECON/OBSERVATION_POST/FIRE_RECON 判定机制实现，并按 CHK064 登记"实现阶段判定机制"待办）
-- [ ] T036 [US1] 实现基础胜负判定（sim/src/outcome.cpp：关键目标/关键失败条件/时间上限、完成度加权、失败优先、部署超时兜底）
+- [x] T032 [US1] 实现失联机制（sim/src/contact.cpp：失联概率统一 RNG、最后已知状态、恢复 60–180s、压制/失联/模块损伤复合状态取最严叠加）
+- [x] T033 [US1] 实现迷雾/情报识别系统（sim/src/intel.cpp：可视距离与观察能力、识别分档 T1–T3、记忆保留、最后动向、情报来源标注与过期）
+- [x] T034 [US1] 实现任务判定与事件上报（sim/src/mission_exec.cpp：确定性完成/失败判定、超时处置、失败后处置、持续任务循环、任务状态事件上报上级）
+- [x] T035 [US1] 实现侦察类任务判定机制（sim/src/recon_tasks.cpp：HIDDEN_RECON/INFILTRATE_RECON/OBSERVATION_POST/FIRE_RECON 判定机制实现，并按 CHK064 登记"实现阶段判定机制"待办）
+- [x] T036 [US1] 实现基础胜负判定（sim/src/outcome.cpp：关键目标/关键失败条件/时间上限、完成度加权、失败优先、部署超时兜底）
 - [x] T037 [P] [US1] 创建基础数据文件（data/units/、data/terrain/：班/武器/弹药/地形/工事/功能设施基线 JSON，带 schema_version，加载校验通过）
 - [x] T038 [P] [US1] 创建连排级新手教程场景（data/scenarios/scn-tutorial-platoon.json：小规模战斗、目标/失败条件/时间上限、教程独立存档标识）
 - [ ] T039 [P] [US1] 实现主菜单与作战规模选择 UI（ui/src/MainMenu/：选择连排/营级与扮演节点、教程入口、新游戏/读档入口）
