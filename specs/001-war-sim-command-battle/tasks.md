@@ -51,7 +51,7 @@ description: "Task list template for feature implementation"
 - [x] T011 实现事件/命令确定性队列（sim/include/wfs/sim/queue.h、sim/src/queue.cpp：按（game_tick, 单调序列号）排序、玩家命令与 AI 决策同一队列）
 - [ ] T012 实现 C ABI 边界层（sim/src/c_api.cpp：wfs_sim_* 系列、不透明句柄、wfs_sim_result 错误码、快照缓冲生命周期、wfs_sim_version ABI 版本号，见 contracts/sim-c-api.md）
 - [x] T013 实现场景/数据加载与校验框架（sim/src/loader.cpp：JSON Schema + 语义校验、非法数据报错而非崩溃、启动校验预算 ≤5s）
-- [ ] T014 实现命令 Schema 与双重校验管道（sim/src/command_validation.cpp：JSON Schema + 语义校验，含越权命令拒绝/未注册类型/条件可求值/弹药存在性，见 contracts/command-schema.md §2）
+- [x] T014 实现命令 Schema 与双重校验管道（sim/src/command_validation.cpp：JSON Schema + 语义校验，含越权命令拒绝/未注册类型/条件可求值/弹药存在性，见 contracts/command-schema.md §2）
 - [ ] T015 [P] 实现事件日志基础设施（sim/src/event_log.cpp：分类/严重级、5000 条环形保留、关键事件优先、过滤与搜索接口）
 - [ ] T016 实现状态快照与状态哈希（sim/src/snapshot.cpp：wfs_sim_get_snapshot 只读 JSON 快照、wfs_sim_get_state_hash SHA-256）
 - [ ] T017 实现存档序列化框架（sim/src/save.cpp：magic "WFS-SAVE" + format_version + header_json + state_blob、migrate 迁移链骨架、wfs_sim_save/load_save，见 contracts/save-format.md）

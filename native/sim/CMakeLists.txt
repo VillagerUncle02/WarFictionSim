@@ -10,6 +10,7 @@ add_library(sim STATIC
     src/clock.cpp
     src/queue.cpp
     src/loader.cpp
+    src/command_validation.cpp
     src/schema_validator.cpp
 )
 

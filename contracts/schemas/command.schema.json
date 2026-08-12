@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim command",
+  "description": "Runtime schema for player and AI commands (T014). Mirrors specs/001-war-sim-command-battle/contracts/command-schema.md section 1; semantic checks beyond structure live in command_validation.cpp.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "type",
+    "target",
+    "completion",
+    "intent",
+    "behavior",
+    "priority",
+    "deadline"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "unit",
+            "zone",
+            "point"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "completion": {
+      "type": "object",
+      "required": [
+        "condition"
+      ],
+      "properties": {
+        "condition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    "intent": {
+      "type": "string"
+    },
+    "behavior": {
+      "type": "object",
+      "properties": {
+        "engagement": {
+          "enum": [
+            "aggressive",
+            "balanced",
+            "cautious"
+          ]
+        },
+        "ammo_override": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_action": {
+          "enum": [
+            "withdraw_to",
+            "hold",
+            "report"
+          ]
+        }
+      }
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "deadline": {
+      "type": "object",
+      "required": [
+        "game_time"
+      ],
+      "properties": {
+        "game_time": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
