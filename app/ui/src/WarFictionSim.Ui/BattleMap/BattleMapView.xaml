@@ -1,0 +1,91 @@
+<!-- 文件总览：2D 兵牌地图视图（T040）。
+     迷雾生效：ItemsControl 只绑定 BattleMapViewModel.Markers（已过滤的可见兵牌）；
+     平移/缩放走纯几何 MapViewport，渲染独立于模拟 tick（FR-025）。
+     识别档位/来源/最后已知状态直接呈现在兵牌样式与工具提示上。 -->
+<UserControl x:Class="WarFictionSim.Ui.BattleMap.BattleMapView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:map="clr-namespace:WarFictionSim.Ui.BattleMap"
+             mc:Ignorable="d"
+             d:DesignHeight="480" d:DesignWidth="720"
+             KeyboardNavigation.TabNavigation="Cycle">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#1D1D1D" Padding="8,4">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="ZoomInButton" Content="放大(_I)…" Click="ZoomInButton_Click" Padding="6,2"
+                        AutomationProperties.Name="放大地图"/>
+                <Button x:Name="ZoomOutButton" Content="缩小(_O)" Click="ZoomOutButton_Click" Padding="6,2" Margin="6,0,0,0"
+                        AutomationProperties.Name="缩小地图"/>
+                <Button x:Name="FitButton" Content="适配(_F)" Click="FitButton_Click" Padding="6,2" Margin="6,0,0,0"
+                        AutomationProperties.Name="整图适配视口"/>
+                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#DDDDDD"
+                           Text="{Binding Viewport.Zoom, StringFormat=缩放 {0:0.#} px/km}"/>
+                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#9BB7D4" Text="蓝=己方"/>
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Foreground="#D4A39B" Text="红=敌情（按识别档位）"/>
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Foreground="#AAAAAA" Text="虚线=最后已知状态"/>
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="MapHost" BorderBrush="#333333" BorderThickness="1">
+            <Canvas x:Name="MapCanvas" Background="#101820" ClipToBounds="True"
+                    SizeChanged="MapCanvas_SizeChanged"
+                    MouseWheel="MapCanvas_MouseWheel"
+                    MouseLeftButtonDown="MapCanvas_MouseLeftButtonDown"
+                    MouseMove="MapCanvas_MouseMove"
+                    MouseLeftButtonUp="MapCanvas_MouseLeftButtonUp">
+                <ItemsControl ItemsSource="{Binding Markers}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding ScreenX}"/>
+                            <Setter Property="Canvas.Top" Value="{Binding ScreenY}"/>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding DataContext.SelectUnitCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding UnitId}"
+                                    ToolTip="{Binding SourceLabel}"
+                                    Foreground="White"
+                                    Margin="-8,-10,0,0">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="#8B3A2E"/>
+                                        <Setter Property="BorderBrush" Value="#222222"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Setter Property="Padding" Value="4,2"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsFriendly}" Value="True">
+                                                <Setter Property="Background" Value="#245A9E"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsLastKnown}" Value="True">
+                                                <Setter Property="Opacity" Value="0.68"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                <Setter Property="BorderBrush" Value="#FFD54F"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DisplayName}" FontSize="11" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Tier, StringFormat=[{0}]}" FontSize="9" Foreground="#FFD54F"
+                                               HorizontalAlignment="Center"
+                                               Visibility="{Binding Tier, Converter={x:Static map:IntelTierToVisibilityConverter.Default}}"/>
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Canvas>
+        </Border>
+    </DockPanel>
+</UserControl>
