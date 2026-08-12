@@ -22,6 +22,7 @@ add_library(sim STATIC
     src/ai/decision_log.cpp
     src/ai/script_backend.cpp
     src/ai_inject.cpp
+    src/headless_driver.cpp
 )
 
 target_include_directories(sim PUBLIC
@@ -36,4 +37,41 @@ target_link_libraries(sim PUBLIC
 
 if (MSVC)
     target_compile_options(sim PRIVATE /utf-8)
+endif()
+
+# ---- T019：无头 CLI（宪法 15：无头可测；quickstart §3）----
+add_executable(sim_headless headless/main.cpp)
+target_link_libraries(sim_headless PRIVATE sim)
+# 内部驱动/注入头文件（sim_runtime.h、ai_inject.h、sim_state.h）。
+target_include_directories(sim_headless PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+if (MSVC)
+    target_compile_options(sim_headless PRIVATE /utf-8)
+endif()
+
+# Windows 下 json-schema-validator 为动态库时，把运行期 DLL 复制到
+# sim_headless.exe 目录（与 sim_tests 同一策略），避免运行时找不到 DLL。
+if (WIN32)
+    set(_sim_headless_need_dll_copy FALSE)
+    get_target_property(_sim_headless_location nlohmann_json_schema_validator::validator IMPORTED_LOCATION_RELEASE)
+    if (NOT _sim_headless_location OR _sim_headless_location MATCHES "-NOTFOUND$")
+        get_target_property(_sim_headless_location nlohmann_json_schema_validator::validator IMPORTED_LOCATION)
+    endif()
+    if (_sim_headless_location)
+        string(TOLOWER "${_sim_headless_location}" _sim_headless_location_lower)
+        if (_sim_headless_location_lower MATCHES "\\.dll$")
+            set(_sim_headless_need_dll_copy TRUE)
+        endif()
+    endif()
+    if (_sim_headless_need_dll_copy)
+        add_custom_command(TARGET sim_headless POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_RUNTIME_DLLS:sim_headless>
+                $<TARGET_FILE_DIR:sim_headless>
+            COMMAND_EXPAND_LISTS
+            VERBATIM)
+    endif()
+    unset(_sim_headless_need_dll_copy)
+    unset(_sim_headless_location)
+    unset(_sim_headless_location_lower)
 endif()
