@@ -2,6 +2,7 @@
 # T009：转换为 STATIC 并加入统一确定性 RNG（PCG32）源码；继续链接 core_c。
 add_library(sim STATIC
     src/rng.cpp
+    src/clock.cpp
 )
 
 target_include_directories(sim PUBLIC
