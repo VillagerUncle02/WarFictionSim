@@ -8,6 +8,7 @@
 // 状态修改执行，队列保持不变。try_pop() 采用补发语义：请求 tick 大于
 // 事件 tick 时仍弹出（不丢命令），事件晚于请求 tick 时留待后续。
 
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -39,12 +40,21 @@ std::uint64_t EventQueue::enqueue(GameTick tick, std::string payload) {
         ++next_seq_;
     }
     const std::uint64_t seq = next_seq_;
-    enqueue(tick, seq, std::move(payload));
+    insert(tick, seq, std::move(payload));
     ++next_seq_;
     return seq;
 }
 
 void EventQueue::enqueue(GameTick tick, std::uint64_t seq, std::string payload) {
+    insert(tick, seq, std::move(payload));
+    // 保持 auto 序列号全局单调：显式入队成功后把游标前移到 max(next_seq_, seq+1)；
+    // seq == UINT64_MAX 时饱和不推进（无后续可分配值）。
+    if (seq != std::numeric_limits<std::uint64_t>::max() && seq + 1u > next_seq_) {
+        next_seq_ = seq + 1u;
+    }
+}
+
+void EventQueue::insert(GameTick tick, std::uint64_t seq, std::string payload) {
     if (!seqs_.insert(seq).second) {
         ThrowDuplicateSeq(seq);
     }

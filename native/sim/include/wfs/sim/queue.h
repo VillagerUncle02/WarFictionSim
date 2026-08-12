@@ -7,8 +7,9 @@
 //   (game_tick, 单调序列号) 排序；模拟核心按序取出执行，保证相同输入
 //   产生相同处理顺序。
 // - 序列号可由调用方按确定性规则显式提供（如注入通道记录的到达序号，
-//   T020），也可由队列自动分配。auto 与显式 seq 可混用：auto 从 0 起
-//   单调递增并自动跳过队列中已占用的 seq（确定性递增，基于现有存储查重），
+//   T020），也可由队列自动分配。两者可混用：显式入队成功后自动游标推进到
+//   max(next_seq_, seq + 1)（饱和），保证 auto 序列号全局单调、不回收；
+//   auto 分配还会跳过队列中已占用的 seq（确定性递增，基于现有存储查重），
 //   因此显式 seq 0 不会锁死 auto 分配；两者共享同一唯一性校验。
 //   同 tick 内先进先出等价于按 seq 升序。
 // - 重复 seq（同一事件在队列中只能存在一份）是确定性违约：抛
@@ -58,6 +59,8 @@ class EventQueue {
     std::uint64_t next_seq() const noexcept;
 
    private:
+    void insert(GameTick tick, std::uint64_t seq, std::string payload);
+
     struct ByTickThenSeq {
         bool operator()(const QueuedEvent& lhs, const QueuedEvent& rhs) const {
             if (lhs.tick != rhs.tick) {

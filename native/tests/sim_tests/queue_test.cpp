@@ -133,10 +133,21 @@ TEST(WfsQueueTest, ExplicitAndAutoSeqShareUniqueness) {
     EventQueue queue;
     queue.enqueue(0u, 5u, "explicit");
     const uint64_t auto_seq = queue.enqueue(0u, "auto");
-    EXPECT_EQ(auto_seq, 0u);
-    EXPECT_THROW(queue.enqueue(0u, 0u, "duplicate-of-auto"), std::invalid_argument);
+    EXPECT_EQ(auto_seq, 6u);  // auto 从显式 seq 之后继续单调分配。
+    EXPECT_THROW(queue.enqueue(0u, 6u, "duplicate-of-auto"), std::invalid_argument);
     EXPECT_THROW(queue.enqueue(0u, 5u, "duplicate-of-explicit"), std::invalid_argument);
     EXPECT_EQ(queue.size(), 2u);
+}
+
+TEST(WfsQueueTest, AutoSeqStaysMonotonicAfterExplicitSeq) {
+    EventQueue queue;
+    queue.enqueue(0u, 100u, "explicit-100");
+    queue.pop();
+    const uint64_t auto_seq = queue.enqueue(0u, "auto");
+    EXPECT_EQ(auto_seq, 101u);  // 显式事件弹出后 auto 仍从 101 继续，不回收。
+    EXPECT_EQ(queue.next_seq(), 102u);
+    EXPECT_EQ(Next(queue).payload, "auto");
+    EXPECT_TRUE(queue.empty());
 }
 
 TEST(WfsQueueTest, AutoSeqSkipsExplicitZero) {
@@ -189,5 +200,20 @@ TEST(WfsQueueTest, TryPopCatchUpWhenRequestedTickAhead) {
     EXPECT_EQ(out.tick, 3u);
     EXPECT_EQ(out.seq, 0u);
     EXPECT_EQ(out.payload, "at3");
+    EXPECT_TRUE(queue.empty());
+}
+
+TEST(WfsQueueTest, TryPopCatchUpPopsAllEligibleEventsInOrder) {
+    EventQueue queue;
+    queue.enqueue(3u, 0u, "t3");
+    queue.enqueue(5u, 2u, "t5b");
+    queue.enqueue(4u, 1u, "t4");
+    queue.enqueue(5u, 3u, "t5a");
+
+    QueuedEvent out;
+    for (const char* expected : {"t3", "t4", "t5b", "t5a"}) {
+        EXPECT_TRUE(queue.try_pop(5u, out)) << "expected: " << expected;
+        EXPECT_EQ(out.payload, expected);
+    }
     EXPECT_TRUE(queue.empty());
 }
