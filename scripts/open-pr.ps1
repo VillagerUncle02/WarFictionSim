@@ -24,6 +24,7 @@ param(
     [string]$Repo = "",
     [string]$GeneratorName = "speckit-implement-loop",
     [string]$TitlePattern = "^T\d{3,}",
+    [string]$BaseRef = "origin/main",
     [switch]$DryRun,
     [switch]$AllowEmptyCloses
 )
@@ -43,7 +44,7 @@ if ($TasksFile) {
         Write-Err "ERROR: tasks.md 不存在：$TasksFile（不会创建无 Closes 的 PR）。"
         exit 1
     }
-    $taskIds += @(Get-NewCompletedTaskIds -TasksFile $TasksFile -RepoRoot $repoRoot)
+    $taskIds += @(Get-NewCompletedTaskIds -TasksFile $TasksFile -RepoRoot $repoRoot -BaseRef $BaseRef)
     if ($taskIds.Count -eq 0 -and -not $AllowEmptyCloses) {
         Write-Err "ERROR: tasks.md 中没有已完成（[X]）任务，将生成无 Closes 的 PR（正是漏关 issue 的根源）。"
         Write-Err "请确认调用时机；确需创建请加 -AllowEmptyCloses。"

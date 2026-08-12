@@ -15,6 +15,7 @@ param(
     [string]$Repo = "",
     [string]$PR = "",
     [string]$TitlePattern = "^T\d{3,}",
+    [string]$BaseRef = "origin/main",
     [switch]$DryRun
 )
 
@@ -51,7 +52,7 @@ if (-not $PR) {
 }
 
 # 已完成任务 → issue 映射
-$taskIds = @(Get-NewCompletedTaskIds -TasksFile $TasksFile -RepoRoot $repoRoot)
+$taskIds = @(Get-NewCompletedTaskIds -TasksFile $TasksFile -RepoRoot $repoRoot -BaseRef $BaseRef)
 if ($taskIds.Count -eq 0) {
     Write-Host "tasks.md 中没有已完成（[X]）任务，无需同步 Closes。"
     exit 0
