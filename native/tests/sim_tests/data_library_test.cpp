@@ -48,7 +48,7 @@ nlohmann::json ReadFile(const std::filesystem::path& path) {
 // 把仓库基线数据复制到临时目录，仅覆盖指定相对路径的文件内容。
 void CopyBaselineTo(TempDir& dir, const std::string& override_relative, const nlohmann::json& override_content) {
     for (const std::string& relative :
-         {"units/squads.json", "units/weapons.json", "units/ammo.json", "terrain/terrain.json",
+         {"units/squads.json", "units/vehicles.json", "units/weapons.json", "units/ammo.json", "terrain/terrain.json",
           "terrain/fortifications.json", "terrain/facilities.json"}) {
         if (relative == override_relative) {
             dir.Write(relative, override_content.dump());
@@ -72,6 +72,8 @@ std::vector<std::string> IssueCodes(const wfs::sim::DataLibraryLoadResult& resul
 TEST(WfsDataLibraryTest, ResolvesSchemasByRepoConvention) {
     EXPECT_EQ(resolve_schema_path(DataRoot() / "units" / "squads.json", "squads.schema.json"),
               SchemaDir() / "squads.schema.json");
+    EXPECT_EQ(resolve_schema_path(DataRoot() / "units" / "vehicles.json", "vehicles.schema.json"),
+              SchemaDir() / "vehicles.schema.json");
     EXPECT_EQ(resolve_schema_path(DataRoot() / "units" / "weapons.json", "weapons.schema.json"),
               SchemaDir() / "weapons.schema.json");
     EXPECT_EQ(resolve_schema_path(DataRoot() / "units" / "ammo.json", "ammo.schema.json"),
@@ -90,6 +92,12 @@ TEST(WfsDataLibraryTest, EachCatalogLoadsIndividually) {
     EXPECT_EQ(squads.catalog.schema_version, 1);
     EXPECT_EQ(squads.catalog.kind, "squad");
     EXPECT_GT(squads.catalog.entries.size(), 0u);
+
+    const auto vehicles = load_data_catalog(DataRoot() / "units" / "vehicles.json");
+    ASSERT_TRUE(vehicles.ok()) << (vehicles.issues.empty() ? "" : vehicles.issues.front().message);
+    EXPECT_EQ(vehicles.catalog.schema_version, 1);
+    EXPECT_EQ(vehicles.catalog.kind, "vehicle");
+    EXPECT_GT(vehicles.catalog.entries.size(), 0u);
 
     const auto weapons = load_data_catalog(DataRoot() / "units" / "weapons.json");
     ASSERT_TRUE(weapons.ok());
@@ -116,12 +124,14 @@ TEST(WfsDataLibraryTest, BaselineLibraryLoadsWithCrossReferences) {
     const auto result = load_data_library(DataRoot());
     ASSERT_TRUE(result.ok()) << (result.issues.empty() ? "" : result.issues.front().message);
     EXPECT_EQ(result.library.squads.schema_version, 1);
+    EXPECT_EQ(result.library.vehicles.schema_version, 1);
     EXPECT_EQ(result.library.weapons.schema_version, 1);
     EXPECT_EQ(result.library.ammo.schema_version, 1);
     EXPECT_EQ(result.library.terrain.schema_version, 1);
     EXPECT_EQ(result.library.fortifications.schema_version, 1);
     EXPECT_EQ(result.library.facilities.schema_version, 1);
     EXPECT_GE(result.library.squads.entries.size(), 5u);
+    EXPECT_GE(result.library.vehicles.entries.size(), 2u);
     EXPECT_GE(result.library.weapons.entries.size(), 7u);
     EXPECT_GE(result.library.ammo.entries.size(), 8u);
     EXPECT_GE(result.library.terrain.entries.size(), 9u);
@@ -178,6 +188,28 @@ TEST(WfsDataLibraryTest, SquadAmmoMustBeCompatibleWithWeapons) {
     const auto result = load_data_library(dir.path(), SchemaDir());
     ASSERT_FALSE(result.ok());
     EXPECT_EQ(result.issues.front().code, "DATA_AMMO_INCOMPATIBLE");
+}
+
+TEST(WfsDataLibraryTest, VehicleAmmoAndCrewCapacityValidated) {
+    TempDir dir;
+    nlohmann::json vehicles = ReadFile(DataRoot() / "units" / "vehicles.json");
+    vehicles["entries"][0]["ammo"] = nlohmann::json::array({"ammo-atgm"});  // 与载具武器不兼容。
+    CopyBaselineTo(dir, "units/vehicles.json", vehicles);
+
+    const auto result = load_data_library(dir.path(), SchemaDir());
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "DATA_AMMO_INCOMPATIBLE");
+}
+
+TEST(WfsDataLibraryTest, VehicleCrewOverCapacityRejected) {
+    TempDir dir;
+    nlohmann::json vehicles = ReadFile(DataRoot() / "units" / "vehicles.json");
+    vehicles["entries"][0]["crew"] = 99;
+    CopyBaselineTo(dir, "units/vehicles.json", vehicles);
+
+    const auto result = load_data_library(dir.path(), SchemaDir());
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "DATA_CREW_OVER_CAPACITY");
 }
 
 TEST(WfsDataLibraryTest, SchemaVersionMismatchRejected) {

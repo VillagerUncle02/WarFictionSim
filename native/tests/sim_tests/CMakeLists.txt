@@ -19,6 +19,8 @@ add_executable(sim_tests
     c_api_test.cpp
     ai_inject_test.cpp
     script_backend_test.cpp
+    runtime_combat_test.cpp
+    command_chain_test.cpp
     golden/golden_test.cpp
     golden/combat_golden.cpp
     command_model_test.cpp

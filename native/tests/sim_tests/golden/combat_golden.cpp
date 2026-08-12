@@ -83,7 +83,11 @@ const std::map<std::string, std::string>& GoldenSamples() {
         {"suppression", R"({"added":0.5,"total":0.7})"},
         {"contact_loss", R"({"duration_ticks":2267,"lost":true,"probability":0.24000000000000002})"},
         {"target_selection",
-         R"({"ranked":[{"distance_m":250.0,"threat":1.0,"unit_id":"enemy-squad-threat"},{"distance_m":150.0,"threat":0.5,"unit_id":"enemy-squad-near"},{"distance_m":300.0,"threat":0.8,"unit_id":"enemy-squad-far"}],"score":0.75,"target_id":"enemy-squad-threat"})"},
+         R"({"ranked":[{"distance_m":250.0,"target_armor_mm":0.0,"target_is_vehicle":false,"threat":1.0,"unit_id":"enemy-squad-threat"},{"distance_m":150.0,"target_armor_mm":0.0,"target_is_vehicle":false,"threat":0.5,"unit_id":"enemy-squad-near"},{"distance_m":300.0,"target_armor_mm":0.0,"target_is_vehicle":false,"threat":0.8,"unit_id":"enemy-squad-far"}],"score":0.75,"target_id":"enemy-squad-threat"})"},
+        {"target_selection_ammo_fit_ap",
+         R"({"ranked":[{"distance_m":250.0,"target_armor_mm":20.0,"target_is_vehicle":true,"threat":1.0,"unit_id":"vehicle-far"},{"distance_m":200.0,"target_armor_mm":0.0,"target_is_vehicle":false,"threat":1.0,"unit_id":"infantry-near"}],"score":1.0,"target_id":"vehicle-far"})"},
+        {"target_selection_ammo_fit_ball",
+         R"({"ranked":[{"distance_m":200.0,"target_armor_mm":0.0,"target_is_vehicle":false,"threat":1.0,"unit_id":"infantry-near"},{"distance_m":250.0,"target_armor_mm":20.0,"target_is_vehicle":true,"threat":1.0,"unit_id":"vehicle-far"}],"score":0.6033000000000001,"target_id":"infantry-near"})"},
         {"ammo_selection_infantry",
          R"({"ammo_id":"ammo-frag-grenade","effectiveness":1.2,"mismatch":false,"note":""})"},
         {"ammo_selection_vehicle",
@@ -302,6 +306,30 @@ TEST(WfsCombatGolden, TargetSelectionGoldenSample) {
         EngagementPolicy::kAggressive};
     const TargetSelectionResult result = wfs::sim::select_target(input, config);
     AssertGolden("target_selection", nlohmann::json(result));
+}
+
+TEST(WfsCombatGolden, TargetSelectionIncludesAmmoFit) {
+    // F6：目标选择评分必须纳入弹药适配（ammo_fit_weight），AP 弹药可用时
+    // 更远的装甲目标可反超更近的步兵目标；仅普通弹时距离主导。
+    const CombatConfig config = CombatConfig::Defaults();
+    Weapon rifle = MakeRifle();
+    rifle.compatible_ammo = {"ammo-556", "ammo-at"};
+    const Ammo ball = Make556();
+    const Ammo ap = Ammo{
+        "ammo-at", "Test AP", WarheadKind::kKinetic, AntiArmorProfile{30.0, 100.0}, AntiPersonnelProfile{0.0, 1.0, 0.5},
+        false,     1.0};
+    const std::vector<TargetCandidate> candidates{
+        {"vehicle-far", 250.0, 1.0, true, 20.0},
+        {"infantry-near", 200.0, 1.0, false, 0.0},
+    };
+
+    const TargetSelectionResult with_ap = wfs::sim::select_target(
+        TargetSelectionInput{&rifle, 0.0, 0.0, candidates, EngagementPolicy::kBalanced, {&ap}}, config);
+    AssertGolden("target_selection_ammo_fit_ap", nlohmann::json(with_ap));
+
+    const TargetSelectionResult with_ball = wfs::sim::select_target(
+        TargetSelectionInput{&rifle, 0.0, 0.0, candidates, EngagementPolicy::kBalanced, {&ball}}, config);
+    AssertGolden("target_selection_ammo_fit_ball", nlohmann::json(with_ball));
 }
 
 TEST(WfsCombatGolden, AutoAmmoSelectionAndMismatchDegradation) {

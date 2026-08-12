@@ -43,6 +43,10 @@ std::filesystem::path SampleScenario() {
     return RepoRoot() / "data" / "scenarios" / "scn-smoke-test.json";
 }
 
+std::filesystem::path RuntimeCombatScenario() {
+    return RepoRoot() / "data" / "scenarios" / "scn-runtime-combat-test.json";
+}
+
 std::string ValidCommandJson() {
     return R"({
         "schema_version": 1,
@@ -193,6 +197,35 @@ TEST(WfsSaveTest, SaveLoadRoundTripRestoresState) {
     EXPECT_EQ(StateHash(restored.get()), hash_before);
     // 线程数是运行期配置，不从存档恢复，也不参与状态哈希（宪法第 7 条）。
     EXPECT_EQ(restored_snapshot.at("threads"), 4);
+}
+
+TEST(WfsSaveTest, SaveLoadMidBattleRestoresCombatState) {
+    // F7：推进到战斗中期（命中/压制/失联/烟幕/模块损伤/弃车）后存档，
+    // 加载必须恢复完全一致的状态哈希与运行期单位/烟幕状态（宪法 13）。
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "midbattle.wfs";
+    wfs_sim_handle* source = wfs_sim_create(RuntimeCombatScenario().string().c_str(), 42U, 1);
+    ASSERT_NE(source, nullptr);
+    for (int i = 0; i < 600; ++i) {
+        EXPECT_EQ(wfs_sim_step(source), WFS_SIM_RESULT_OK);
+    }
+    const std::string hash_before = [&] {
+        char buffer[WFS_SIM_STATE_HASH_HEX_LEN] = {};
+        EXPECT_EQ(wfs_sim_get_state_hash(source, buffer), WFS_SIM_RESULT_OK);
+        return std::string(buffer);
+    }();
+    const nlohmann::json source_snapshot = SnapshotJson(source);
+    EXPECT_GT(source_snapshot.at("event_log").at("size").get<std::size_t>(), 0U) << "应已进入战斗中期";
+    EXPECT_EQ(wfs_sim_save(source, path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    wfs_sim_handle* restored = wfs_sim_create(RuntimeCombatScenario().string().c_str(), 42U, 4);
+    ASSERT_NE(restored, nullptr);
+    EXPECT_EQ(wfs_sim_load_save(restored, path.string().c_str()), WFS_SIM_RESULT_OK);
+    char restored_hash[WFS_SIM_STATE_HASH_HEX_LEN] = {};
+    EXPECT_EQ(wfs_sim_get_state_hash(restored, restored_hash), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(hash_before, std::string(restored_hash));
+    wfs_sim_destroy(source);
+    wfs_sim_destroy(restored);
 }
 
 TEST(WfsSaveTest, SaveFileLayoutMatchesContract) {
