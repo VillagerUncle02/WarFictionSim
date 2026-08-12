@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!--
+      测试工程改为 net10.0-windows：UI 工程（WPF）仅面向 Windows，
+      只有同平台目标框架才能添加 ProjectReference 并直接引用其类型。
+      本工程不需要 UseWPF，WPF 框架引用随项目引用传递。
+    -->
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
@@ -9,5 +14,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\ui\src\WarFictionSim.Ui\WarFictionSim.Ui.csproj" />
   </ItemGroup>
 </Project>
