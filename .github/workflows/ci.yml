@@ -162,10 +162,10 @@ jobs:
           }
           if (Get-Command clang-tidy -ErrorAction SilentlyContinue) {
             $repoRoot = (Get-Location).Path
-            # Windows 路径需转正斜杠并转义正则元字符，否则 \a/\W 等会被当作
-            # 正则转义，header-filter 失效导致 clang-tidy 全量分析系统头（海量噪音）。
-            $repoRootFwd = $repoRoot -replace '\\', '/'
-            $headerFilter = [regex]::Escape($repoRootFwd) + '/(native/sim|native/core_c)/'
+            # Windows 下 clang-tidy 的头文件诊断路径是混合分隔符
+            # （前缀反斜杠 + include 相对部分正斜杠），且 \a/\W 等会被当作正则
+            # 转义；因此转义仓库根后使用 [\\/] 分隔符容忍匹配（review N1）。
+            $headerFilter = [regex]::Escape($repoRoot) + '[\\/]native[\\/](sim|core_c)[\\/]'
             $cppSrc = @(Get-ChildItem native/sim -Recurse -Include *.cpp,*.cc,*.cxx -ErrorAction SilentlyContinue | ForEach-Object FullName)
             $cSrc = @(Get-ChildItem native/core_c -Recurse -Include *.c -ErrorAction SilentlyContinue | ForEach-Object FullName)
             # Ninja + clang-cl 已产出 compile_commands.json：直接按编译数据库分析
