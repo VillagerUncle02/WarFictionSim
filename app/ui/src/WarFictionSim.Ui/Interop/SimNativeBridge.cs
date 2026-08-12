@@ -6,8 +6,9 @@
 //   （返回的是静态存储指针，不能按 string 返回值自动释放）。
 // - 句柄生命周期由 IDisposable 管理，destroy 幂等；同一句柄非线程安全，
 //   因此所有调用串行化在同一把锁后（步进线程与渲染线程共享句柄时安全）。
-// - 快照走"先探长度、再按需分配"的两段式缓冲，只读解析为不可变 DTO；
-//   命令注入是修改模拟状态的唯一写路径。
+// - 快照/事件查询走"先探长度、再按需分配"的两段式缓冲（NativeBufferReader），
+//   首探成功也按实际写出长度解析；快照只读解析为不可变 DTO。
+// - 模拟状态变更（命令注入/读档）统一经本接口，UI 不直接修改模拟状态。
 // - 创建失败/DLL 缺失/ABI 错配全部抛出带可操作文案的中文异常，
 //   绝不静默吞错（宪法第 17 条）。
 
@@ -19,7 +20,6 @@ namespace WarFictionSim.Ui.Interop;
 public sealed class SimNativeBridge : ISimClient
 {
     private const int StateHashHexLength = 65;
-    private const int InitialSnapshotBufferSize = 4096;
 
     private readonly object _gate = new();
     private IntPtr _handle;
@@ -99,33 +99,25 @@ public sealed class SimNativeBridge : ISimClient
         lock (_gate)
         {
             EnsureNotDisposed();
+            string json = NativeBufferReader.Read(
+                (byte[] buffer, nuint bufferSize, out nuint length) =>
+                    NativeGetSnapshot(_handle, buffer, bufferSize, out length),
+                "读取快照");
+            return SnapshotReader.Parse(json);
+        }
+    }
 
-            // 两段式缓冲：先探测所需大小，再精确分配（contracts/sim-c-api.md：
-            // 缓冲生命周期归调用方；BUFFER_TOO_SMALL 时 out_len 含 NUL）。
-            // 循环兜底：极端情况下快照可能在两次调用间增长（同一锁内不应发生）。
-            nuint required = 0;
-            int code = NativeGetSnapshot(_handle, new byte[InitialSnapshotBufferSize], InitialSnapshotBufferSize, out required);
-            if (code != (int)SimResultCode.BufferTooSmall)
-            {
-                ThrowForResult(code, "读取快照");
-                return SnapshotReader.Parse(ReadOnlyMemory<byte>.Empty);
-            }
-
-            for (int attempt = 0; attempt < 3; attempt++)
-            {
-                byte[] buffer = new byte[checked((int)required)];
-                code = NativeGetSnapshot(_handle, buffer, (nuint)buffer.Length, out nuint written);
-                if (code == (int)SimResultCode.BufferTooSmall)
-                {
-                    required = written;
-                    continue;
-                }
-
-                ThrowForResult(code, "读取快照");
-                return SnapshotReader.Parse(buffer.AsMemory(0, checked((int)written)));
-            }
-
-            throw new SimNativeException(SimResultCode.InternalError, "读取快照失败：缓冲需求连续增长，核心输出异常。");
+    /// <inheritdoc />
+    public string QueryEvents(string queryJson)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(queryJson);
+        lock (_gate)
+        {
+            EnsureNotDisposed();
+            return NativeBufferReader.Read(
+                (byte[] buffer, nuint bufferSize, out nuint length) =>
+                    NativeQueryEvents(_handle, queryJson, buffer, bufferSize, out length),
+                "查询事件日志");
         }
     }
 
@@ -136,7 +128,7 @@ public sealed class SimNativeBridge : ISimClient
         {
             EnsureNotDisposed();
             byte[] buffer = new byte[StateHashHexLength];
-            ThrowForResult(NativeGetStateHash(_handle, buffer), "读取状态哈希");
+            NativeBufferReader.ThrowForResult(NativeGetStateHash(_handle, buffer), "读取状态哈希");
 
             // 核心保证写出 64 个小写十六进制字符 + NUL；按 64 字符截断防御脏缓冲。
             string hash = System.Text.Encoding.ASCII.GetString(buffer, 0, 64);
@@ -151,7 +143,7 @@ public sealed class SimNativeBridge : ISimClient
         lock (_gate)
         {
             EnsureNotDisposed();
-            ThrowForResult(NativeStep(_handle), "推进模拟 tick");
+            NativeBufferReader.ThrowForResult(NativeStep(_handle), "推进模拟 tick");
         }
     }
 
@@ -162,7 +154,7 @@ public sealed class SimNativeBridge : ISimClient
         lock (_gate)
         {
             EnsureNotDisposed();
-            ThrowForResult(NativeInjectCommand(_handle, commandJson), "注入命令");
+            NativeBufferReader.ThrowForResult(NativeInjectCommand(_handle, commandJson), "注入命令");
         }
     }
 
@@ -173,7 +165,7 @@ public sealed class SimNativeBridge : ISimClient
         lock (_gate)
         {
             EnsureNotDisposed();
-            ThrowForResult(NativeSave(_handle, path), "写入存档");
+            NativeBufferReader.ThrowForResult(NativeSave(_handle, path), "写入存档");
         }
     }
 
@@ -184,7 +176,7 @@ public sealed class SimNativeBridge : ISimClient
         lock (_gate)
         {
             EnsureNotDisposed();
-            ThrowForResult(NativeLoadSave(_handle, path), "读取存档");
+            NativeBufferReader.ThrowForResult(NativeLoadSave(_handle, path), "读取存档");
         }
     }
 
@@ -213,23 +205,6 @@ public sealed class SimNativeBridge : ISimClient
                 ?? throw new SimNativeException(SimResultCode.InternalError, "读取模拟核心 ABI 版本失败（非法 UTF-8）。");
     }
 
-    private static void ThrowForResult(int rawCode, string operation)
-    {
-        var code = (SimResultCode)rawCode;
-        if (code == SimResultCode.Ok)
-        {
-            return;
-        }
-
-        string hint = code switch
-        {
-            SimResultCode.InvalidData => "（核心校验拒绝，最终以核心为准）",
-            SimResultCode.IoError => "（请检查文件路径与磁盘状态）",
-            _ => string.Empty,
-        };
-        throw new SimNativeException(code, $"{operation}失败：{SimNativeException.Describe(code)}{hint}。");
-    }
-
     [DllImport(NativeSimLibrary.DefaultLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wfs_sim_create")]
     private static extern IntPtr NativeCreate(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string scenarioPath, ulong seed, int threads);
@@ -249,6 +224,14 @@ public sealed class SimNativeBridge : ISimClient
 
     [DllImport(NativeSimLibrary.DefaultLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wfs_sim_get_snapshot")]
     private static extern int NativeGetSnapshot(IntPtr handle, [Out] byte[] outBuffer, nuint bufferSize, out nuint outLength);
+
+    [DllImport(NativeSimLibrary.DefaultLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wfs_sim_query_events")]
+    private static extern int NativeQueryEvents(
+        IntPtr handle,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string queryJson,
+        [Out] byte[] outBuffer,
+        nuint bufferSize,
+        out nuint outLength);
 
     [DllImport(NativeSimLibrary.DefaultLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wfs_sim_get_state_hash")]
     private static extern int NativeGetStateHash(IntPtr handle, [Out] byte[] outHex);

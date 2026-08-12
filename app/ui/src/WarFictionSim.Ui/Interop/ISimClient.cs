@@ -1,8 +1,8 @@
 // 文件总览：UI↔核心互操作 —— 模拟客户端抽象接口（T043）。
 //
 // 为什么抽象成接口：ViewModel 只依赖这个最小表面，单元测试用假实现注入；
-// 接口刻意窄化——快照只读、命令注入是唯一修改模拟状态的写路径
-// （宪法第 14 条：UI 不直改模拟状态），Save/LoadSave 只是持久化不出模拟状态。
+// 接口刻意窄化——快照与事件查询只读；模拟状态变更（命令注入/读档恢复）
+// 统一经本接口，UI 不直接修改模拟状态（宪法第 14 条）。
 
 namespace WarFictionSim.Ui.Interop;
 
@@ -16,6 +16,12 @@ public interface ISimClient : IDisposable
     /// <returns>不可变快照。</returns>
     /// <exception cref="SimNativeException">核心返回非 OK 错误码。</exception>
     SimulationSnapshot GetSnapshot();
+
+    /// <summary>按过滤器查询事件日志（wfs_sim_query_events，只读）。</summary>
+    /// <param name="queryJson">可选 category/min_severity/text/limit 的查询 JSON。</param>
+    /// <returns>核心输出的只读 JSON 文本：events/count/truncated。</returns>
+    /// <exception cref="SimNativeException">查询参数非法或核心返回非 OK 错误码。</exception>
+    string QueryEvents(string queryJson);
 
     /// <summary>读取 64 位十六进制状态哈希（小写，SHA-256）。</summary>
     /// <returns>状态哈希字符串。</returns>

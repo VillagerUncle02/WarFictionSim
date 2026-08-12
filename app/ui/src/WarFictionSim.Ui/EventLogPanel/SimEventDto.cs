@@ -86,6 +86,20 @@ public static class SimEventCategoryParser
         SimEventCategory.System => "系统",
         _ => "未知",
     };
+
+    /// <summary>返回分类的核心稳定名称（构造 wfs_sim_query_events 查询用）。</summary>
+    /// <param name="category">分类。</param>
+    /// <returns>稳定名称。</returns>
+    public static string ToNativeName(this SimEventCategory category) => category switch
+    {
+        SimEventCategory.Command => "command",
+        SimEventCategory.Combat => "combat",
+        SimEventCategory.Intel => "intel",
+        SimEventCategory.Mission => "mission",
+        SimEventCategory.Logistics => "logistics",
+        SimEventCategory.System => "system",
+        _ => throw new ArgumentOutOfRangeException(nameof(category), category, null),
+    };
 }
 
 /// <summary>事件严重级名称解析与中文显示。</summary>
@@ -117,5 +131,17 @@ public static class SimEventSeverityParser
         SimEventSeverity.Warning => "警告",
         SimEventSeverity.Critical => "关键",
         _ => "未知",
+    };
+
+    /// <summary>返回严重级的核心稳定名称（构造 wfs_sim_query_events 查询用）。</summary>
+    /// <param name="severity">严重级。</param>
+    /// <returns>稳定名称。</returns>
+    public static string ToNativeName(this SimEventSeverity severity) => severity switch
+    {
+        SimEventSeverity.Debug => "debug",
+        SimEventSeverity.Info => "info",
+        SimEventSeverity.Warning => "warning",
+        SimEventSeverity.Critical => "critical",
+        _ => throw new ArgumentOutOfRangeException(nameof(severity), severity, null),
     };
 }

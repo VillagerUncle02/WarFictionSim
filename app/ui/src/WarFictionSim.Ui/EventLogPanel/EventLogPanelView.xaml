@@ -32,6 +32,10 @@
             </ComboBox>
             <TextBox Width="140" Margin="6,0,0,0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                      AutomationProperties.Name="搜索日志文本"/>
+            <TextBox Width="110" Margin="6,0,0,0" Text="{Binding SinceTickText, UpdateSourceTrigger=PropertyChanged}"
+                     AutomationProperties.Name="起始游戏时间筛选" ToolTip="起始游戏时间（tick，空=全部）"/>
+            <TextBlock Text="{Binding GameTimeFilterError}" Foreground="#B3261E"
+                       VerticalAlignment="Center" Margin="6,0,0,0" TextTrimming="CharacterEllipsis"/>
             <CheckBox Content="关键事件置顶" Margin="10,0,0,0" VerticalAlignment="Center"
                       IsChecked="{Binding PinCriticalEvents}"
                       AutomationProperties.Name="关键事件置顶"/>

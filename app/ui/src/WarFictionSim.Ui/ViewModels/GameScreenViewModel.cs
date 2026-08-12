@@ -37,7 +37,7 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         BattleMap = new BattleMapViewModel(scenario.MapWidthKm, scenario.MapHeightKm);
         CommandPanel = new CommandPanelViewModel();
         TimeControls = new TimeControlsViewModel((int)scenario.TickHz);
-        EventLog = new EventLogViewModel();
+        EventLog = new EventLogViewModel(_client, scenario.TickHz);
         CommandPanel.SubmitRequested += (_, json) => InjectCommand(json);
     }
 
@@ -111,7 +111,7 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
     {
         BattleMap.ApplySnapshot(snapshot);
         CommandPanel.ApplyContext(BuildCommandContext(snapshot));
-        EventLog.ApplySummary(snapshot.EventLog);
+        EventLog.ApplySummary(snapshot.EventLog, snapshot.Tick);
         TickDisplay = $"tick {snapshot.Tick}";
         StateHash = _client.GetStateHash();
     }
