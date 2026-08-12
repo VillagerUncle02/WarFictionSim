@@ -3,6 +3,7 @@
 add_library(sim STATIC
     src/rng.cpp
     src/clock.cpp
+    src/queue.cpp
 )
 
 target_include_directories(sim PUBLIC
