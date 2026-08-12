@@ -80,10 +80,10 @@ description: "Task list template for feature implementation"
 
 ### Implementation for User Story 1
 
-- [ ] T025 [P] [US1] 创建指挥节点/编制/最小可指挥单位模型（sim/include/wfs/sim/model/command_node.h、organization.h、min_unit.h：CommandNode/Owner/指挥树/command_limit/coordination/experience、OrganizationUnit、MinCommandUnit、每节点单一 AI 归属（FR-048））
-- [ ] T026 [P] [US1] 创建士兵/班组/载具/武器/弹药模型（sim/include/wfs/sim/model/combat.h：Soldier/Squad/Vehicle/Weapon/Ammo、四方向防护、模块状态、乘员/载员、重装备标志）
-- [ ] T027 [P] [US1] 创建地形/设施/工事/环境模型（sim/include/wfs/sim/model/terrain.h：TerrainElement/Facility/Fortification/EnvironmentState、统一 passability、两栖规则、设施可见性规则与生命周期（部署/取消/重布置、侦察残留，FR-014））
-- [ ] T028 [P] [US1] 创建任务模型与 13 种任务类型注册表（sim/src/mission_registry.cpp：Mission/MissionType 全部 13 种、ConditionExpr 确定性求值器、任务状态机数据表，见 data-model §11）
+- [x] T025 [P] [US1] 创建指挥节点/编制/最小可指挥单位模型（sim/include/wfs/sim/model/command_node.h、organization.h、min_unit.h：CommandNode/Owner/指挥树/command_limit/coordination/experience、OrganizationUnit、MinCommandUnit、每节点单一 AI 归属（FR-048））
+- [x] T026 [P] [US1] 创建士兵/班组/载具/武器/弹药模型（sim/include/wfs/sim/model/combat.h：Soldier/Squad/Vehicle/Weapon/Ammo、四方向防护、模块状态、乘员/载员、重装备标志）
+- [x] T027 [P] [US1] 创建地形/设施/工事/环境模型（sim/include/wfs/sim/model/terrain.h：TerrainElement/Facility/Fortification/EnvironmentState、统一 passability、两栖规则、设施可见性规则与生命周期（部署/取消/重布置、侦察残留，FR-014））
+- [x] T028 [P] [US1] 创建任务模型与 13 种任务类型注册表（sim/src/mission_registry.cpp：Mission/MissionType 全部 13 种、ConditionExpr 确定性求值器、任务状态机数据表，见 data-model §11）
 - [ ] T029 [US1] 实现命令下达与通讯延迟链路（sim/src/command_chain.cpp：下达→确认接受→执行、连排 3–10s 延迟、生效前撤回/修改、（优先级,序列号）裁决、批量部分接受）
 - [ ] T030 [US1] 实现机动系统（sim/src/movement.cpp：路径移动、地形速度系数/通行限制、行军/战斗队形自动选择与切换耗时、烟幕区域遮蔽）
 - [ ] T031 [US1] 实现战斗结算系统（sim/src/combat.cpp：动能/化学能穿深与伤害查表、过穿衰减、班组区域结算→个人防护衔接、自动目标选择/选弹与不匹配降级、压制量化、模块损伤、弃车与乘员/载员结算（FR-062））
@@ -92,8 +92,8 @@ description: "Task list template for feature implementation"
 - [ ] T034 [US1] 实现任务判定与事件上报（sim/src/mission_exec.cpp：确定性完成/失败判定、超时处置、失败后处置、持续任务循环、任务状态事件上报上级）
 - [ ] T035 [US1] 实现侦察类任务判定机制（sim/src/recon_tasks.cpp：HIDDEN_RECON/INFILTRATE_RECON/OBSERVATION_POST/FIRE_RECON 判定机制实现，并按 CHK064 登记"实现阶段判定机制"待办）
 - [ ] T036 [US1] 实现基础胜负判定（sim/src/outcome.cpp：关键目标/关键失败条件/时间上限、完成度加权、失败优先、部署超时兜底）
-- [ ] T037 [P] [US1] 创建基础数据文件（data/units/、data/terrain/：班/武器/弹药/地形/工事/功能设施基线 JSON，带 schema_version，加载校验通过）
-- [ ] T038 [P] [US1] 创建连排级新手教程场景（data/scenarios/scn-tutorial-platoon.json：小规模战斗、目标/失败条件/时间上限、教程独立存档标识）
+- [x] T037 [P] [US1] 创建基础数据文件（data/units/、data/terrain/：班/武器/弹药/地形/工事/功能设施基线 JSON，带 schema_version，加载校验通过）
+- [x] T038 [P] [US1] 创建连排级新手教程场景（data/scenarios/scn-tutorial-platoon.json：小规模战斗、目标/失败条件/时间上限、教程独立存档标识）
 - [ ] T039 [P] [US1] 实现主菜单与作战规模选择 UI（ui/src/MainMenu/：选择连排/营级与扮演节点、教程入口、新游戏/读档入口）
 - [ ] T040 [P] [US1] 实现 2D 兵牌地图视图（ui/src/BattleMap/：平移/缩放、迷雾生效、兵牌渲染、识别档位信息与来源标注显示、最后已知状态）
 - [ ] T041 [US1] 实现命令面板与三级校验提示（ui/src/CommandPanel/：点选/框选目标、类型/完成条件/优先级/时限、错误/警告/建议内嵌提示、全键盘可操作）
