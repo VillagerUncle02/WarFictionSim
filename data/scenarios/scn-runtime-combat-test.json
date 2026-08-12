@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "id": "scn-runtime-combat-test",
+  "name": "Runtime Combat Test (F5/F7/F8)",
+  "player_node_id": "player-node",
+  "map": {
+    "width_km": 1.0,
+    "height_km": 1.0
+  },
+  "tick_hz": 20,
+  "seed": 42,
+  "combat": {
+    "fire_cooldown_ticks": 2,
+    "suppression_recovery_per_tick": 0.001
+  },
+  "terrain": [
+    {
+      "id": "river-swim",
+      "terrain_id": "terrain-river",
+      "x": 0.3,
+      "y": 0.3,
+      "width_km": 0.05,
+      "height_km": 0.05
+    }
+  ],
+  "zones": [
+    {
+      "id": "zone-a",
+      "name": "Zone A"
+    }
+  ],
+  "units": [
+    {
+      "id": "squad-friend",
+      "type": "squad-rifle-us",
+      "node_id": "player-node",
+      "x": 0.1,
+      "y": 0.1,
+      "ammo": [
+        "ammo-556",
+        "ammo-frag-grenade"
+      ]
+    },
+    {
+      "id": "squad-enemy",
+      "type": "squad-rifle-opposition",
+      "node_id": "enemy-node",
+      "x": 0.11,
+      "y": 0.1,
+      "ammo": [
+        "ammo-762",
+        "ammo-rpg"
+      ]
+    },
+    {
+      "id": "vehicle-friend",
+      "type": "vehicle-ifv-test",
+      "node_id": "player-node",
+      "x": 0.5,
+      "y": 0.1,
+      "ammo": [
+        "ammo-556"
+      ]
+    },
+    {
+      "id": "squad-antiarmor",
+      "type": "squad-hmg-team",
+      "node_id": "enemy-node",
+      "x": 0.51,
+      "y": 0.1,
+      "ammo": [
+        "ammo-127"
+      ]
+    },
+    {
+      "id": "squad-swim",
+      "type": "squad-rifle-us",
+      "node_id": "player-node",
+      "x": 0.3,
+      "y": 0.3,
+      "ammo": [
+        "ammo-556"
+      ]
+    },
+    {
+      "id": "squad-heavy",
+      "type": "squad-hmg-team",
+      "node_id": "player-node",
+      "x": 0.31,
+      "y": 0.31,
+      "ammo": [
+        "ammo-127"
+      ]
+    },
+    {
+      "id": "squad-mortar-smoke",
+      "type": "squad-mortar-team",
+      "node_id": "player-node",
+      "x": 0.6,
+      "y": 0.1,
+      "ammo": [
+        "ammo-smoke"
+      ]
+    },
+    {
+      "id": "squad-target",
+      "type": "squad-rifle-opposition",
+      "node_id": "enemy-node",
+      "x": 0.61,
+      "y": 0.1,
+      "ammo": [
+        "ammo-762"
+      ]
+    }
+  ],
+  "objectives": [
+    {
+      "id": "obj-a",
+      "kind": "zone",
+      "target_ref": "zone-a",
+      "duration_ticks": 1200
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "kind": "weapon",
+  "entries": [
+    {
+      "id": "rifle-556",
+      "name": "5.56mm Rifle",
+      "category": "rifle",
+      "warhead_kind": "kinetic",
+      "effective_range_m": 500,
+      "accuracy": 0.8,
+      "weight_kg": 3.6,
+      "heavy_equipment": false,
+      "min_crew": 1,
+      "compatible_ammo": [
+        "ammo-556",
+        "ammo-frag-grenade"
+      ]
+    },
+    {
+      "id": "saw-556",
+      "name": "Squad Automatic Weapon",
+      "category": "squad_automatic",
+      "warhead_kind": "kinetic",
+      "effective_range_m": 800,
+      "accuracy": 0.65,
+      "weight_kg": 8.2,
+      "heavy_equipment": false,
+      "min_crew": 1,
+      "compatible_ammo": [
+        "ammo-556"
+      ]
+    },
+    {
+      "id": "rifle-762",
+      "name": "7.62mm Rifle",
+      "category": "rifle",
+      "warhead_kind": "kinetic",
+      "effective_range_m": 500,
+      "accuracy": 0.78,
+      "weight_kg": 4.1,
+      "heavy_equipment": false,
+      "min_crew": 1,
+      "compatible_ammo": [
+        "ammo-762"
+      ]
+    },
+    {
+      "id": "hmg-127",
+      "name": "Heavy Machine Gun",
+      "category": "mg",
+      "warhead_kind": "kinetic",
+      "effective_range_m": 1500,
+      "accuracy": 0.5,
+      "weight_kg": 38.0,
+      "heavy_equipment": true,
+      "min_crew": 2,
+      "compatible_ammo": [
+        "ammo-127"
+      ]
+    },
+    {
+      "id": "mortar-60",
+      "name": "60mm Mortar",
+      "category": "mortar",
+      "warhead_kind": "chemical",
+      "effective_range_m": 3500,
+      "accuracy": 0.55,
+      "weight_kg": 19.0,
+      "heavy_equipment": true,
+      "min_crew": 2,
+      "compatible_ammo": [
+        "ammo-he-60",
+        "ammo-smoke"
+      ]
+    },
+    {
+      "id": "atgm-9k111",
+      "name": "ATGM Launcher",
+      "category": "atgm",
+      "warhead_kind": "chemical",
+      "effective_range_m": 2000,
+      "accuracy": 0.9,
+      "weight_kg": 30.0,
+      "heavy_equipment": true,
+      "min_crew": 2,
+      "compatible_ammo": [
+        "ammo-atgm"
+      ]
+    },
+    {
+      "id": "rpg-7",
+      "name": "RPG Launcher",
+      "category": "launcher",
+      "warhead_kind": "chemical",
+      "effective_range_m": 500,
+      "accuracy": 0.75,
+      "weight_kg": 8.5,
+      "heavy_equipment": false,
+      "min_crew": 1,
+      "compatible_ammo": [
+        "ammo-rpg"
+      ]
+    },
+    {
+      "id": "grenade-holder",
+      "name": "Fragmentation Grenades",
+      "category": "rifle",
+      "warhead_kind": "chemical",
+      "effective_range_m": 40,
+      "accuracy": 0.7,
+      "weight_kg": 0.4,
+      "heavy_equipment": false,
+      "min_crew": 1,
+      "compatible_ammo": [
+        "ammo-frag-grenade"
+      ]
+    }
+  ]
+}

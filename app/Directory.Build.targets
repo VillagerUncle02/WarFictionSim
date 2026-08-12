@@ -1,14 +1,20 @@
 <Project>
   <!-- 原生 DLL 产物契约：C# 工程构建后从 native 构建目录复制 sim_core 等 DLL。
        CI 中 native job 上传的产物按相同相对路径解压，本规则本地/CI 通用。
+       只复制与 sim_core.dll 同目录的运行时依赖（CMake POST_BUILD 已把正确
+       Release 版 json-schema-validator 放在旁边）；不能全树通配 **\*.dll，
+       否则 vcpkg debug/bin 下的同名 DLL 会覆盖 Release 版，混用 Debug CRT
+       导致 wfs_sim_create 访问冲突。
        未找到原生 DLL 时跳过（骨架期 C ABI 尚未合入），不阻断 C# 构建。 -->
   <PropertyGroup>
     <WfsNativeConfig>clang-cl-$(Configuration.ToLower())</WfsNativeConfig>
     <WfsNativeBuildDir>$(MSBuildThisFileDirectory)..\native\build\$(WfsNativeConfig)</WfsNativeBuildDir>
+    <WfsSimCoreDir>$(WfsNativeBuildDir)\sim</WfsSimCoreDir>
+    <WfsHeadlessExePath>$(WfsSimCoreDir)\sim_headless.exe</WfsHeadlessExePath>
   </PropertyGroup>
   <Target Name="WfsCopyNativeDlls" AfterTargets="Build" Condition="'$(WfsCopyNativeDlls)' != 'false'">
     <ItemGroup>
-      <WfsNativeDll Include="$(WfsNativeBuildDir)\**\*.dll" />
+      <WfsNativeDll Include="$(WfsSimCoreDir)\*.dll" />
     </ItemGroup>
     <Copy
       SourceFiles="@(WfsNativeDll)"
@@ -21,7 +27,29 @@
       Condition="'@(WfsNativeDll)' != ''" />
     <Message
       Importance="normal"
-      Text="WFS: 未找到原生 DLL（$(WfsNativeBuildDir)），跳过复制。先执行 cmake --preset $(WfsNativeConfig)"
+      Text="WFS: 未找到原生 DLL（$(WfsSimCoreDir)），跳过复制。先执行 cmake --preset $(WfsNativeConfig)"
       Condition="'@(WfsNativeDll)' == ''" />
+  </Target>
+  <!-- sim_headless.exe 产物接线：由 E2E 测试工程显式开启（WfsCopyHeadlessExe=true），
+       构建后复制无头 CLI 到测试输出目录供 xUnit 直接驱动；依赖 DLL 已由
+       WfsCopyNativeDlls 复制到同一目录。未找到 exe 时仅提示、不阻断构建，
+       运行期由测试给出可操作中文错误并失败。 -->
+  <Target
+    Name="WfsCopyHeadlessExe"
+    AfterTargets="Build"
+    Condition="'$(WfsCopyNativeDlls)' != 'false' and '$(WfsCopyHeadlessExe)' == 'true'">
+    <Copy
+      SourceFiles="$(WfsHeadlessExePath)"
+      DestinationFolder="$(OutDir)"
+      SkipUnchangedFiles="true"
+      Condition="Exists('$(WfsHeadlessExePath)')" />
+    <Message
+      Importance="normal"
+      Text="WFS: 已复制 sim_headless.exe 到 $(OutDir)（供 E2E 测试驱动无头 CLI）"
+      Condition="Exists('$(WfsHeadlessExePath)')" />
+    <Message
+      Importance="normal"
+      Text="WFS: 未找到 sim_headless.exe（$(WfsHeadlessExePath)），跳过复制。先执行 cmake --preset $(WfsNativeConfig) 再 cmake --build --preset $(WfsNativeConfig)"
+      Condition="!Exists('$(WfsHeadlessExePath)')" />
   </Target>
 </Project>

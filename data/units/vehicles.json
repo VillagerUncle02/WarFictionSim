@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "kind": "vehicle",
+  "entries": [
+    {
+      "id": "vehicle-ifv-test",
+      "name": "Test IFV",
+      "chassis_id": "chassis-ifv-test",
+      "armor": {
+        "front": {
+          "kinetic_mm": 80,
+          "chemical_mm": 60
+        },
+        "side": {
+          "kinetic_mm": 25,
+          "chemical_mm": 20
+        },
+        "top": {
+          "kinetic_mm": 10,
+          "chemical_mm": 8
+        },
+        "bottom": {
+          "kinetic_mm": 5,
+          "chemical_mm": 4
+        }
+      },
+      "modules": {
+        "mobility": "functional",
+        "optics": "functional",
+        "reloading": "functional"
+      },
+      "amphibious": false,
+      "heavy_equipment": false,
+      "crew_capacity": 3,
+      "passenger_capacity": 5,
+      "weapons": [
+        "rifle-556"
+      ],
+      "ammo": [
+        "ammo-556"
+      ],
+      "crew": 3,
+      "passengers": 5,
+      "protection": {
+        "helmet": true,
+        "body_armor": "light"
+      }
+    },
+    {
+      "id": "vehicle-apc-amphibious",
+      "name": "Amphibious APC",
+      "chassis_id": "chassis-apc-test",
+      "armor": {
+        "front": {
+          "kinetic_mm": 30,
+          "chemical_mm": 25
+        },
+        "side": {
+          "kinetic_mm": 15,
+          "chemical_mm": 12
+        },
+        "top": {
+          "kinetic_mm": 8,
+          "chemical_mm": 6
+        },
+        "bottom": {
+          "kinetic_mm": 4,
+          "chemical_mm": 3
+        }
+      },
+      "modules": {
+        "mobility": "functional",
+        "optics": "functional",
+        "reloading": "functional"
+      },
+      "amphibious": true,
+      "heavy_equipment": false,
+      "crew_capacity": 2,
+      "passenger_capacity": 6,
+      "weapons": [
+        "hmg-127"
+      ],
+      "ammo": [
+        "ammo-127"
+      ],
+      "crew": 2,
+      "passengers": 6,
+      "protection": {
+        "helmet": true,
+        "body_armor": "light"
+      }
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim fortification catalog",
+  "description": "Runtime schema for data/terrain/fortifications.json (T037). Mirrors FR-067: effects stack, specialized emplacements carry applicable weapon categories.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "const": "fortification"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "concealment_bonus",
+          "cover_bonus",
+          "detection_reduction",
+          "applicable_weapon_categories",
+          "construction_ticks"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "trench",
+              "bunker",
+              "emplacement",
+              "camouflage",
+              "specialized"
+            ]
+          },
+          "concealment_bonus": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "cover_bonus": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "detection_reduction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "applicable_weapon_categories": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "construction_ticks": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

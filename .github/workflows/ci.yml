@@ -108,8 +108,24 @@ jobs:
         shell: pwsh
         working-directory: native
         run: |
-          & $env:CMAKE_BIN --preset clang-cl-release
-          if ($LASTEXITCODE -ne 0) { throw "CMake 配置失败" }
+          $attempt = 0
+          $configured = $false
+          while (-not $configured -and $attempt -lt 3) {
+            $attempt++
+            & $env:CMAKE_BIN --preset clang-cl-release
+            if ($LASTEXITCODE -eq 0) {
+              $configured = $true
+            } else {
+              Write-Host "CMake 配置失败：第 $attempt 次尝试（退出码 $LASTEXITCODE），疑似 vcpkg 下载依赖时遇到瞬时 503"
+              if ($attempt -lt 3) {
+                Write-Host "等待 15 秒后进行第 $($attempt + 1) 次重试"
+                Start-Sleep -Seconds 15
+              }
+            }
+          }
+          if (-not $configured) {
+            throw "CMake 配置失败：重试 3 次后仍失败"
+          }
 
       - name: Build C++ core & C11 math lib (Release)
         shell: pwsh
