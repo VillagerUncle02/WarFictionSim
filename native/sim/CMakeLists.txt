@@ -13,6 +13,7 @@ add_library(sim STATIC
     src/sha256.cpp
     src/snapshot.cpp
     src/save.cpp
+    src/parallel.cpp
     src/loader.cpp
     src/command_validation.cpp
     src/schema_validator.cpp
