@@ -38,15 +38,18 @@ public class HeadlessParityE2ETests
     private const ulong CommandDeadlineTick = 20000;
     private const string ScenarioFileName = "scn-tutorial-platoon.json";
     private const string ExecutorId = "tutorial-squad-1";
+    // 无头 CLI 等待上限：核心回归导致卡死时测试必须显式失败而非无限挂起
+    // （复审 us1-e2e-r1.md 🟡）。
+    private const int HeadlessWaitTimeoutSeconds = 60;
 
     [Fact]
-    public void UiBridgeAndHeadless_ProduceByteIdenticalStateHash()
+    public async Task UiBridgeAndHeadless_ProduceByteIdenticalStateHash()
     {
         using TestEnvironment environment = PrepareEnvironment();
         string commandJson = BuildMoveCommand();
 
         UiRun ui = RunUiBridge(environment.ScenarioPath, commandJson);
-        HeadlessRun headless = RunHeadless(environment, commandJson);
+        HeadlessRun headless = await RunHeadlessAsync(environment, commandJson);
 
         AssertStateHash(ui.StateHash);
         AssertStateHash(headless.StateHash);
@@ -65,15 +68,15 @@ public class HeadlessParityE2ETests
     }
 
     [Fact]
-    public void SameInput_RerunTwice_YieldsSameHashAndEventSequence()
+    public async Task SameInput_RerunTwice_YieldsSameHashAndEventSequence()
     {
         using TestEnvironment environment = PrepareEnvironment();
         string commandJson = BuildMoveCommand();
 
         UiRun uiFirst = RunUiBridge(environment.ScenarioPath, commandJson);
         UiRun uiSecond = RunUiBridge(environment.ScenarioPath, commandJson);
-        HeadlessRun headlessFirst = RunHeadless(environment, commandJson);
-        HeadlessRun headlessSecond = RunHeadless(environment, commandJson);
+        HeadlessRun headlessFirst = await RunHeadlessAsync(environment, commandJson);
+        HeadlessRun headlessSecond = await RunHeadlessAsync(environment, commandJson);
 
         // SC-001 连排级等价：同输入两次运行哈希一致。
         Assert.Equal(headlessFirst.StateHash, headlessSecond.StateHash);
@@ -123,8 +126,8 @@ public class HeadlessParityE2ETests
         return new UiRun(stateHash, events.Events.Select(entry => entry.Message).ToArray());
     }
 
-    /// <summary>驱动 sim_headless inject 跑同一 scenario/seed/命令脚本。</summary>
-    private static HeadlessRun RunHeadless(TestEnvironment environment, string commandJson)
+    /// <summary>驱动 sim_headless inject 跑同一 scenario/seed/命令脚本（带超时与管道防死锁）。</summary>
+    private static async Task<HeadlessRun> RunHeadlessAsync(TestEnvironment environment, string commandJson)
     {
         string scriptPath = Path.Combine(environment.TempDir, $"e2e-move-{Guid.NewGuid():N}.jsonl");
         string eventsPath = Path.Combine(environment.TempDir, $"e2e-events-{Guid.NewGuid():N}.jsonl");
@@ -157,9 +160,48 @@ public class HeadlessParityE2ETests
 
         using Process process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"无法启动无头 CLI：{environment.HeadlessExe}");
-        string standardOutput = process.StandardOutput.ReadToEnd();
-        string standardError = process.StandardError.ReadToEnd();
-        process.WaitForExit();
+
+        // 两个流先并发消费（避免 stdout/stderr 单边读满缓冲区造成互相等待的
+        // 管道死锁），再按超时上限等待退出；超时则终止整棵进程树并显式失败
+        // （宪法第 17 条：不静默吞错，也不无限挂起）。
+        Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        Task<string> standardErrorTask = process.StandardError.ReadToEndAsync();
+        bool exitedInTime;
+        try
+        {
+            // Process.WaitForExitAsync 无 TimeSpan 重载，用 Task.WaitAsync 施加
+            // 超时上限；TimeoutException 仅可能由本次等待抛出。
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(HeadlessWaitTimeoutSeconds));
+            exitedInTime = true;
+        }
+        catch (TimeoutException)
+        {
+            exitedInTime = false;
+        }
+
+        if (!exitedInTime)
+        {
+            int processId = process.Id;
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // 竞态兜底：进程恰在超时判定后自行退出，Kill 因进程已退出而抛
+                // InvalidOperationException；此时继续读关闭后的流并走超时失败路径。
+            }
+
+            string timedOutOutput = await standardOutputTask;
+            string timedOutError = await standardErrorTask;
+            throw new InvalidOperationException(
+                $"sim_headless inject 超时（{HeadlessWaitTimeoutSeconds} 秒未退出），已终止进程树。\n" +
+                $"可执行文件：{environment.HeadlessExe}\n进程 Id：{processId}\n" +
+                $"标准输出：{timedOutOutput.Trim()}\n标准错误：{timedOutError.Trim()}");
+        }
+
+        string standardOutput = await standardOutputTask;
+        string standardError = await standardErrorTask;
 
         if (process.ExitCode != 0)
         {
