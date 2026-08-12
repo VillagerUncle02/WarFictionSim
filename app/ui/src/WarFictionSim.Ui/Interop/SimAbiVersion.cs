@@ -10,7 +10,7 @@ namespace WarFictionSim.Ui.Interop;
 public static class SimAbiVersion
 {
     /// <summary>期望的 ABI 版本（镜像 c_api.h 的 WFS_SIM_VERSION_STRING）。</summary>
-    public const string Expected = "0.1.0";
+    public const string Expected = "0.2.0";
 
     /// <summary>判断运行时 ABI 版本是否与本 UI 兼容（精确匹配）。</summary>
     /// <param name="actual">wfs_sim_version 返回的版本字符串。</param>

@@ -2,7 +2,8 @@
 //
 // 为什么存在：ViewModel 只依赖 ISimClient 抽象，测试不需要真实 sim_core.dll；
 // 假实现记录注入/步进/存档/事件查询调用，并镜像 native wfs_sim_query_events
-// 的过滤语义（category/min_severity/text/limit），让断言聚焦表现层逻辑
+// 的过滤语义（category/min_severity/text/unit_id/limit，text 与 unit_id 取
+// 交集），让断言聚焦表现层逻辑
 // 而非原生边界。
 
 using System.Text.Json;
@@ -94,8 +95,9 @@ public sealed class FakeSimClient : ISimClient
             throw NextQueryEventsError;
         }
 
-        // 镜像 native：category/min_severity/text 精确过滤，limit 截断最旧前缀，
-        // count 为截断前总数。事件按 seq 升序返回（追加顺序）。
+        // 镜像 native：category/min_severity/text/unit_id 精确过滤（text 与
+        // unit_id 同时给定取交集），limit 截断最旧前缀，count 为截断前总数。
+        // 事件按 seq 升序返回（追加顺序）。
         using JsonDocument document = JsonDocument.Parse(queryJson);
         JsonElement root = document.RootElement;
         IEnumerable<SimEventDto> matches = Events;
@@ -114,6 +116,11 @@ public sealed class FakeSimClient : ISimClient
         if (TryGetString(root, "text", out string? text) && !string.IsNullOrEmpty(text))
         {
             matches = matches.Where(item => item.Message.Contains(text!, StringComparison.Ordinal));
+        }
+
+        if (TryGetString(root, "unit_id", out string? unitId) && !string.IsNullOrEmpty(unitId))
+        {
+            matches = matches.Where(item => item.Message.Contains(unitId!, StringComparison.Ordinal));
         }
 
         List<SimEventDto> result = matches.OrderBy(item => item.Seq).ToList();

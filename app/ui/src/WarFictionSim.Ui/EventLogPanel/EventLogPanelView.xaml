@@ -1,5 +1,5 @@
 <!-- 文件总览：事件日志面板视图（T042）。
-     回看/过滤（分类、最低严重级）/搜索/关键置顶；时间戳统一为游戏时间
+     回看/过滤（分类、最低严重级、文本、单位）/关键置顶；时间戳统一为游戏时间
      （FR-044：加速/暂停不改变日志时序语义）。 -->
 <UserControl x:Class="WarFictionSim.Ui.EventLogPanel.EventLogPanelView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -32,6 +32,8 @@
             </ComboBox>
             <TextBox Width="140" Margin="6,0,0,0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                      AutomationProperties.Name="搜索日志文本"/>
+            <TextBox Width="110" Margin="6,0,0,0" Text="{Binding UnitIdText, UpdateSourceTrigger=PropertyChanged}"
+                     AutomationProperties.Name="按单位筛选"/>
             <TextBox Width="110" Margin="6,0,0,0" Text="{Binding SinceTickText, UpdateSourceTrigger=PropertyChanged}"
                      AutomationProperties.Name="起始游戏时间筛选" ToolTip="起始游戏时间（tick，空=全部）"/>
             <TextBlock Text="{Binding GameTimeFilterError}" Foreground="#B3261E"
@@ -43,7 +45,6 @@
 
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding NativeSummaryText}"
                    Foreground="#AAAAAA" Margin="0,4,0,0"/>
-
         <ListBox ItemsSource="{Binding Entries}" HorizontalContentAlignment="Stretch"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>

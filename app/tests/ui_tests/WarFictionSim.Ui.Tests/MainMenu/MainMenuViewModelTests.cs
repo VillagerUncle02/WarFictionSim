@@ -199,7 +199,7 @@ public class MainMenuViewModelTests
     [Fact]
     public void LoadSave_WithUnknownScenario_SetsErrorAndDoesNotStart()
     {
-        string savePath = WriteSaveFile(abiVersion: "0.1.0", scenarioId: "scn-not-installed");
+        string savePath = WriteSaveFile(abiVersion: "0.2.0", scenarioId: "scn-not-installed");
         var viewModel = new MainMenuViewModel(Catalog(Scenario("platoon-a")));
         int raised = 0;
         viewModel.GameStartRequested += (_, _) => raised++;
@@ -214,7 +214,7 @@ public class MainMenuViewModelTests
     [Fact]
     public void LoadSave_WithValidSave_RaisesRequestWithSavePathAndHeaderSeed()
     {
-        string savePath = WriteSaveFile(abiVersion: "0.1.0", seed: 777);
+        string savePath = WriteSaveFile(abiVersion: "0.2.0", seed: 777);
         var entry = Scenario("platoon-a");
         var viewModel = new MainMenuViewModel(Catalog(entry));
         GameStartRequest? request = null;

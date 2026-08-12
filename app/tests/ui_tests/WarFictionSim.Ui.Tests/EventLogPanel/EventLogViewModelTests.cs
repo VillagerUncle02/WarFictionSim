@@ -2,8 +2,9 @@
 //
 // 面板不再镜像核心的环形驱逐：事件正文经 ISimClient.QueryEvents 从
 // wfs_sim_query_events 拉取（快照更新时按需、默认最近 500 条窗口），
-// 分类/严重级/文本过滤下推给 native 查询，游戏时间过滤在窗口内本地执行，
-// 关键事件=severity critical 置顶；状态栏计数仍来自快照 summary。
+// 分类/严重级/文本/单位过滤下推给 native 查询（text 与 unit_id 取交集），
+// 游戏时间过滤在窗口内本地执行，关键事件=severity critical 置顶；状态栏
+// 计数仍来自快照 summary。
 
 using WarFictionSim.Ui.EventLogPanel;
 using WarFictionSim.Ui.Interop;
@@ -78,6 +79,50 @@ public class EventLogViewModelTests
         Assert.Contains("\"category\":\"combat\"", query, StringComparison.Ordinal);
         Assert.Contains("\"min_severity\":\"info\"", query, StringComparison.Ordinal);
         Assert.Contains("\"text\":\"接敌\"", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnitIdFilter_IsSentToNativeQuery()
+    {
+        var client = Client(Event(1));
+        var viewModel = new EventLogViewModel(client);
+
+        viewModel.UnitIdText = "platoon-1";
+
+        string query = Assert.Single(client.EventQueries);
+        Assert.Contains("\"unit_id\":\"platoon-1\"", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnitIdAndTextFilters_AreCombinedInOneQuery()
+    {
+        var client = Client(Event(1));
+        var viewModel = new EventLogViewModel(client);
+
+        viewModel.UnitIdText = "platoon-1";
+        viewModel.SearchText = "接敌";
+
+        // 最后一次查询同时携带 unit_id 与 text（组合下推，交集由核心执行）。
+        string query = client.EventQueries[^1];
+        Assert.Contains("\"unit_id\":\"platoon-1\"", query, StringComparison.Ordinal);
+        Assert.Contains("\"text\":\"接敌\"", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnitIdAndTextFilters_IntersectNativeResults()
+    {
+        var client = Client(
+            Event(1, message: "unit-a 接敌"),
+            Event(2, message: "unit-b 接敌"),
+            Event(3, message: "unit-a 撤退"));
+        var viewModel = new EventLogViewModel(client);
+
+        viewModel.UnitIdText = "unit-a";
+        viewModel.SearchText = "接敌";
+        viewModel.ApplySummary(new EventLogSummaryState(3, 5000, 0), snapshotTick: 1);
+
+        // unit_id 与 text 取交集（镜像 native 语义）：只剩同时命中的一条。
+        Assert.Equal([1uL], viewModel.Entries.Select(entry => entry.Seq));
     }
 
     [Fact]

@@ -2,9 +2,10 @@
 //
 // 单一事实源是核心 EventLog：面板不再镜像环形驱逐，事件正文经
 // ISimClient.QueryEvents（wfs_sim_query_events）在快照更新时按需拉取，
-// 默认取最近 500 条窗口；分类/严重级/文本过滤下推给 native 查询，
-// 游戏时间过滤在窗口内本地执行（native 查询契约无 tick 字段）；
-// 关键事件=severity critical 置顶；状态栏计数仍来自快照 summary。
+// 默认取最近 500 条窗口；分类/严重级/文本/单位过滤下推给 native 查询
+// （text 与 unit_id 同时给定取交集），游戏时间过滤在窗口内本地执行
+// （native 查询契约无 tick 字段）；关键事件=severity critical 置顶；
+// 状态栏计数仍来自快照 summary。
 // TODO(F1 后续)：native limit 语义为"取最旧前缀"，"最近 N"目前靠本地
 // 对未受限查询取尾实现；核心事件日志容量有界（默认 5000），传输可接受。
 
@@ -35,6 +36,7 @@ public sealed partial class EventLogViewModel : ObservableObject
     private SimEventCategory? _selectedCategory;
     private SimEventSeverity? _minSeverity;
     private string _searchText = string.Empty;
+    private string _unitIdText = string.Empty;
     private string _sinceTickText = string.Empty;
     private ulong? _sinceTick;
     private string? _gameTimeFilterError;
@@ -102,6 +104,19 @@ public sealed partial class EventLogViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _searchText, value ?? string.Empty))
+            {
+                InvalidateAndPull();
+            }
+        }
+    }
+
+    /// <summary>单位筛选输入（消息子串匹配，区分大小写；与文本搜索取交集；下推为 unit_id）。</summary>
+    public string UnitIdText
+    {
+        get => _unitIdText;
+        set
+        {
+            if (SetProperty(ref _unitIdText, value ?? string.Empty))
             {
                 InvalidateAndPull();
             }
@@ -204,6 +219,11 @@ public sealed partial class EventLogViewModel : ObservableObject
             if (!string.IsNullOrEmpty(SearchText))
             {
                 writer.WriteString("text", SearchText);
+            }
+
+            if (!string.IsNullOrEmpty(UnitIdText))
+            {
+                writer.WriteString("unit_id", UnitIdText);
             }
 
             writer.WriteEndObject();
