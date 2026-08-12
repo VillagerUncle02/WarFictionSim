@@ -79,6 +79,7 @@ struct CombatConfig {
     double contact_loss_suppression_probability = 0.2;
     std::uint64_t contact_loss_min_ticks = 1200U;  // 60s。
     std::uint64_t contact_loss_max_ticks = 3600U;  // 180s。
+    std::uint64_t fire_cooldown_ticks = 60U;       // 单位自动接敌开火冷却（T031）。
     // 目标选择（FR-060）。
     double aggressive_threat_weight = 1.5;
     double aggressive_distance_weight = 1.0;
@@ -206,7 +207,9 @@ ContactLossResult resolve_contact_loss(const ContactLossInput& input, const Comb
 struct TargetCandidate {
     std::string unit_id;
     double distance_m = 0.0;
-    double threat = 0.0;  // 对自身的威胁程度（调用方按敌方武器/态势量化）。
+    double threat = 0.0;             // 对自身的威胁程度（调用方按敌方武器/态势量化）。
+    bool target_is_vehicle = false;  // 弹药适配评分输入（F6）。
+    double target_armor_mm = 0.0;    // 目标装甲厚度（针对载具）。
 };
 
 struct TargetSelectionInput {
@@ -215,6 +218,8 @@ struct TargetSelectionInput {
     double attacker_y = 0.0;
     std::vector<TargetCandidate> candidates;
     model::EngagementPolicy policy = model::EngagementPolicy::kBalanced;
+    // 可用弹药（F6）：非空时把 select_ammo 的有效性预评分纳入目标评分。
+    std::vector<const model::Ammo*> available_ammo;
 };
 
 struct TargetSelectionResult {

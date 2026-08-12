@@ -280,12 +280,6 @@ CommandChain::IssueResult CommandChain::Issue(const nlohmann::json& command, con
         return result;
     }
 
-    // 连排级 3–10s 通讯延迟（FR-030）：统一 RNG 均匀抽样 [min, max]。
-    const std::uint64_t min_ticks = config.min_ticks(tick_hz);
-    const std::uint64_t max_ticks = config.max_ticks(tick_hz);
-    const std::uint32_t span = static_cast<std::uint32_t>(std::min<std::uint64_t>(max_ticks - min_ticks, 1000000U));
-    const std::uint64_t delay = min_ticks + static_cast<std::uint64_t>(rng.next_bounded(span));
-
     const bool is_batch = command["target"]["kind"].get<std::string>() == "units";
     const bool meta = IsMetaType(type);
     ChainCommand parent;
@@ -294,10 +288,39 @@ CommandChain::IssueResult CommandChain::Issue(const nlohmann::json& command, con
     parent.type = type;
     parent.priority = command.at("priority").get<std::int64_t>();
     parent.issue_tick = issue_tick;
-    parent.delay_ticks = delay;
-    parent.arrival_tick = issue_tick + delay;
     parent.payload = command;
     parent.batch = is_batch;
+
+    if (meta && !is_batch) {
+        parent.unit_id = units.front();
+        // F4：撤回/修改必须校验目标命令归属单位（跨单位元命令拒绝）。
+        const std::string target_id = command.value("withdraw_command_id", std::string());
+        if (!target_id.empty()) {
+            const ChainCommand* target = Find(target_id);
+            if (target != nullptr && target->unit_id != parent.unit_id) {
+                result.error = "撤回目标命令不属于本命令目标单位（目标命令 unit=" + target->unit_id +
+                               "，命令目标 unit=" + parent.unit_id + "）";
+                return result;
+            }
+        }
+        if (type == "MODIFY_COMMAND") {
+            const nlohmann::json& replacement = command.at("replace_with");
+            const std::vector<std::string> replacement_units = TargetUnits(replacement);
+            if (replacement_units != units) {
+                result.error = "replace_with 目标与命令目标不一致";
+                return result;
+            }
+        }
+    }
+
+    // 连排级 3–10s 通讯延迟（FR-030）：统一 RNG 均匀抽样 [min, max]。
+    const std::uint64_t min_ticks = config.min_ticks(tick_hz);
+    const std::uint64_t max_ticks = config.max_ticks(tick_hz);
+    const std::uint32_t span = static_cast<std::uint32_t>(std::min<std::uint64_t>(max_ticks - min_ticks, 1000000U));
+    const std::uint64_t delay = min_ticks + static_cast<std::uint64_t>(rng.next_bounded(span));
+
+    parent.delay_ticks = delay;
+    parent.arrival_tick = issue_tick + delay;
     if (is_batch) {
         parent.unit_id.clear();
         commands_.push_back(parent);
@@ -395,7 +418,7 @@ void CommandChain::ProcessDue(SimState& state) {
             if (command.state == CommandState::kEffective && command.arrival_tick <= state.clock.tick()) {
                 RuntimeUnitState* unit = FindUnit(state, command.unit_id);
                 if (unit != nullptr && unit->mission_active && unit->mission_deadline_ticks > 0U &&
-                    state.clock.tick() > unit->mission_deadline_ticks) {
+                    state.clock.tick() >= unit->mission_deadline_ticks) {  // F11：到期即超时（>=）。
                     MarkTimedOut(state, command.command_id);
                 }
             }
@@ -589,7 +612,7 @@ void CommandChain::ProcessDue(SimState& state) {
         if (command.state == CommandState::kEffective && command.arrival_tick <= state.clock.tick()) {
             RuntimeUnitState* unit = FindUnit(state, command.unit_id);
             if (unit != nullptr && unit->mission_active && unit->mission_deadline_ticks > 0U &&
-                state.clock.tick() > unit->mission_deadline_ticks) {
+                state.clock.tick() >= unit->mission_deadline_ticks) {  // F11：到期即超时（>=）。
                 MarkTimedOut(state, command.command_id);
             }
         }

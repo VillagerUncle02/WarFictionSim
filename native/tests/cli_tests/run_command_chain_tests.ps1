@@ -131,11 +131,27 @@ if ($issued.Count -lt 7) {
 #    （20 Hz 下 60–200 tick）区间内（FR-030/SC-003）。
 foreach ($cmdId in @('cmd-0', 'cmd-1', 'cmd-2', 'cmd-3', 'cmd-4', 'cmd-5', 'cmd-6')) {
     $issue = Match-Events $events "^COMMAND_ISSUED command=$($cmdId) "
-    $ack = Match-Events $events "^COMMAND_ACKNOWLEDGED command=$($cmdId) "
     if ($issue.Count -ne 1) {
         Fail "缺少唯一下达事件 command=$cmdId"
     }
     $issueTick = [long](Extract $issue[0].Message 'issue_tick=(\d+)')
+    # F7 ①：批量父命令不产生自己的 ACK，按子命令（cmd-6.<unit>）匹配，
+    # 消除"模式匹配不到就静默 continue"的盲区。
+    if ($cmdId -eq 'cmd-6') {
+        $ack = Match-Events $events '^COMMAND_ACKNOWLEDGED command=cmd-6\.'
+        if ($ack.Count -eq 0) {
+            Fail "批量命令缺少子命令确认（command=cmd-6.*）"
+        }
+        foreach ($ackEvent in $ack) {
+            $ackTick = [long](Extract $ackEvent.Message 'arrival_tick=(\d+)')
+            $delay = $ackTick - $issueTick
+            if ($delay -lt 60 -or $delay -gt 200) {
+                Fail "批量命令子确认 $($ackEvent.Message) 通讯延迟 $delay tick 不在 60–200 区间"
+            }
+        }
+        continue
+    }
+    $ack = Match-Events $events "^COMMAND_ACKNOWLEDGED command=$($cmdId) "
     if ($ack.Count -eq 0) {
         # 被同优先级先到者裁决拒绝的命令不产生确认（cmd-3 预期路径）。
         continue

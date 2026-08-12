@@ -85,7 +85,7 @@ const DataEntry* FindEntry(const DataCatalog& catalog, const std::string& entry_
 }
 
 // 初始化单个场景单位的运行期状态：武器/弹药/士兵来自编制数据目录。
-// NOLINTBEGIN(bugprone-easily-swappable-parameters)
+// NOLINTBEGIN(bugprone-easily-swappable-parameters, readability-function-cognitive-complexity)
 RuntimeUnitState MakeRuntimeUnit(const ScenarioUnit& unit, const DataLibraryLoadResult& library,
                                  const std::vector<model::TerrainElement>& terrain_library,
                                  const std::vector<TerrainCell>& terrain_cells) {
@@ -96,35 +96,88 @@ RuntimeUnitState MakeRuntimeUnit(const ScenarioUnit& unit, const DataLibraryLoad
     runtime.x = unit.x;
     runtime.y = unit.y;
     runtime.formation = model::Formation::kMarch;
-    runtime.amphibious = true;  // 基线：步兵无重装备可泅渡（FR-022）。
 
     const DataEntry* squad = FindEntry(library.library.squads, unit.type);
-    if (squad != nullptr) {
-        const nlohmann::json& raw = squad->raw;
-        for (const std::string& weapon_id : raw.value("weapons", std::vector<std::string>{})) {
+    const DataEntry* vehicle = FindEntry(library.library.vehicles, unit.type);
+    const nlohmann::json* raw = nullptr;
+    if (vehicle != nullptr) {
+        raw = &vehicle->raw;  // F5：载具目录（四方向防护/模块/两栖/乘员/载员）。
+    } else if (squad != nullptr) {
+        raw = &squad->raw;
+    }
+    if (raw != nullptr) {
+        for (const std::string& weapon_id : raw->value("weapons", std::vector<std::string>{})) {
             if (const DataEntry* weapon = FindEntry(library.library.weapons, weapon_id)) {
                 runtime.weapons.push_back(weapon->raw.get<model::Weapon>());
             }
         }
         // 单兵弹药以场景单位声明为准（批量部分接受依赖单位级差异，FR-045），
         // 编制模板声明仅作回退。
-        const std::vector<std::string> template_ammo = raw.value("ammo", std::vector<std::string>{});
+        const std::vector<std::string> template_ammo = raw->value("ammo", std::vector<std::string>{});
         const std::vector<std::string>& unit_ammo = unit.ammo.empty() ? template_ammo : unit.ammo;
         for (const std::string& ammo_id : unit_ammo) {
             runtime.ammo[ammo_id] = kDefaultAmmoRounds;  // 基线弹药基数（数据可扩展）。
         }
-        const std::uint32_t soldier_count = raw.value("soldier_count", 0U);
-        for (std::uint32_t i = 0U; i < soldier_count; ++i) {
+        const model::Protection protection = raw->contains("protection")
+                                                 ? raw->at("protection").get<model::Protection>()
+                                                 : model::Protection{true, model::ArmorClass::kLight};
+        const auto add_soldier = [&](const std::string& soldier_id, const std::string& soldier_name) {
             model::Soldier soldier;
-            soldier.id = unit.id + "-s" + std::to_string(i);
-            soldier.name = "S" + std::to_string(i);
-            soldier.weapon_id = runtime.weapons.empty() ? "" : runtime.weapons[i % runtime.weapons.size()].id;
-            soldier.experience = model::Experience{kBaselineTraining, kBaselineService, kBaselineCombat};  // 基线经验。
-            soldier.protection = model::Protection{true, model::ArmorClass::kLight};                       // 基线防护。
-            if (raw.contains("protection") && raw["protection"].is_object()) {
-                soldier.protection = raw["protection"].get<model::Protection>();
-            }
+            soldier.id = soldier_id;
+            soldier.name = soldier_name;
+            soldier.experience = model::Experience{kBaselineTraining, kBaselineService, kBaselineCombat};
+            soldier.protection = protection;
             runtime.soldiers.push_back(std::move(soldier));
+        };
+
+        if (vehicle != nullptr) {
+            runtime.is_vehicle = true;
+            model::Vehicle shell;
+            shell.armor = raw->at("armor").get<model::ArmorProfile>();
+            runtime.vehicle_modules = raw->at("modules").get<model::ModuleStatus>();
+            runtime.amphibious = raw->at("amphibious").get<bool>();  // F8：载具两栖来自数据。
+            runtime.vehicle_armor = shell.armor;
+            runtime.vehicle_hp = wfs::sim::vehicle_hp(shell);
+            const std::uint32_t crew = raw->value("crew", 0U);
+            const std::uint32_t passengers = raw->value("passengers", 0U);
+            for (std::uint32_t i = 0U; i < crew; ++i) {
+                add_soldier(unit.id + "-c" + std::to_string(i), "C" + std::to_string(i));
+            }
+            for (std::uint32_t i = 0U; i < passengers; ++i) {
+                add_soldier(unit.id + "-p" + std::to_string(i), "P" + std::to_string(i));
+            }
+            runtime.crew_count = static_cast<std::size_t>(crew);
+        } else {
+            const std::uint32_t soldier_count = raw->value("soldier_count", 0U);
+            for (std::uint32_t i = 0U; i < soldier_count; ++i) {
+                model::Soldier soldier;
+                soldier.id = unit.id + "-s" + std::to_string(i);
+                soldier.name = "S" + std::to_string(i);
+                soldier.weapon_id = runtime.weapons.empty() ? "" : runtime.weapons[i % runtime.weapons.size()].id;
+                soldier.experience = model::Experience{kBaselineTraining, kBaselineService, kBaselineCombat};
+                soldier.protection = protection;
+                // F8：携带重装备（多人伺候武器）的士兵不可泅渡（FR-022）。
+                for (const model::Weapon& weapon : runtime.weapons) {
+                    if (weapon.id == soldier.weapon_id) {
+                        soldier.carries_heavy_equipment = weapon.heavy_equipment;
+                        break;
+                    }
+                }
+                runtime.soldiers.push_back(std::move(soldier));
+            }
+            runtime.crew_count = runtime.soldiers.size();
+            // F8：两栖能力优先取编制数据，缺省按"全员无重装备"派生。
+            if (raw->contains("amphibious")) {
+                runtime.amphibious = raw->at("amphibious").get<bool>();
+            } else {
+                runtime.amphibious = true;
+                for (const model::Soldier& soldier : runtime.soldiers) {
+                    if (soldier.carries_heavy_equipment) {
+                        runtime.amphibious = false;
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -138,7 +191,7 @@ RuntimeUnitState MakeRuntimeUnit(const ScenarioUnit& unit, const DataLibraryLoad
     }
     return runtime;
 }
-// NOLINTEND(bugprone-easily-swappable-parameters)
+// NOLINTEND(bugprone-easily-swappable-parameters, readability-function-cognitive-complexity)
 
 }  // namespace
 
@@ -160,6 +213,9 @@ void initialize_runtime_state(SimState& state) {
     state.units.clear();
     for (const ScenarioUnit& unit : state.scenario.units) {
         state.units.push_back(MakeRuntimeUnit(unit, library, state.terrain_library, state.terrain_cells));
+    }
+    for (RuntimeUnitState& unit : state.units) {
+        unit.fire_cooldown_ticks = state.combat_config.fire_cooldown_ticks;  // F5：冷却数据驱动。
     }
 }
 
@@ -195,18 +251,6 @@ PlayerCommandResult inject_player_command(SimState& state, const std::string& co
         result.errors.push_back(ValidationError{"INVALID_JSON", "命令不是合法 JSON"});
         return result;
     }
-    const CommandChain::IssueResult issued = state.command_chain.Issue(
-        command, result.arrival_seq, result.arrival_tick, state.clock.tick_hz(), state.command_delay_config, state.rng);
-    if (!issued.accepted) {
-        result.errors.push_back(ValidationError{"CHAIN_REJECTED", issued.error});
-        return result;
-    }
-    // 队列作为传输层：到达信号为 issue_tick + 1；真正生效时间由链路控制。
-    state.queue.enqueue(result.arrival_tick + 1U, result.arrival_seq, command_json);
-    result.accepted = true;
-    state.event_log.append(
-        result.arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
-        "COMMAND_QUEUED seq=" + std::to_string(result.arrival_seq) + " tick=" + std::to_string(result.arrival_tick));
     std::string unit_text;
     const nlohmann::json& target = command.at("target");
     if (target.at("kind").get<std::string>() == "units") {
@@ -219,6 +263,22 @@ PlayerCommandResult inject_player_command(SimState& state, const std::string& co
     } else {
         unit_text = target.at("ref").get<std::string>();
     }
+    const CommandChain::IssueResult issued = state.command_chain.Issue(
+        command, result.arrival_seq, result.arrival_tick, state.clock.tick_hz(), state.command_delay_config, state.rng);
+    if (!issued.accepted) {
+        result.arrival_seq = 0U;  // F15：拒绝记录 0（未入队）。
+        result.errors.push_back(ValidationError{"CHAIN_REJECTED", issued.error});
+        state.event_log.append(result.arrival_tick, EventCategory::kCommand, EventSeverity::kWarning,
+                               "COMMAND_REJECTED command=" + issued.command_id + " unit=" + unit_text +
+                                   " type=" + command.at("type").get<std::string>() + " reason=" + issued.error);
+        return result;
+    }
+    // 队列作为传输层：到达信号为 issue_tick + 1；真正生效时间由链路控制。
+    state.queue.enqueue(result.arrival_tick + 1U, result.arrival_seq, command_json);
+    result.accepted = true;
+    state.event_log.append(
+        result.arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
+        "COMMAND_QUEUED seq=" + std::to_string(result.arrival_seq) + " tick=" + std::to_string(result.arrival_tick));
     state.event_log.append(result.arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
                            "COMMAND_ISSUED command=" + issued.command_id + " unit=" + unit_text + " type=" +
                                command.at("type").get<std::string>() + " seq=" + std::to_string(result.arrival_seq) +

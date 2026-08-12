@@ -68,6 +68,8 @@ struct RuntimeUnitState {
     std::vector<model::Weapon> weapons;
     std::map<std::string, std::uint64_t> ammo;  // ammo_id -> 余弹。
     std::vector<model::Soldier> soldiers;       // 班组/乘员/载员运行期副本。
+    std::size_t crew_count = 0U;                // 载具乘员数（soldiers 前 N 个）；
+                                                // 班组 = soldiers.size()，弃车按此拆分（FR-062）。
 
     // 任务（命令链生效后写入；完整判定为 T034，本组覆盖 MOVE 闭环）。
     std::string mission_command_id;
@@ -133,6 +135,7 @@ inline void to_json(nlohmann::json& json, const RuntimeUnitState& unit) {
                           {"weapons", unit.weapons},
                           {"ammo", unit.ammo},
                           {"soldiers", unit.soldiers},
+                          {"crew_count", unit.crew_count},
                           {"mission_active", unit.mission_active},
                           {"mission_command_id", unit.mission_command_id},
                           {"mission_type", unit.mission_type},
@@ -174,6 +177,7 @@ inline void from_json(const nlohmann::json& json, RuntimeUnitState& unit) {
     unit.weapons = json.at("weapons").get<std::vector<model::Weapon>>();
     unit.ammo = json.at("ammo").get<std::map<std::string, std::uint64_t>>();
     unit.soldiers = json.at("soldiers").get<std::vector<model::Soldier>>();
+    unit.crew_count = json.at("crew_count").get<std::size_t>();
     unit.mission_active = json.at("mission_active").get<bool>();
     unit.mission_command_id = json.at("mission_command_id").get<std::string>();
     unit.mission_type = json.at("mission_type").get<std::string>();

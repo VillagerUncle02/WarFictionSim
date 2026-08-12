@@ -140,6 +140,7 @@ AiInjectResult inject_ai_decision(SimState& state, const std::string& command_js
                 state.command_chain.Issue(command, result.arrival_seq, arrival_tick, state.clock.tick_hz(),
                                           state.command_delay_config, state.rng);
             if (!issued.accepted) {
+                result.arrival_seq = 0U;  // F15：链路拒绝按"未入队"记录 0。
                 result.errors.push_back(ValidationError{"CHAIN_REJECTED", issued.error});
                 state.event_log.append(
                     arrival_tick, EventCategory::kCommand, EventSeverity::kWarning,

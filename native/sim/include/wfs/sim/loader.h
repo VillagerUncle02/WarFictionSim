@@ -124,9 +124,10 @@ DataCatalogLoadResult load_data_catalog(const std::filesystem::path& data_file);
 DataCatalogLoadResult load_data_catalog(const std::filesystem::path& data_file,
                                         const std::filesystem::path& schema_path);
 
-// T037：基础数据库（units/ + terrain/ 六类目录的汇总视图）。
+// T037/F5：基础数据库（units/ + terrain/ 七类目录的汇总视图）。
 struct DataLibrary {
     DataCatalog squads;
+    DataCatalog vehicles;  // F5：载具目录（四方向防护/模块/乘员/载员/两栖）。
     DataCatalog weapons;
     DataCatalog ammo;
     DataCatalog terrain;

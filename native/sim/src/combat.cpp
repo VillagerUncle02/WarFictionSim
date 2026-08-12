@@ -114,6 +114,34 @@ double PersonalArmorMm(const model::Protection& protection) {
 
 }  // namespace
 
+namespace {
+
+// 可覆盖配置字段的确定性读取：缺省回退；非法值（非有限/负数/零 tick）显式
+// 抛错（与 MovementConfig 同级，宪法第 17 条，F9）。
+double ConfigDouble(const nlohmann::json& json, const char* key, double fallback) {
+    if (!json.contains(key)) {
+        return fallback;
+    }
+    const double value = json[key].get<double>();
+    if (!std::isfinite(value) || value < 0.0) {
+        throw std::invalid_argument(std::string("combat 配置非法: ") + key);
+    }
+    return value;
+}
+
+std::uint64_t ConfigUint64(const nlohmann::json& json, const char* key, std::uint64_t fallback) {
+    if (!json.contains(key)) {
+        return fallback;
+    }
+    const std::uint64_t value = json[key].get<std::uint64_t>();
+    if (value == 0U) {
+        throw std::invalid_argument(std::string("combat 配置必须为正: ") + key);
+    }
+    return value;
+}
+
+}  // namespace
+
 CombatConfig CombatConfig::Defaults() {
     return CombatConfig{};
 }
@@ -125,41 +153,48 @@ CombatConfig CombatConfig::FromScenario(
         return config;
     }
     const nlohmann::json& json = raw["combat"];
-    config.moving_target_factor = json.value("moving_target_factor", config.moving_target_factor);
-    config.march_formation_factor = json.value("march_formation_factor", config.march_formation_factor);
-    config.combat_formation_factor = json.value("combat_formation_factor", config.combat_formation_factor);
-    config.cover_none_factor = json.value("cover_none_factor", config.cover_none_factor);
-    config.cover_partial_factor = json.value("cover_partial_factor", config.cover_partial_factor);
-    config.cover_full_factor = json.value("cover_full_factor", config.cover_full_factor);
-    config.suppressed_accuracy_penalty = json.value("suppressed_accuracy_penalty", config.suppressed_accuracy_penalty);
-    config.smoke_hit_reduction = json.value("smoke_hit_reduction", config.smoke_hit_reduction);
-    config.kinetic_range_decay = json.value("kinetic_range_decay", config.kinetic_range_decay);
+    config.moving_target_factor = ConfigDouble(json, "moving_target_factor", config.moving_target_factor);
+    config.march_formation_factor = ConfigDouble(json, "march_formation_factor", config.march_formation_factor);
+    config.combat_formation_factor = ConfigDouble(json, "combat_formation_factor", config.combat_formation_factor);
+    config.cover_none_factor = ConfigDouble(json, "cover_none_factor", config.cover_none_factor);
+    config.cover_partial_factor = ConfigDouble(json, "cover_partial_factor", config.cover_partial_factor);
+    config.cover_full_factor = ConfigDouble(json, "cover_full_factor", config.cover_full_factor);
+    config.suppressed_accuracy_penalty =
+        ConfigDouble(json, "suppressed_accuracy_penalty", config.suppressed_accuracy_penalty);
+    config.smoke_hit_reduction = ConfigDouble(json, "smoke_hit_reduction", config.smoke_hit_reduction);
+    config.kinetic_range_decay = ConfigDouble(json, "kinetic_range_decay", config.kinetic_range_decay);
     config.kinetic_range_decay_distance_m =
-        json.value("kinetic_range_decay_distance_m", config.kinetic_range_decay_distance_m);
-    config.kinetic_damage_peak = json.value("kinetic_damage_peak", config.kinetic_damage_peak);
-    config.kinetic_overmatch_ratio = json.value("kinetic_overmatch_ratio", config.kinetic_overmatch_ratio);
-    config.kinetic_overmatch_decay = json.value("kinetic_overmatch_decay", config.kinetic_overmatch_decay);
-    config.kinetic_overmatch_floor = json.value("kinetic_overmatch_floor", config.kinetic_overmatch_floor);
-    config.chemical_damage_cap = json.value("chemical_damage_cap", config.chemical_damage_cap);
-    config.suppression_hit_gain = json.value("suppression_hit_gain", config.suppression_hit_gain);
-    config.suppression_lethality_scale = json.value("suppression_lethality_scale", config.suppression_lethality_scale);
-    config.suppression_area_gain = json.value("suppression_area_gain", config.suppression_area_gain);
+        ConfigDouble(json, "kinetic_range_decay_distance_m", config.kinetic_range_decay_distance_m);
+    config.kinetic_damage_peak = ConfigDouble(json, "kinetic_damage_peak", config.kinetic_damage_peak);
+    config.kinetic_overmatch_ratio = ConfigDouble(json, "kinetic_overmatch_ratio", config.kinetic_overmatch_ratio);
+    config.kinetic_overmatch_decay = ConfigDouble(json, "kinetic_overmatch_decay", config.kinetic_overmatch_decay);
+    config.kinetic_overmatch_floor = ConfigDouble(json, "kinetic_overmatch_floor", config.kinetic_overmatch_floor);
+    config.chemical_damage_cap = ConfigDouble(json, "chemical_damage_cap", config.chemical_damage_cap);
+    config.suppression_hit_gain = ConfigDouble(json, "suppression_hit_gain", config.suppression_hit_gain);
+    config.suppression_lethality_scale =
+        ConfigDouble(json, "suppression_lethality_scale", config.suppression_lethality_scale);
+    config.suppression_area_gain = ConfigDouble(json, "suppression_area_gain", config.suppression_area_gain);
     config.suppression_recovery_per_tick =
-        json.value("suppression_recovery_per_tick", config.suppression_recovery_per_tick);
+        ConfigDouble(json, "suppression_recovery_per_tick", config.suppression_recovery_per_tick);
     config.contact_loss_suppression_threshold =
-        json.value("contact_loss_suppression_threshold", config.contact_loss_suppression_threshold);
+        ConfigDouble(json, "contact_loss_suppression_threshold", config.contact_loss_suppression_threshold);
     config.contact_loss_damage_probability =
-        json.value("contact_loss_damage_probability", config.contact_loss_damage_probability);
+        ConfigDouble(json, "contact_loss_damage_probability", config.contact_loss_damage_probability);
     config.contact_loss_suppression_probability =
-        json.value("contact_loss_suppression_probability", config.contact_loss_suppression_probability);
-    config.contact_loss_min_ticks = json.value("contact_loss_min_ticks", config.contact_loss_min_ticks);
-    config.contact_loss_max_ticks = json.value("contact_loss_max_ticks", config.contact_loss_max_ticks);
-    config.aggressive_threat_weight = json.value("aggressive_threat_weight", config.aggressive_threat_weight);
-    config.aggressive_distance_weight = json.value("aggressive_distance_weight", config.aggressive_distance_weight);
-    config.cautious_threat_weight = json.value("cautious_threat_weight", config.cautious_threat_weight);
-    config.cautious_distance_weight = json.value("cautious_distance_weight", config.cautious_distance_weight);
-    config.ammo_fit_weight = json.value("ammo_fit_weight", config.ammo_fit_weight);
-    config.smoke_radius_m = json.value("smoke_radius_m", config.smoke_radius_m);
+        ConfigDouble(json, "contact_loss_suppression_probability", config.contact_loss_suppression_probability);
+    config.contact_loss_min_ticks = ConfigUint64(json, "contact_loss_min_ticks", config.contact_loss_min_ticks);
+    config.contact_loss_max_ticks = ConfigUint64(json, "contact_loss_max_ticks", config.contact_loss_max_ticks);
+    if (config.contact_loss_max_ticks < config.contact_loss_min_ticks) {
+        throw std::invalid_argument("combat 配置非法（contact_loss_max_ticks 必须 >= min）");
+    }
+    config.fire_cooldown_ticks = ConfigUint64(json, "fire_cooldown_ticks", config.fire_cooldown_ticks);
+    config.aggressive_threat_weight = ConfigDouble(json, "aggressive_threat_weight", config.aggressive_threat_weight);
+    config.aggressive_distance_weight =
+        ConfigDouble(json, "aggressive_distance_weight", config.aggressive_distance_weight);
+    config.cautious_threat_weight = ConfigDouble(json, "cautious_threat_weight", config.cautious_threat_weight);
+    config.cautious_distance_weight = ConfigDouble(json, "cautious_distance_weight", config.cautious_distance_weight);
+    config.ammo_fit_weight = ConfigDouble(json, "ammo_fit_weight", config.ammo_fit_weight);
+    config.smoke_radius_m = ConfigDouble(json, "smoke_radius_m", config.smoke_radius_m);
     return config;
 }
 
@@ -450,7 +485,18 @@ TargetSelectionResult select_target(const TargetSelectionInput& input, const Com
         const double range_factor = input.weapon->effective_range_m > 0.0
                                         ? std::max(0.0, 1.0 - (candidate.distance_m / input.weapon->effective_range_m))
                                         : 0.0;
-        const double score = threat_weight * candidate.threat * distance_weight * range_factor;
+        // 弹药适配（F6/FR-060）：可用弹药非空时，按 select_ammo 对该候选的
+        // 有效性预评分折算为乘性因子（效果 100 归一化），ammo_fit_weight 可调。
+        double ammo_fit_factor = 1.0;
+        if (!input.available_ammo.empty()) {
+            const AmmoSelectionResult choice =
+                select_ammo(AmmoSelectionInput{input.weapon, input.available_ammo, candidate.target_is_vehicle,
+                                               candidate.target_armor_mm, candidate.distance_m},
+                            config);
+            const double effectiveness_norm = std::min(1.0, choice.effectiveness / 100.0);
+            ammo_fit_factor = 1.0 + (config.ammo_fit_weight * effectiveness_norm);
+        }
+        const double score = threat_weight * candidate.threat * distance_weight * range_factor * ammo_fit_factor;
         scored.push_back(Scored{candidate, score});
     }
     // 确定性排序：分数降序，并列按距离升序、单位 id 升序（无序遍历不可接受）。
@@ -555,8 +601,11 @@ void to_json(nlohmann::json& json, const ContactLossResult& result) {
 }
 
 void to_json(nlohmann::json& json, const TargetCandidate& candidate) {
-    json = nlohmann::json{
-        {"unit_id", candidate.unit_id}, {"distance_m", candidate.distance_m}, {"threat", candidate.threat}};
+    json = nlohmann::json{{"unit_id", candidate.unit_id},
+                          {"distance_m", candidate.distance_m},
+                          {"threat", candidate.threat},
+                          {"target_is_vehicle", candidate.target_is_vehicle},
+                          {"target_armor_mm", candidate.target_armor_mm}};
 }
 
 void to_json(nlohmann::json& json, const TargetSelectionResult& result) {
@@ -604,15 +653,21 @@ void LogCombat(SimState& state, const EventSeverity severity, std::string messag
 }
 
 // 载员/乘员弃车与伤亡结算（FR-062）：被摧毁时按最后一次命中伤害相对摧毁
-// 阈值传递伤亡；严重受损时按概率弃车；幸存者转为徒步班组。
+// 阈值传递伤亡；严重受损时按概率弃车。乘员组与载员组分别转为两个徒步班组
+// （FR-062：车组与搭乘班组），弃车后载具清空名单（F3）。
+// 注意：push_back 可能使 vehicle 引用失效，日志字段在 push 前拷贝（F2）。
 void SettleVehicleOccupants(SimState& state, RuntimeUnitState& vehicle, const double damage_ratio, Rng& rng) {
+    const std::string vehicle_id = vehicle.id;
     if (vehicle.soldiers.empty()) {
         return;
     }
-    std::vector<model::Soldier> survivors;
+    std::vector<model::Soldier> crew_survivors;
+    std::vector<model::Soldier> passenger_survivors;
     std::size_t casualties = 0U;
     const bool destroyed = vehicle.destroyed;
-    for (model::Soldier& soldier : vehicle.soldiers) {
+    const std::size_t crew_count = std::min(vehicle.crew_count, vehicle.soldiers.size());
+    for (std::size_t i = 0U; i < vehicle.soldiers.size(); ++i) {
+        model::Soldier& soldier = vehicle.soldiers[i];
         double survival_probability = 1.0 - (kSurvivalDamageScale * std::clamp(damage_ratio, 0.0, 1.0));
         if (!destroyed) {
             survival_probability = 1.0;  // 严重受损弃车：人员全部下车（基线）。
@@ -623,28 +678,46 @@ void SettleVehicleOccupants(SimState& state, RuntimeUnitState& vehicle, const do
             ++casualties;
         } else {
             soldier.status = model::SoldierStatus::kNormal;
-            survivors.push_back(std::move(soldier));
+            if (i < crew_count) {
+                crew_survivors.push_back(std::move(soldier));
+            } else {
+                passenger_survivors.push_back(std::move(soldier));
+            }
         }
     }
-    if (vehicle.destroyed) {
-        vehicle.soldiers.clear();  // 伤亡者从载具名单移除（转入伤亡统计）。
-    }
-    const std::size_t survivor_count = survivors.size();
-    if (!survivors.empty()) {
+    vehicle.soldiers.clear();  // 两种弃车路径都清空载具名单（F3）。
+
+    // push_back 可能重分配 state.units 使 vehicle 引用失效：位置/归属先拷贝。
+    const std::string node_id = vehicle.node_id;
+    const double dismount_x = vehicle.x;
+    const double dismount_y = vehicle.y;
+    const auto add_dismounted_squad = [&state, &node_id, &vehicle_id, dismount_x, dismount_y](
+                                          std::vector<model::Soldier>& survivors, const std::string& suffix) {
+        if (survivors.empty()) {
+            return;
+        }
         RuntimeUnitState dismounted;
-        dismounted.id = vehicle.id + "-dismounted";
+        dismounted.id = vehicle_id + suffix;  // 调用前已拷贝 vehicle_id（F2）。
         dismounted.type = "dismounted-squad";
-        dismounted.node_id = vehicle.node_id;
-        dismounted.x = vehicle.x;
-        dismounted.y = vehicle.y;
+        dismounted.node_id = node_id;
+        dismounted.x = dismount_x;
+        dismounted.y = dismount_y;
         dismounted.formation = model::Formation::kMarch;
         dismounted.soldiers = std::move(survivors);
+        dismounted.crew_count = dismounted.soldiers.size();  // 徒步班组全员为车组成员/载员组。
         dismounted.amphibious = true;
         state.units.push_back(std::move(dismounted));
-    }
+    };
+    const std::size_t crew_survivor_count = crew_survivors.size();
+    const std::size_t passenger_survivor_count = passenger_survivors.size();
+    add_dismounted_squad(crew_survivors, "-dismounted-crew");
+    add_dismounted_squad(passenger_survivors, "-dismounted-passengers");
+
     LogCombat(state, EventSeverity::kInfo,
-              "COMBAT_ABANDONED unit=" + vehicle.id + " survivors=" + std::to_string(survivor_count) +
-                  " casualties=" + std::to_string(casualties));
+              "COMBAT_ABANDONED unit=" + vehicle_id +
+                  " survivors=" + std::to_string(crew_survivor_count + passenger_survivor_count) +
+                  " casualties=" + std::to_string(casualties) + " crew=" + std::to_string(crew_survivor_count) +
+                  " passengers=" + std::to_string(passenger_survivor_count));
 }
 
 // 载具模块损伤：按累计伤害阈值推进模块状态（FR-064，确定性 RNG 选模块）。
@@ -724,7 +797,8 @@ void step_combat(SimState& state) {
             }
             const double distance_m = DistanceKm(attacker, target) * kMetersPerKilometer;
             const double threat = target.weapons.empty() ? 0.5 : 1.0;
-            candidates.push_back(TargetCandidate{target.id, distance_m, threat});
+            candidates.push_back(TargetCandidate{target.id, distance_m, threat, target.is_vehicle,
+                                                 target.is_vehicle ? target.vehicle_armor.side.kinetic_mm : 0.0});
         }
         if (candidates.empty()) {
             continue;
@@ -741,6 +815,23 @@ void step_combat(SimState& state) {
             continue;
         }
 
+        // 自动选弹输入（F6）：先收集可用弹药，供目标评分中的弹药适配预评分。
+        std::vector<const model::Ammo*> available;
+        for (const auto& [ammo_id, count] : attacker.ammo) {
+            if (count > 0U) {
+                if (const model::Ammo* ammo = FindAmmo(state, ammo_id)) {
+                    available.push_back(ammo);
+                }
+            }
+        }
+        if (available.empty()) {
+            if (attacker_mut->last_exhausted_weapon.empty()) {
+                attacker_mut->last_exhausted_weapon = "all";
+                LogCombat(state, EventSeverity::kWarning, "AMMO_EXHAUSTED unit=" + attacker.id + " weapon=all");
+            }
+            continue;
+        }
+
         for (const model::Weapon& weapon : attacker.weapons) {
             std::vector<TargetCandidate> in_range;
             for (const TargetCandidate& candidate : candidates) {
@@ -751,9 +842,10 @@ void step_combat(SimState& state) {
             if (in_range.empty()) {
                 continue;
             }
-            const TargetSelectionResult selected = select_target(
-                TargetSelectionInput{&weapon, attacker.x, attacker.y, in_range, model::EngagementPolicy::kBalanced},
-                config);
+            const TargetSelectionResult selected =
+                select_target(TargetSelectionInput{&weapon, attacker.x, attacker.y, in_range,
+                                                   model::EngagementPolicy::kBalanced, available},
+                              config);
             if (selected.target_id.empty()) {
                 continue;
             }
@@ -771,22 +863,6 @@ void step_combat(SimState& state) {
             const double range_m = DistanceKm(attacker, *target_mut) * kMetersPerKilometer;
 
             // 自动选弹（FR-058）：按目标类型与距离取最合适可用弹药。
-            std::vector<const model::Ammo*> available;
-            for (const auto& [ammo_id, count] : attacker.ammo) {
-                if (count > 0U) {
-                    if (const model::Ammo* ammo = FindAmmo(state, ammo_id)) {
-                        available.push_back(ammo);
-                    }
-                }
-            }
-            if (available.empty()) {
-                if (attacker_mut->last_exhausted_weapon != weapon.id) {
-                    attacker_mut->last_exhausted_weapon = weapon.id;
-                    LogCombat(state, EventSeverity::kWarning,
-                              "AMMO_EXHAUSTED unit=" + attacker.id + " weapon=" + weapon.id);
-                }
-                continue;
-            }
             const double armor_mm = target_mut->is_vehicle ? target_mut->vehicle_armor.side.kinetic_mm : 0.0;
             const AmmoSelectionResult ammo_choice =
                 select_ammo(AmmoSelectionInput{&weapon, available, target_mut->is_vehicle, armor_mm, range_m}, config);
@@ -819,6 +895,7 @@ void step_combat(SimState& state) {
                                      attacker.suppression,
                                      shooter_experience,
                                      environment_accuracy};
+            attacker_mut->last_fire_tick = state.clock.tick();  // F1：开火即落冷却，miss/hit 均覆盖。
             const HitResult hit = resolve_hit(hit_input, config, state.rng);
             if (!hit.hit) {
                 LogCombat(state, EventSeverity::kInfo,
@@ -902,8 +979,6 @@ void step_combat(SimState& state) {
                           "COMBAT_OUT_OF_CONTACT unit=" + target_mut->id +
                               " duration_ticks=" + std::to_string(contact.duration_ticks));
             }
-            attacker_mut->last_fire_tick = state.clock.tick();  // 开火冷却先落账。
-
             // 载具模块损伤与弃车（FR-062/064）：在烟幕/失联之后结算，避免
             // 新增弃车班组使指针失效（弃车班组不参与本 tick 射击）。
             if (target_mut->is_vehicle) {

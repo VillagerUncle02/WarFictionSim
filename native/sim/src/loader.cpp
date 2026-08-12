@@ -125,6 +125,7 @@ bool IsRepoContractSchema(const std::filesystem::path& schema_path) {
 
 // F4：场景单位 type/ammo 必须存在于数据目录，且弹药必须与班类型的武器
 // 兼容弹药集合匹配（宪法第 12 条：数据引用必须存在且自洽）。
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 void CheckScenarioUnitReferences(const Scenario& scenario, const DataLibrary& library, std::vector<DataIssue>& issues) {
     std::set<std::string> ammo_ids;
     std::map<std::string, std::set<std::string>> weapon_compatible;
@@ -136,38 +137,45 @@ void CheckScenarioUnitReferences(const Scenario& scenario, const DataLibrary& li
             weapon_compatible[entry.id].insert(ref.get<std::string>());
         }
     }
-    const auto find_squad = [&library](const std::string& squad_id) -> const DataEntry* {
+    const auto find_type = [&library](const std::string& type_id) -> const DataEntry* {
         for (const DataEntry& entry : library.squads.entries) {
-            if (entry.id == squad_id) {
+            if (entry.id == type_id) {
+                return &entry;
+            }
+        }
+        for (const DataEntry& entry : library.vehicles.entries) {
+            if (entry.id == type_id) {
                 return &entry;
             }
         }
         return nullptr;
     };
     for (const ScenarioUnit& unit : scenario.units) {
-        const DataEntry* squad = find_squad(unit.type);
-        if (squad == nullptr) {
-            issues.push_back(Issue("UNIT_TYPE_NOT_FOUND", "场景单位 " + unit.id + " 引用不存在的班类型: " + unit.type));
+        const DataEntry* type_entry = find_type(unit.type);
+        if (type_entry == nullptr) {
+            issues.push_back(
+                Issue("UNIT_TYPE_NOT_FOUND", "场景单位 " + unit.id + " 引用不存在的单位类型: " + unit.type));
             continue;
         }
-        std::set<std::string> squad_compatible;
-        for (const nlohmann::json& weapon_ref : squad->raw.value("weapons", nlohmann::json::array())) {
+        std::set<std::string> type_compatible;
+        for (const nlohmann::json& weapon_ref : type_entry->raw.value("weapons", nlohmann::json::array())) {
             const std::string weapon_id = weapon_ref.get<std::string>();
             const auto compatible = weapon_compatible.find(weapon_id);
             if (compatible != weapon_compatible.end()) {
-                squad_compatible.insert(compatible->second.begin(), compatible->second.end());
+                type_compatible.insert(compatible->second.begin(), compatible->second.end());
             }
         }
         for (const std::string& ammo : unit.ammo) {
             if (!ammo_ids.contains(ammo)) {
                 issues.push_back(Issue("UNIT_AMMO_NOT_FOUND", "场景单位 " + unit.id + " 引用不存在的弹药: " + ammo));
-            } else if (!squad_compatible.contains(ammo)) {
+            } else if (!type_compatible.contains(ammo)) {
                 issues.push_back(Issue("UNIT_AMMO_INCOMPATIBLE", "场景单位 " + unit.id + " 的弹药 " + ammo +
-                                                                     " 与班类型 " + unit.type + " 武器不兼容"));
+                                                                     " 与单位类型 " + unit.type + " 武器不兼容"));
             }
         }
     }
 }
+// NOLINTEND(readability-function-cognitive-complexity)
 
 // 语义校验 + 实体提取。Schema 已保证必需字段存在，此处只做跨字段完整性；
 // 失败时按固定顺序追加 issue 并返回 false。
@@ -472,6 +480,44 @@ void ValidateSquadReferences(const DataEntry& entry, const std::set<std::string>
     }
 }
 
+// 载具条目引用完整性（F5）：武器/弹药存在且兼容，乘员/载员不得超容量。
+void ValidateVehicleReferences(const DataEntry& entry, const std::set<std::string>& weapon_ids,
+                               const std::set<std::string>& ammo_ids,
+                               const std::map<std::string, std::set<std::string>>& weapon_compatible,
+                               std::vector<DataIssue>& issues) {
+    CheckEntryRefs(entry, "weapons", weapon_ids, "载具", issues);
+    CheckEntryRefs(entry, "ammo", ammo_ids, "载具", issues);
+
+    std::set<std::string> vehicle_compatible;
+    for (const nlohmann::json& weapon_ref : entry.raw.value("weapons", nlohmann::json::array())) {
+        const std::string weapon_id = weapon_ref.get<std::string>();
+        const auto compatible = weapon_compatible.find(weapon_id);
+        if (compatible != weapon_compatible.end()) {
+            vehicle_compatible.insert(compatible->second.begin(), compatible->second.end());
+        }
+    }
+    for (const nlohmann::json& ammo_ref : entry.raw.value("ammo", nlohmann::json::array())) {
+        const std::string ammo_id = ammo_ref.get<std::string>();
+        if (ammo_ids.contains(ammo_id) && !vehicle_compatible.contains(ammo_id)) {
+            issues.push_back(
+                Issue("DATA_AMMO_INCOMPATIBLE", "载具 " + entry.id + " 的弹药 " + ammo_id + " 不在其武器兼容弹药内"));
+        }
+    }
+    const std::uint32_t crew = entry.raw.value("crew", 0U);
+    const std::uint32_t passengers = entry.raw.value("passengers", 0U);
+    const std::uint32_t crew_capacity = entry.raw.value("crew_capacity", 0U);
+    const std::uint32_t passenger_capacity = entry.raw.value("passenger_capacity", 0U);
+    if (crew > crew_capacity) {
+        issues.push_back(Issue("DATA_CREW_OVER_CAPACITY", "载具 " + entry.id + " 乘员数 " + std::to_string(crew) +
+                                                              " 超过容量 " + std::to_string(crew_capacity)));
+    }
+    if (passengers > passenger_capacity) {
+        issues.push_back(Issue("DATA_PASSENGER_OVER_CAPACITY", "载具 " + entry.id + " 载员数 " +
+                                                                   std::to_string(passengers) + " 超过容量 " +
+                                                                   std::to_string(passenger_capacity)));
+    }
+}
+
 // 第二层：跨文件引用完整性（固定顺序：班 → 武器 → 工事）。
 bool ValidateDataReferences(const DataLibrary& library, std::vector<DataIssue>& issues) {
     std::set<std::string> weapon_ids;
@@ -491,6 +537,9 @@ bool ValidateDataReferences(const DataLibrary& library, std::vector<DataIssue>& 
 
     for (const DataEntry& entry : library.squads.entries) {
         ValidateSquadReferences(entry, weapon_ids, ammo_ids, weapon_compatible, issues);
+    }
+    for (const DataEntry& entry : library.vehicles.entries) {
+        ValidateVehicleReferences(entry, weapon_ids, ammo_ids, weapon_compatible, issues);
     }
     for (const DataEntry& entry : library.weapons.entries) {
         CheckEntryRefs(entry, "compatible_ammo", ammo_ids, "武器", issues);
@@ -524,8 +573,9 @@ DataLibraryLoadResult load_data_library(const std::filesystem::path& data_root,
         const char* relative_path;
         DataCatalog DataLibrary::* member;
     };
-    static const std::array<CatalogSpec, 6> kCatalogSpecs = {{
+    static const std::array<CatalogSpec, 7> kCatalogSpecs = {{
         {"units/squads.json", &DataLibrary::squads},
+        {"units/vehicles.json", &DataLibrary::vehicles},
         {"units/weapons.json", &DataLibrary::weapons},
         {"units/ammo.json", &DataLibrary::ammo},
         {"terrain/terrain.json", &DataLibrary::terrain},
