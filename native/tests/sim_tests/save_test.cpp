@@ -228,6 +228,40 @@ TEST(WfsSaveTest, SaveLoadMidBattleRestoresCombatState) {
     wfs_sim_destroy(restored);
 }
 
+TEST(WfsSaveTest, LegacyV1SaveWithoutCrewCountLoads) {
+    // N1 存档兼容回归：fc62e4b 生成的 v1 存档（units 无 crew_count）必须可加载。
+    // 构造方式：保存当前状态 → 从 state_blob 移除 units[].crew_count → 重建
+    // 文件（含重新计算哈希与 state_size_bytes）→ 加载断言 OK 且状态哈希一致
+    // （班组默认 crew_count = soldiers.size()，与原状态语义一致）。
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "current.wfs";
+    Handle source;
+    ASSERT_NE(source.get(), nullptr);
+    const std::string hash_before = StateHash(source.get());
+    EXPECT_EQ(wfs_sim_save(source.get(), path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    const std::string bytes = ReadFile(path);
+    SavedLayout layout = ParseLayout(bytes);
+    ASSERT_FALSE(layout.blob.empty());
+    nlohmann::json blob = nlohmann::json::parse(layout.blob);
+    for (nlohmann::json& unit : blob.at("units")) {
+        unit.erase("crew_count");
+    }
+    const std::string rebuilt_blob = blob.dump();
+    nlohmann::json header = nlohmann::json::parse(layout.header);
+    header["state_size_bytes"] = rebuilt_blob.size();
+    const std::filesystem::path legacy_path = dir.path() / "legacy-v1.wfs";
+    {
+        std::ofstream out(legacy_path, std::ios::binary);
+        out << BuildSaveBytes(layout.version, header.dump(), rebuilt_blob);
+    }
+
+    Handle restored;
+    ASSERT_NE(restored.get(), nullptr);
+    EXPECT_EQ(wfs_sim_load_save(restored.get(), legacy_path.string().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(StateHash(restored.get()), hash_before);
+}
+
 TEST(WfsSaveTest, SaveFileLayoutMatchesContract) {
     TempDir dir;
     const std::filesystem::path path = dir.path() / "layout.wfs";

@@ -177,7 +177,11 @@ inline void from_json(const nlohmann::json& json, RuntimeUnitState& unit) {
     unit.weapons = json.at("weapons").get<std::vector<model::Weapon>>();
     unit.ammo = json.at("ammo").get<std::map<std::string, std::uint64_t>>();
     unit.soldiers = json.at("soldiers").get<std::vector<model::Soldier>>();
-    unit.crew_count = json.at("crew_count").get<std::size_t>();
+    // 存档兼容（宪法 13）：fc62e4b 生成的 v1 存档（units 无 crew_count 字段）
+    // 必须可加载。班组旧存档默认 crew_count = soldiers.size()（全员视为乘员，
+    // 与班组语义一致）；载具旧存档（该字段引入前仓库数据中不存在载具运行期
+    // 单位）按全员视为乘员保守处理——弃车时全部进入乘员组，不丢失人员。
+    unit.crew_count = json.value("crew_count", unit.soldiers.size());
     unit.mission_active = json.at("mission_active").get<bool>();
     unit.mission_command_id = json.at("mission_command_id").get<std::string>();
     unit.mission_type = json.at("mission_type").get<std::string>();
