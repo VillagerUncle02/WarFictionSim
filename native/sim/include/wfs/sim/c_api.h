@@ -11,7 +11,8 @@
 //   create 无错误码通道，失败时显式返回 nullptr。
 // - 快照与事件查询缓冲生命周期：调用方负责分配与释放 out_buf（纯数据 JSON 文本）；
 //   缓冲区不足返回 WFS_SIM_RESULT_BUFFER_TOO_SMALL 并写出所需字节数。
-// - wfs_sim_version 返回 ABI 版本字符串，C# 端用于检测核心错配。
+// - wfs_sim_version 返回 ABI 版本字符串（当前 0.2.0），C# 端按精确匹配
+//   校验；旧 DLL 缺少新增入口时在启动被拒绝并提示升级。
 // - 本头文件同时兼容 C 与 C++（extern "C"），由 c_api.cpp 实现。
 // - 非线程安全：同一句柄的并发调用必须由调用方串行化（与 EventQueue 一致，
 //   并发注入边界由 T020 落实）。
@@ -27,9 +28,12 @@ extern "C" {
 #endif
 
 #define WFS_SIM_ABI_VERSION_MAJOR 0
-#define WFS_SIM_ABI_VERSION_MINOR 1
+// 0.2.0：新增 wfs_sim_query_events 入口（小版本 +1，不破坏既有符号/布局，
+// 故不升 MAJOR）；修改本串必须同步 contracts/sim-c-api.md 与 UI 端
+// SimAbiVersion.Expected。
+#define WFS_SIM_ABI_VERSION_MINOR 2
 #define WFS_SIM_ABI_VERSION_PATCH 0
-#define WFS_SIM_VERSION_STRING "0.1.0"
+#define WFS_SIM_VERSION_STRING "0.2.0"
 // SHA-256 十六进制文本长度 64 + NUL（contracts/save-format.md：state_hash）。
 #define WFS_SIM_STATE_HASH_HEX_LEN 65
 
@@ -52,7 +56,8 @@ wfs_sim_handle* wfs_sim_create(const char* scenario_path, uint64_t seed, int thr
 // 销毁句柄；NULL 为无操作。
 void wfs_sim_destroy(wfs_sim_handle* h);
 
-// 返回 ABI 版本字符串（静态存储，无需释放）。
+// 返回 ABI 版本字符串（静态存储，无需释放）；UI 端精确匹配校验，
+// 错配（如旧 DLL 缺少新增入口）在启动时拒绝并提示升级。
 const char* wfs_sim_version(void);
 
 // 推进一个离散 tick，并按 (tick, seq) 顺序处理到期命令（T011 队列）。
@@ -68,8 +73,10 @@ wfs_sim_result wfs_sim_inject_ai_decision(wfs_sim_handle* h, const char* decisio
 wfs_sim_result wfs_sim_get_snapshot(wfs_sim_handle* h, char* out_buf, size_t buf_size, size_t* out_len);
 
 // 查询事件日志（FR-044 回看/过滤/搜索/置顶的数据通道）：query_json 可选字段
-// category/min_severity/text/limit（见 contracts/sim-c-api.md），映射到
-// EventFilter 后输出只读 JSON 文本 {"events":[...],"count":N,"truncated":bool}。
+// category/min_severity/text/limit/unit_id（见 contracts/sim-c-api.md；
+// unit_id 为 v1 的 message 区分大小写子串匹配，与 text 语义一致，两者同时
+// 给定取交集），前四字段映射到 EventFilter、unit_id 在 ABI 层叠加过滤后
+// 输出只读 JSON 文本 {"events":[...],"count":N,"truncated":bool}。
 // 缓冲生命周期与两段式读取语义同 wfs_sim_get_snapshot（out_len 为不含 NUL 的
 // 文本字节数）；只读查询不改变状态（宪法第 7 条），同一句柄并发仍由调用方
 // 串行化（与全部 wfs_sim_* 一致）。
