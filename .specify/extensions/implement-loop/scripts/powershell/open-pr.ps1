@@ -43,7 +43,7 @@ if ($TasksFile) {
         Write-Err "ERROR: tasks.md 不存在：$TasksFile（不会创建无 Closes 的 PR）。"
         exit 1
     }
-    $taskIds += @(Get-TaskIdsFromTasksFile -TasksFile $TasksFile -CompletedOnly)
+    $taskIds += @(Get-NewCompletedTaskIds -TasksFile $TasksFile -RepoRoot $repoRoot)
     if ($taskIds.Count -eq 0 -and -not $AllowEmptyCloses) {
         Write-Err "ERROR: tasks.md 中没有已完成（[X]）任务，将生成无 Closes 的 PR（正是漏关 issue 的根源）。"
         Write-Err "请确认调用时机；确需创建请加 -AllowEmptyCloses。"
