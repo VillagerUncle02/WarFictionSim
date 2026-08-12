@@ -1,0 +1,169 @@
+// 文件总览：应用壳 —— 战斗主屏视图模型（T039–T042 集成）。
+//
+// 职责：把一份快照分发给各面板（地图/命令上下文/事件计数），并把命令面板
+// 的提交 JSON 经 ISimClient 注入核心；核心拒绝时回填命令面板错误。
+// 表现层帧由视图定时器驱动（渲染独立于模拟 tick，FR-025）；本类型只读快照
+// 与注入命令，不直改模拟状态（宪法第 14 条）。
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using WarFictionSim.Ui.BattleMap;
+using WarFictionSim.Ui.CommandPanel;
+using WarFictionSim.Ui.EventLogPanel;
+using WarFictionSim.Ui.GameControls;
+using WarFictionSim.Ui.Interop;
+using WarFictionSim.Ui.MainMenu;
+
+namespace WarFictionSim.Ui.ViewModels;
+
+/// <summary>战斗主屏（地图 + 命令面板 + 时间控制 + 事件日志）。</summary>
+public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
+{
+    private readonly ISimClient _client;
+    private readonly IReadOnlyList<string> _zoneIds;
+    private bool _disposed;
+    private string _tickDisplay = "tick 0";
+    private string _stateHash = string.Empty;
+    private string? _statusError;
+    private string? _lastStepError;
+
+    /// <summary>初始化战斗主屏。</summary>
+    /// <param name="client">已创建（并已读档）的模拟客户端。</param>
+    /// <param name="scenario">场景静态元数据（地图尺寸/区域列表）。</param>
+    public GameScreenViewModel(ISimClient client, ScenarioCatalogEntry scenario)
+    {
+        _client = client;
+        _zoneIds = scenario.Zones;
+        ScenarioName = scenario.Name;
+        BattleMap = new BattleMapViewModel(scenario.MapWidthKm, scenario.MapHeightKm);
+        CommandPanel = new CommandPanelViewModel();
+        TimeControls = new TimeControlsViewModel((int)scenario.TickHz);
+        EventLog = new EventLogViewModel();
+        CommandPanel.SubmitRequested += (_, json) => InjectCommand(json);
+    }
+
+    /// <summary>场景显示名。</summary>
+    public string ScenarioName { get; }
+
+    /// <summary>兵牌地图。</summary>
+    public BattleMapViewModel BattleMap { get; }
+
+    /// <summary>命令面板。</summary>
+    public CommandPanelViewModel CommandPanel { get; }
+
+    /// <summary>时间控制。</summary>
+    public TimeControlsViewModel TimeControls { get; }
+
+    /// <summary>事件日志。</summary>
+    public EventLogViewModel EventLog { get; }
+
+    /// <summary>当前游戏 tick 展示。</summary>
+    public string TickDisplay
+    {
+        get => _tickDisplay;
+        private set => SetProperty(ref _tickDisplay, value);
+    }
+
+    /// <summary>最近一次状态哈希（供 HUD 展示确定性身份）。</summary>
+    public string StateHash
+    {
+        get => _stateHash;
+        private set => SetProperty(ref _stateHash, value);
+    }
+
+    /// <summary>表现层状态错误（快照/步进失败时展示，不静默）。</summary>
+    public string? StatusError
+    {
+        get => _statusError;
+        private set => SetProperty(ref _statusError, value);
+    }
+
+    /// <summary>渲染帧：拉取快照并分发给各面板（不步进）。</summary>
+    public void OnPresentationFrame()
+    {
+        try
+        {
+            ApplySnapshot(_client.GetSnapshot());
+            StatusError = _lastStepError;
+        }
+        catch (SimNativeException exception)
+        {
+            StatusError = $"读取快照失败：{exception.Message}";
+        }
+    }
+
+    /// <summary>步进一个 tick（由表现层步进泵按档位调用；暂停时不调用）。</summary>
+    public void StepOneTick()
+    {
+        try
+        {
+            _client.Step();
+            _lastStepError = null;
+        }
+        catch (SimNativeException exception)
+        {
+            _lastStepError = $"推进模拟失败：{exception.Message}";
+        }
+    }
+
+    /// <summary>把快照分发给各面板。</summary>
+    /// <param name="snapshot">只读快照。</param>
+    public void ApplySnapshot(SimulationSnapshot snapshot)
+    {
+        BattleMap.ApplySnapshot(snapshot);
+        CommandPanel.ApplyContext(BuildCommandContext(snapshot));
+        EventLog.ApplySummary(snapshot.EventLog);
+        TickDisplay = $"tick {snapshot.Tick}";
+        StateHash = _client.GetStateHash();
+    }
+
+    /// <summary>把命令 JSON 注入核心；核心拒绝时回填面板错误。</summary>
+    /// <param name="commandJson">已序列化的命令。</param>
+    public void InjectCommand(string commandJson)
+    {
+        try
+        {
+            _client.InjectCommand(commandJson);
+        }
+        catch (SimNativeException exception)
+        {
+            CommandPanel.ShowNativeRejection(exception);
+        }
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _client.Dispose();
+    }
+
+    private CommandContext BuildCommandContext(SimulationSnapshot snapshot)
+    {
+        string friendlySide = snapshot.Units.FirstOrDefault(unit => unit.NodeId == snapshot.PlayerNodeId)?.Side
+            ?? snapshot.PlayerNodeId;
+        var units = new List<CommandableUnit>(snapshot.Units.Count);
+        foreach (UnitState unit in snapshot.Units)
+        {
+            units.Add(new CommandableUnit(
+                unit.Id,
+                unit.NodeId,
+                unit.Side,
+                unit.Ammo.Keys.ToList(),
+                unit.MissionActive));
+        }
+
+        return new CommandContext
+        {
+            CommanderNodeId = snapshot.PlayerNodeId,
+            FriendlySide = friendlySide,
+            CurrentTick = snapshot.Tick,
+            Units = units,
+            ZoneIds = _zoneIds,
+        };
+    }
+}
