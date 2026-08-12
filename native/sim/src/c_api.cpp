@@ -14,6 +14,7 @@
 
 #include "wfs/sim/c_api.h"
 
+#include <algorithm>
 #include <cstring>
 #include <new>
 #include <stdexcept>
@@ -44,7 +45,8 @@ struct wfs_sim_handle : wfs::sim::SimState {
 
 namespace {
 
-// 解析 query_json（可选字段 category/min_severity/text/limit）为 EventFilter。
+// 解析 query_json（可选字段 category/min_severity/text/limit）为 EventFilter；
+// unit_id 由 ParseUnitId 单独解析（v1 不进入 EventFilter，见下）。
 // 未知名称/字段类型错误/负 limit 抛 std::invalid_argument（宪法第 17 条：
 // 显式报错，不静默吞错），由 wfs_sim_query_events 统一映射为
 // WFS_SIM_RESULT_INVALID_DATA；未知字段忽略（前向兼容），null 字段视同缺省。
@@ -79,6 +81,22 @@ wfs::sim::EventFilter ParseEventQuery(const nlohmann::json& query) {
         filter.limit = limit->get<std::size_t>();
     }
     return filter;
+}
+
+// 解析 query_json 可选字段 unit_id（N3，FR-044 按单位筛选的 v1 实现）：
+// 语义为 message 区分大小写子串匹配（与 text 一致）；空串或 null 视同
+// 不过滤；非字符串抛 std::invalid_argument → WFS_SIM_RESULT_INVALID_DATA。
+// 结构化 unit 字段是后续事项（见 contracts/sim-c-api.md），v1 只在此 ABI
+// 解析层叠加过滤，不改变 EventFilter/SimEvent 与任何生产者。
+std::string ParseUnitId(const nlohmann::json& query) {
+    const auto unit_id = query.find("unit_id");
+    if (unit_id != query.end() && !unit_id->is_null()) {
+        if (!unit_id->is_string()) {
+            throw std::invalid_argument("query.unit_id 必须是字符串");
+        }
+        return unit_id->get<std::string>();
+    }
+    return {};
 }
 
 }  // namespace
@@ -208,12 +226,24 @@ wfs_sim_result wfs_sim_query_events(wfs_sim_handle* handle, const char* query_js
             return WFS_SIM_RESULT_INVALID_DATA;
         }
         const wfs::sim::EventFilter filter = ParseEventQuery(query);
+        const std::string unit_id = ParseUnitId(query);
         // 先全量过滤统计 count（limit 置 0 不限），再按 limit 截断；
         // truncated = 过滤后总数超过 limit。事件日志保留集合有界（默认 5000），
         // 全量扫描满足 FR-044 查询延迟预算且 count 为截断前总数。
         wfs::sim::EventFilter counting = filter;
         counting.limit = 0U;
         std::vector<wfs::sim::SimEvent> matches = handle->event_log.query(counting);
+        // N3：unit_id 在 EventFilter（category/min_severity/text）之上叠加
+        // message 区分大小写子串匹配；text 与 unit_id 同时给定取交集。
+        // 过滤顺序固定（先 EventFilter 后 unit_id），erase-remove 保持
+        // seq 升序，同一查询字节级一致（宪法第 7 条确定性）。
+        if (!unit_id.empty()) {
+            matches.erase(std::remove_if(matches.begin(), matches.end(),
+                                         [&unit_id](const wfs::sim::SimEvent& event) {
+                                             return event.message.find(unit_id) == std::string::npos;
+                                         }),
+                          matches.end());
+        }
         const std::size_t count = matches.size();
         const bool truncated = (filter.limit != 0U) && (matches.size() > filter.limit);
         if (truncated) {
