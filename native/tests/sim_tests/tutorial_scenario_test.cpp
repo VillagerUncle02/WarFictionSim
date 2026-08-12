@@ -13,6 +13,8 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include "test_temp_dir.h"
+
 #include "wfs/sim/loader.h"
 
 namespace {
@@ -31,38 +33,8 @@ std::filesystem::path ScenarioSchema() {
     return RepoRoot() / "contracts" / "schemas" / "scenario.schema.json";
 }
 
-// 测试专用临时目录（与 loader_test 相同的安全清理约定）。
-class TempDir {
-   public:
-    TempDir() {
-        static int counter = 0;
-        path_ = std::filesystem::temp_directory_path() / ("wfs-tutorial-test-" + std::to_string(counter++));
-        std::filesystem::remove_all(path_);
-        std::filesystem::create_directories(path_);
-    }
-
-    ~TempDir() {
-        const std::filesystem::path temp_root = std::filesystem::temp_directory_path();
-        const std::filesystem::path normalized = path_.lexically_normal();
-        if (normalized.string().starts_with(temp_root.string())) {
-            std::error_code ec;
-            std::filesystem::remove_all(normalized, ec);
-        }
-    }
-
-    TempDir(const TempDir&) = delete;
-    TempDir& operator=(const TempDir&) = delete;
-
-    std::filesystem::path Write(const std::string& filename, const nlohmann::json& content) const {
-        const std::filesystem::path file = path_ / filename;
-        std::ofstream out(file);
-        out << content.dump();
-        return file;
-    }
-
-   private:
-    std::filesystem::path path_;
-};
+// 测试临时目录统一使用共享唯一化设施（F1：pid + 进程内单调序号，防并行冲突）。
+using TempDir = wfs::sim::test::TempDir;
 
 nlohmann::json TutorialJson() {
     std::ifstream in(TutorialScenario());
@@ -100,7 +72,7 @@ TEST(WfsTutorialScenarioTest, InvalidFailureConditionReferenceRejected) {
     root["failure_conditions"] =
         nlohmann::json::array({nlohmann::json{{"id", "fail-ghost"}, {"kind", "unit"}, {"target_ref", "ghost-unit"}}});
     TempDir dir;
-    const auto result = load_scenario(dir.Write("broken-tutorial.json", root), ScenarioSchema());
+    const auto result = load_scenario(dir.Write("broken-tutorial.json", root.dump()), ScenarioSchema());
     ASSERT_FALSE(result.ok());
     EXPECT_EQ(result.issues.front().code, "OBJECTIVE_REF_NOT_FOUND");
 }
@@ -117,7 +89,7 @@ TEST(WfsTutorialScenarioTest, TutorialRequiresSaveSlot) {
     nlohmann::json root = TutorialJson();
     root.erase("save_slot");
     TempDir dir;
-    const auto result = load_scenario(dir.Write("tutorial-no-save-slot.json", root), ScenarioSchema());
+    const auto result = load_scenario(dir.Write("tutorial-no-save-slot.json", root.dump()), ScenarioSchema());
     ASSERT_FALSE(result.ok());
     // Schema if-then 与语义校验双保险：任一层面拒绝均可（F3）。
     const std::string code = result.issues.front().code;
@@ -129,7 +101,7 @@ TEST(WfsTutorialScenarioTest, NonTutorialRejectsSaveSlot) {
     nlohmann::json root = nlohmann::json::parse(in);
     root["save_slot"] = "main-custom-slot";
     TempDir dir;
-    const auto result = load_scenario(dir.Write("save-slot-on-non-tutorial.json", root), ScenarioSchema());
+    const auto result = load_scenario(dir.Write("save-slot-on-non-tutorial.json", root.dump()), ScenarioSchema());
     ASSERT_FALSE(result.ok());
     const std::string code = result.issues.front().code;
     EXPECT_TRUE(code == "SAVE_SLOT_FORBIDDEN" || code == "SCHEMA_INVALID") << code;

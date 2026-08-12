@@ -24,6 +24,8 @@
 
 #include <gtest/gtest.h>
 
+#include "../test_temp_dir.h"
+
 #include "wfs/sim/c_api.h"
 #include "wfs/sim/headless.h"
 
@@ -105,9 +107,8 @@ bool IsHex64(const std::string& hash) {
 // Windows 用 CreateProcessW 直接启动（CRT system() 对带引号长命令有解析
 // 缺陷，且子进程环境不能依赖 shell 展开），非 Windows 退回 system + 重定向。
 std::string RunCliHash(const std::vector<std::string>& extra_args) {
-    static int counter = 0;
-    const std::filesystem::path out =
-        std::filesystem::temp_directory_path() / ("wfs-golden-" + std::to_string(++counter) + ".txt");
+    // F1：唯一临时文件（pid + 进程内单调序号），ctest -jN 并行互不冲突。
+    const std::filesystem::path out = wfs::sim::test::UniqueTempFile("wfs-golden", ".txt");
     std::string command = "\"" + Exe() + "\" run --scenario \"" + SampleScenario().string() + "\" --seed 42 --hash";
     for (const std::string& arg : extra_args) {
         command += " \"" + arg + "\"";

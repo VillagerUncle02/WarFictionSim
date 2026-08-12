@@ -14,6 +14,8 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include "test_temp_dir.h"
+
 #include "wfs/sim/loader.h"
 
 namespace {
@@ -35,43 +37,8 @@ std::filesystem::path SchemaDir() {
     return RepoRoot() / "contracts" / "schemas";
 }
 
-// 测试专用临时目录：仅创建于系统临时目录下带唯一前缀的路径，析构时递归清理
-// （路径经校验位于 temp_directory_path 内，避免误删工作区文件）。
-class TempDir {
-   public:
-    TempDir() {
-        static int counter = 0;
-        path_ = std::filesystem::temp_directory_path() / ("wfs-data-test-" + std::to_string(counter++));
-        std::filesystem::remove_all(path_);
-        std::filesystem::create_directories(path_);
-        std::filesystem::create_directories(path_ / "units");
-        std::filesystem::create_directories(path_ / "terrain");
-    }
-
-    ~TempDir() {
-        const std::filesystem::path temp_root = std::filesystem::temp_directory_path();
-        const std::filesystem::path normalized = path_.lexically_normal();
-        if (normalized.string().starts_with(temp_root.string())) {
-            std::error_code ec;
-            std::filesystem::remove_all(normalized, ec);
-        }
-    }
-
-    TempDir(const TempDir&) = delete;
-    TempDir& operator=(const TempDir&) = delete;
-
-    void Write(const std::string& relative, const nlohmann::json& content) const {
-        const std::filesystem::path file = path_ / relative;
-        std::filesystem::create_directories(file.parent_path());
-        std::ofstream out(file);
-        out << content.dump();
-    }
-
-    std::filesystem::path path() const { return path_; }
-
-   private:
-    std::filesystem::path path_;
-};
+// 测试临时目录统一使用共享唯一化设施（F1：pid + 进程内单调序号，防并行冲突）。
+using TempDir = wfs::sim::test::TempDir;
 
 nlohmann::json ReadFile(const std::filesystem::path& path) {
     std::ifstream in(path);
@@ -84,9 +51,9 @@ void CopyBaselineTo(TempDir& dir, const std::string& override_relative, const nl
          {"units/squads.json", "units/weapons.json", "units/ammo.json", "terrain/terrain.json",
           "terrain/fortifications.json", "terrain/facilities.json"}) {
         if (relative == override_relative) {
-            dir.Write(relative, override_content);
+            dir.Write(relative, override_content.dump());
         } else {
-            dir.Write(relative, ReadFile(DataRoot() / relative));
+            dir.Write(relative, ReadFile(DataRoot() / relative).dump());
         }
     }
 }
