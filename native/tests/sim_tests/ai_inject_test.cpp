@@ -76,6 +76,7 @@ SimState MakeState(std::uint64_t seed = 42U, int threads = 1) {
     state.seed = seed;
     state.threads = threads;
     state.scenario_path = SampleScenario();
+    initialize_runtime_state(state);  // T029–T031：运行期单位/配置与场景一致。
     return state;
 }
 
@@ -121,7 +122,8 @@ TEST(WfsAiInjectTest, ValidDecisionAcceptedValidatedAndQueued) {
 
     ASSERT_EQ(state.queue.size(), 1U);
     const wfs::sim::QueuedEvent& queued = state.queue.front();
-    EXPECT_EQ(queued.tick, 0U);
+    // T029：队列在 issue_tick + 1 传输到达信号，实际生效由通讯延迟链路控制。
+    EXPECT_EQ(queued.tick, 1U);
     EXPECT_EQ(queued.seq, result.arrival_seq);
     EXPECT_EQ(queued.payload, ValidCommandJson());
 
@@ -244,7 +246,7 @@ TEST(WfsAiInjectTest, ArrivalTickAndSequenceRecordedInOrder) {
 
     // 队列仍保留第二条（tick=1 未到期，当前 tick=1 的 step 已消费第一条）。
     ASSERT_EQ(state.queue.size(), 1U);
-    EXPECT_EQ(state.queue.front().tick, 1U);
+    EXPECT_EQ(state.queue.front().tick, 2U);
     EXPECT_EQ(state.queue.front().seq, 1U);
 }
 

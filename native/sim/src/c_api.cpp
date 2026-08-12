@@ -68,6 +68,7 @@ wfs_sim_handle* wfs_sim_create(const char* scenario_path, std::uint64_t seed, in
         handle->seed = seed;
         handle->threads = threads;
         handle->scenario_path = path;
+        wfs::sim::initialize_runtime_state(*handle);
         return handle;
     } catch (...) {
         return nullptr;

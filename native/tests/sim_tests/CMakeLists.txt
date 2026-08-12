@@ -20,6 +20,7 @@ add_executable(sim_tests
     ai_inject_test.cpp
     script_backend_test.cpp
     golden/golden_test.cpp
+    golden/combat_golden.cpp
     command_model_test.cpp
     combat_model_test.cpp
     terrain_model_test.cpp

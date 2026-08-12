@@ -82,6 +82,9 @@ std::string build_ai_events_json(const SimState& state, std::size_t limit) {
     return output.dump();
 }
 
+// 注入通道是固定顺序的校验→延迟登记→入队→决策点记录事务；拆分会导致
+// 部分失败路径漏记决策日志。
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 AiInjectResult inject_ai_decision(SimState& state, const std::string& command_json, const AiDecisionMeta& meta,
                                   const std::filesystem::path& schema_path) {
     AiInjectResult result;
@@ -129,11 +132,49 @@ AiInjectResult inject_ai_decision(SimState& state, const std::string& command_js
     const GameTick arrival_tick = state.clock.tick();
     if (validation.ok()) {
         result.arrival_tick = arrival_tick;
-        result.arrival_seq = state.queue.enqueue(arrival_tick, command_json);
-        result.accepted = true;
-        state.event_log.append(arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
-                               "AI_DECISION_ACCEPTED decision_id=" + result.decision_id + " tick=" +
-                                   std::to_string(arrival_tick) + " seq=" + std::to_string(result.arrival_seq));
+        result.arrival_seq = state.queue.next_seq();
+        try {
+            const nlohmann::json command = nlohmann::json::parse(command_json);
+            // T029：AI 指令与玩家指令共用同一通讯延迟链路（FR-030/045）。
+            const CommandChain::IssueResult issued =
+                state.command_chain.Issue(command, result.arrival_seq, arrival_tick, state.clock.tick_hz(),
+                                          state.command_delay_config, state.rng);
+            if (!issued.accepted) {
+                result.errors.push_back(ValidationError{"CHAIN_REJECTED", issued.error});
+                state.event_log.append(
+                    arrival_tick, EventCategory::kCommand, EventSeverity::kWarning,
+                    "AI_DECISION_REJECTED decision_id=" + result.decision_id + " code=CHAIN_REJECTED");
+            } else {
+                state.queue.enqueue(arrival_tick + 1U, result.arrival_seq, command_json);
+                result.accepted = true;
+                state.event_log.append(arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
+                                       "AI_DECISION_ACCEPTED decision_id=" + result.decision_id + " tick=" +
+                                           std::to_string(arrival_tick) + " seq=" + std::to_string(result.arrival_seq));
+                std::string unit_text;
+                const nlohmann::json& target = command.at("target");
+                if (target.at("kind").get<std::string>() == "units") {
+                    for (const std::string& ref : target.at("refs").get<std::vector<std::string>>()) {
+                        if (!unit_text.empty()) {
+                            unit_text += ",";
+                        }
+                        unit_text += ref;
+                    }
+                } else {
+                    unit_text = target.at("ref").get<std::string>();
+                }
+                state.event_log.append(arrival_tick, EventCategory::kCommand, EventSeverity::kInfo,
+                                       "COMMAND_ISSUED command=" + issued.command_id + " unit=" + unit_text +
+                                           " type=" + command.at("type").get<std::string>() +
+                                           " seq=" + std::to_string(result.arrival_seq) +
+                                           " issue_tick=" + std::to_string(arrival_tick) +
+                                           " delay_ticks=" + std::to_string(issued.delay_ticks) +
+                                           " arrival_tick=" + std::to_string(issued.arrival_tick));
+            }
+        } catch (const nlohmann::json::parse_error&) {
+            result.errors.push_back(ValidationError{"INVALID_JSON", "命令不是合法 JSON"});
+            state.event_log.append(arrival_tick, EventCategory::kCommand, EventSeverity::kWarning,
+                                   "AI_DECISION_REJECTED decision_id=" + result.decision_id + " code=INVALID_JSON");
+        }
     } else {
         const std::string code = validation.errors.empty() ? "UNKNOWN" : validation.errors.front().code;
         state.event_log.append(arrival_tick, EventCategory::kCommand, EventSeverity::kWarning,
@@ -156,5 +197,6 @@ AiInjectResult inject_ai_decision(SimState& state, const std::string& command_js
     ++state.ai_decision_counter;
     return result;
 }
+// NOLINTEND(readability-function-cognitive-complexity)
 
 }  // namespace wfs::sim

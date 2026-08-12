@@ -78,6 +78,12 @@ nlohmann::json build_snapshot_json(const SimState& state) {
              {"capacity", state.event_log.capacity()},
              {"critical_count", state.event_log.critical_count()},
          }},
+        // T029–T031：命令链路与单位运行期状态摘要（快照只读消费）。
+        {"command_chain",
+         nlohmann::json{
+             {"commands", state.command_chain.size()},
+         }},
+        {"units", state.units},
     };
 }
 
@@ -117,6 +123,11 @@ nlohmann::json serialize_state_json(const SimState& state) {
     if (!state.decision_log.empty()) {
         root["decision_log"] = decision_log_to_json(state.decision_log);
     }
+    // T029–T031：命令链路/运行期单位/烟幕是确定性状态的组成部分。
+    root["units"] = state.units;
+    root["command_chain"] = state.command_chain;
+    root["smoke"] = state.smoke_areas;
+    root["next_smoke_id"] = state.next_smoke_id;
     return root;
 }
 

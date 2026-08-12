@@ -17,6 +17,9 @@ add_library(sim STATIC
     src/loader.cpp
     src/command_validation.cpp
     src/mission_registry.cpp
+    src/command_chain.cpp
+    src/movement.cpp
+    src/combat.cpp
     src/schema_validator.cpp
     src/c_api.cpp
     src/sim_runtime.cpp

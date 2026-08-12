@@ -54,7 +54,7 @@ class Handle {
 };
 
 std::string SnapshotText(wfs_sim_handle* handle) {
-    std::string buffer(4096, '\0');
+    std::string buffer(1 << 20, '\0');
     std::size_t len = 0;
     const wfs_sim_result result = wfs_sim_get_snapshot(handle, buffer.data(), buffer.size(), &len);
     EXPECT_EQ(result, WFS_SIM_RESULT_OK);

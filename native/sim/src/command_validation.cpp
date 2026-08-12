@@ -89,9 +89,17 @@ bool HasZone(const CommandValidationContext& context, const std::string& zone_id
     return std::find(context.known_zones.begin(), context.known_zones.end(), zone_id) != context.known_zones.end();
 }
 
+// T029 契约扩展：撤回/修改元命令（FR-045）不属于 13 种任务类型，单独注册。
+bool IsMetaCommandType(const std::string& type) {
+    return type == "WITHDRAW_COMMAND" || type == "MODIFY_COMMAND";
+}
+
 // ---- 语义检查 1：类型必须已注册（未注册类型拒绝）。 ----
 void CheckCommandType(const std::string& type, const CommandValidationContext& context,
                       std::vector<ValidationError>& errors) {
+    if (IsMetaCommandType(type)) {
+        return;  // 元命令类型在 T029 链路注册（撤回/修改，FR-045）。
+    }
     const std::vector<std::string>& registered_types =
         context.registered_types.empty() ? BuiltInCommandTypes() : context.registered_types;
     if (std::find(registered_types.begin(), registered_types.end(), type) == registered_types.end()) {
@@ -103,7 +111,7 @@ void CheckCommandType(const std::string& type, const CommandValidationContext& c
 void CheckTarget(const nlohmann::json& command, const CommandValidationContext& context, const UnitInfo*& target_unit,
                  std::vector<ValidationError>& errors) {
     const std::string target_kind = command["target"]["kind"].get<std::string>();
-    const std::string target_ref = command["target"]["ref"].get<std::string>();
+    const std::string target_ref = command["target"].value("ref", std::string());
     if (target_kind == "unit") {
         target_unit = FindUnit(context, target_ref);
         if (target_unit == nullptr) {
@@ -114,6 +122,27 @@ void CheckTarget(const nlohmann::json& command, const CommandValidationContext& 
             errors.push_back(Error("UNAUTHORIZED_TARGET", "目标单位不属于指挥范围: " + target_ref + "（所属节点 " +
                                                               target_unit->node_id + "，指挥节点 " +
                                                               context.commander_node_id + "）"));
+        }
+    } else if (target_kind == "units") {
+        // 批量命令（FR-045）：目标为单位集合；单兵条件（弹药覆盖）延迟到
+        // 命令链到达时按单位独立判定（部分接受）。
+        if (!command["target"].contains("refs") || !command["target"]["refs"].is_array() ||
+            command["target"]["refs"].empty()) {
+            errors.push_back(Error("TARGET_NOT_FOUND", "批量目标缺少非空 refs 数组"));
+            return;
+        }
+        for (const nlohmann::json& ref_json : command["target"]["refs"]) {
+            const std::string ref = ref_json.get<std::string>();
+            const UnitInfo* unit = FindUnit(context, ref);
+            if (unit == nullptr) {
+                errors.push_back(Error("TARGET_NOT_FOUND", "目标单位不存在: " + ref));
+                continue;
+            }
+            if (!context.commander_node_id.empty() && unit->node_id != context.commander_node_id) {
+                errors.push_back(Error("UNAUTHORIZED_TARGET", "目标单位不属于指挥范围: " + ref + "（所属节点 " +
+                                                                  unit->node_id + "，指挥节点 " +
+                                                                  context.commander_node_id + "）"));
+            }
         }
     } else if (target_kind == "zone" && !HasZone(context, target_ref)) {
         errors.push_back(Error("TARGET_NOT_FOUND", "目标区域不存在: " + target_ref));
@@ -133,6 +162,12 @@ bool CollectMissingConditionParams(const ConditionSpec& spec, const nlohmann::js
         const nlohmann::json& value = params[required];
         if (required == "duration_ticks") {
             if (!value.is_number_integer() || value.get<std::int64_t>() <= 0) {
+                missing.push_back(required);
+            }
+        } else if (required == "point") {
+            // T030：reach_point 的 point 参数为坐标对象（x/y，km）。
+            if (!value.is_object() || !value.contains("x") || !value.contains("y") || !value["x"].is_number() ||
+                !value["y"].is_number()) {
                 missing.push_back(required);
             }
         } else if (!value.is_string() || value.get<std::string>().empty()) {
@@ -192,7 +227,10 @@ void CheckAmmoOverride(const nlohmann::json& command, const UnitInfo* target_uni
     }
     const std::string ammo = behavior["ammo_override"].get<std::string>();
     const std::string target_kind = command["target"]["kind"].get<std::string>();
-    const std::string target_ref = command["target"]["ref"].get<std::string>();
+    if (target_kind == "units") {
+        return;  // 批量单兵条件延迟到命令链到达时按单位判定（FR-045 部分接受）。
+    }
+    const std::string target_ref = command["target"].value("ref", std::string());
     if (target_kind != "unit") {
         errors.push_back(
             Error("AMMO_NOT_EVALUABLE", "ammo_override 只能对 unit 目标校验（目标 kind=" + target_kind + "）"));
@@ -262,8 +300,23 @@ CommandValidationResult validate_command(const nlohmann::json& command, const Co
     CheckCommandType(command["type"].get<std::string>(), context, errors);
     const UnitInfo* target_unit = nullptr;
     CheckTarget(command, context, target_unit, errors);
-    CheckCompletionCondition(command, context, errors);
-    CheckAmmoOverride(command, target_unit, errors);
+    const bool meta = IsMetaCommandType(command["type"].get<std::string>());
+    if (!meta) {
+        // 任务命令：完成条件可求值 + 弹药覆盖存在（FR-045/058）。
+        CheckCompletionCondition(command, context, errors);
+        CheckAmmoOverride(command, target_unit, errors);
+    }
+    if (command["type"].get<std::string>() == "MODIFY_COMMAND") {
+        // 修改命令携带完整替代命令：替代命令本身必须通过同一双重校验。
+        if (!command.contains("replace_with") || !command["replace_with"].is_object()) {
+            errors.push_back(Error("MODIFY_INVALID", "MODIFY_COMMAND 缺少 replace_with 命令对象"));
+        } else {
+            const CommandValidationResult replacement = validate_command(command["replace_with"], context, schema);
+            for (const ValidationError& error : replacement.errors) {
+                errors.push_back(ValidationError{error.code, "replace_with: " + error.message});
+            }
+        }
+    }
     return CommandValidationResult{std::move(errors)};
 }
 

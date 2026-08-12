@@ -266,6 +266,7 @@ bool HasDuplicateDecisionIds(const DecisionLog& log) {
 
 }  // namespace
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 nlohmann::json migrate_state(const nlohmann::json& state, std::uint32_t from_version, std::uint32_t to_version) {
     if (from_version < kFirstSaveFormatVersion) {
         throw std::invalid_argument("wfs::sim::migrate_state: no migration path from format version " +
@@ -294,6 +295,7 @@ nlohmann::json migrate_state(const nlohmann::json& state, std::uint32_t from_ver
     }
     return current;
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 wfs_sim_result save_to_file(const SimState& state, const std::filesystem::path& path) {
     try {
@@ -317,6 +319,9 @@ wfs_sim_result save_to_file(const SimState& state, const std::filesystem::path& 
     }
 }
 
+// 存档加载是固定顺序的校验事务（magic→版本→哈希→元数据→组装→一次性提交），
+// 拆分会破坏"失败不改写句柄"的强保证。
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path) {
     std::string data;
     if (!ReadWholeFile(path, data)) {
@@ -415,6 +420,20 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         if (HasDuplicateDecisionIds(next.decision_log)) {
             return WFS_SIM_RESULT_INVALID_DATA;
         }
+        // T029–T031：命令链路/运行期单位/烟幕随存档恢复；旧存档缺失时
+        // 保持句柄已初始化的场景派生状态（非破坏性演进）。
+        if (parsed.contains("units")) {
+            next.units = parsed.at("units").get<std::vector<wfs::sim::RuntimeUnitState>>();
+        }
+        if (parsed.contains("command_chain")) {
+            next.command_chain = parsed.at("command_chain").get<wfs::sim::CommandChain>();
+        }
+        if (parsed.contains("smoke")) {
+            next.smoke_areas = parsed.at("smoke").get<std::vector<wfs::sim::SmokeArea>>();
+        }
+        if (parsed.contains("next_smoke_id")) {
+            next.next_smoke_id = parsed.at("next_smoke_id").get<std::uint64_t>();
+        }
         state = std::move(next);
         return WFS_SIM_RESULT_OK;
     } catch (const std::invalid_argument&) {
@@ -427,5 +446,6 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         return WFS_SIM_RESULT_INTERNAL_ERROR;
     }
 }
+// NOLINTEND(readability-function-cognitive-complexity)
 
 }  // namespace wfs::sim

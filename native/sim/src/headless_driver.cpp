@@ -57,6 +57,7 @@ std::optional<SimState> LoadState(const std::filesystem::path& scenario_path, co
     state.seed = config.seed;
     state.threads = config.threads;
     state.scenario_path = scenario_path;
+    initialize_runtime_state(state);
     return state;
 }
 
