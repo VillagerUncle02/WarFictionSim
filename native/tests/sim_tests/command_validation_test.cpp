@@ -1,0 +1,350 @@
+// tests/sim_tests/command_validation_test.cpp
+//
+// T014 单元测试：命令 Schema + 语义双重校验管道。
+// 覆盖合法命令通过、未注册类型拒绝、目标不存在/越权拒绝、完成条件不可求值
+// （未知条件/缺参数/未知区域/未知目标单位）、弹药覆盖不存在拒绝、
+// Schema 结构错误、类型注册表注入，以及错误顺序与内容的确定性。
+
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+
+#include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
+
+#include "wfs/sim/command_validation.h"
+#include "wfs/sim/loader.h"
+
+namespace {
+
+using wfs::sim::CommandValidationContext;
+using wfs::sim::CommandValidationResult;
+using wfs::sim::load_scenario;
+using wfs::sim::make_validation_context;
+using wfs::sim::UnitInfo;
+using wfs::sim::validate_command;
+using wfs::sim::ValidationError;
+
+std::filesystem::path RepoRoot() {
+    return WFS_SOURCE_ROOT;
+}
+
+std::filesystem::path CommandSchema() {
+    return RepoRoot() / "contracts" / "schemas" / "command.schema.json";
+}
+
+const nlohmann::json& CommandSchemaJson() {
+    // 解析后的 Schema 只读复用：避免每次校验都重复读文件，也让 json 重载
+    // 以精确类型调用（消除 string/path 重载间的隐式转换歧义）。
+    static const nlohmann::json schema = [] {
+        std::ifstream in(CommandSchema());
+        return nlohmann::json::parse(in);
+    }();
+    return schema;
+}
+
+nlohmann::json LaxSchema() {
+    // 刻意不约束 schema_version 类型（无 type:integer 约束），让非法版本值
+    // 穿透 JSON Schema 层，直接命中语义层的取数防护（PR #107 review F2）。
+    return nlohmann::json{
+        {"schema_version", 1},
+        {"type", "object"},
+        {"properties", nlohmann::json::object()},
+    };
+}
+
+CommandValidationContext DefaultContext() {
+    CommandValidationContext context;
+    context.commander_node_id = "platoon-alpha";
+    context.units = {
+        UnitInfo{"squad-a", "platoon-alpha", {"5.56mm", "frag_grenade"}},
+        UnitInfo{"squad-b", "platoon-alpha", {"5.56mm"}},
+        UnitInfo{"squad-c", "enemy-command", {"7.62mm"}},
+    };
+    context.known_zones = {"zone-hill"};
+    return context;
+}
+
+nlohmann::json ValidCommandJson() {
+    return nlohmann::json{
+        {"schema_version", 1},
+        {"type", "SECURE_ZONE"},
+        {"target", nlohmann::json{{"kind", "unit"}, {"ref", "squad-a"}}},
+        {"completion", nlohmann::json{{"condition", "secure_zone"},
+                                      {"params", nlohmann::json{{"zone", "zone-hill"}, {"duration_ticks", 1200}}}}},
+        {"intent", "占领高地并坚守"},
+        {"behavior",
+         nlohmann::json{{"engagement", "aggressive"}, {"ammo_override", "5.56mm"}, {"failure_action", "hold"}}},
+        {"priority", 1},
+        {"deadline", nlohmann::json{{"game_time", 3600}}},
+    };
+}
+
+std::vector<std::string> ErrorCodes(const CommandValidationResult& result) {
+    std::vector<std::string> codes;
+    codes.reserve(result.errors.size());
+    for (const ValidationError& error : result.errors) {
+        codes.push_back(error.code);
+    }
+    return codes;
+}
+
+CommandValidationResult Validate(const nlohmann::json& command) {
+    return validate_command(command, DefaultContext(), CommandSchemaJson());
+}
+
+}  // namespace
+
+TEST(WfsCommandValidationTest, ValidCommandPasses) {
+    const CommandValidationResult result = Validate(ValidCommandJson());
+    EXPECT_TRUE(result.ok());
+    EXPECT_TRUE(result.errors.empty());
+}
+
+TEST(WfsCommandValidationTest, SchemaRejectsMissingRequiredField) {
+    nlohmann::json command = ValidCommandJson();
+    command.erase("priority");
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+}
+
+TEST(WfsCommandValidationTest, InvalidJsonRejected) {
+    const CommandValidationResult result = validate_command("{ not json", DefaultContext(), CommandSchema());
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "INVALID_JSON");
+}
+
+TEST(WfsCommandValidationTest, UnregisteredTypeRejected) {
+    nlohmann::json command = ValidCommandJson();
+    command["type"] = "TELEPORT";
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "UNREGISTERED_TYPE");
+}
+
+TEST(WfsCommandValidationTest, TargetNotFoundRejected) {
+    nlohmann::json command = ValidCommandJson();
+    command["target"] = nlohmann::json{{"kind", "unit"}, {"ref", "ghost-unit"}};
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "TARGET_NOT_FOUND");
+}
+
+TEST(WfsCommandValidationTest, UnauthorizedTargetRejected) {
+    nlohmann::json command = ValidCommandJson();
+    command["target"] = nlohmann::json{{"kind", "unit"}, {"ref", "squad-c"}};
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "UNAUTHORIZED_TARGET");
+}
+
+TEST(WfsCommandValidationTest, EmptyCommanderSkipsAuthorityCheck) {
+    nlohmann::json command = ValidCommandJson();
+    command["target"] = nlohmann::json{{"kind", "unit"}, {"ref", "squad-c"}};
+    command["behavior"].erase("ammo_override");  // 越权检查与弹药检查独立。
+    CommandValidationContext context = DefaultContext();
+    context.commander_node_id.clear();
+    const CommandValidationResult result = validate_command(command, context, CommandSchemaJson());
+    EXPECT_TRUE(result.ok());
+}
+
+TEST(WfsCommandValidationTest, UnknownConditionRejected) {
+    nlohmann::json command = ValidCommandJson();
+    command["completion"] = nlohmann::json{{"condition", "teleport"}, {"params", nlohmann::json::object()}};
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "CONDITION_NOT_EVALUABLE");
+}
+
+TEST(WfsCommandValidationTest, MissingConditionParamRejected) {
+    nlohmann::json command = ValidCommandJson();
+    command["completion"] =
+        nlohmann::json{{"condition", "secure_zone"}, {"params", nlohmann::json{{"duration_ticks", 1200}}}};
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "CONDITION_NOT_EVALUABLE");
+}
+
+TEST(WfsCommandValidationTest, UnknownConditionZoneRejected) {
+    nlohmann::json command = ValidCommandJson();
+    command["completion"] = nlohmann::json{
+        {"condition", "secure_zone"}, {"params", nlohmann::json{{"zone", "zone-ghost"}, {"duration_ticks", 1200}}}};
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "CONDITION_NOT_EVALUABLE");
+}
+
+TEST(WfsCommandValidationTest, UnknownConditionTargetUnitRejected) {
+    nlohmann::json command = ValidCommandJson();
+    command["completion"] =
+        nlohmann::json{{"condition", "destroy_unit"}, {"params", nlohmann::json{{"target_unit", "ghost-unit"}}}};
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "CONDITION_NOT_EVALUABLE");
+}
+
+TEST(WfsCommandValidationTest, AmmoOverrideMissingRejected) {
+    nlohmann::json command = ValidCommandJson();
+    command["behavior"]["ammo_override"] = "rpg-7";
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "AMMO_NOT_FOUND");
+}
+
+TEST(WfsCommandValidationTest, AmmoOverrideOnZoneTargetRejectedAsNotEvaluable) {
+    nlohmann::json command = ValidCommandJson();
+    command["target"] = nlohmann::json{{"kind", "zone"}, {"ref", "zone-hill"}};
+    command["behavior"]["ammo_override"] = "smoke";
+    const CommandValidationResult result = Validate(command);
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.errors.front().code, "AMMO_NOT_EVALUABLE");
+}
+
+TEST(WfsCommandValidationTest, RegisteredTypesOverrideBuiltInList) {
+    CommandValidationContext context = DefaultContext();
+    context.registered_types = {"CUSTOM_MISSION"};
+
+    nlohmann::json command = ValidCommandJson();
+    const CommandValidationResult built_in_rejected = validate_command(command, context, CommandSchemaJson());
+    ASSERT_FALSE(built_in_rejected.ok());
+    EXPECT_EQ(built_in_rejected.errors.front().code, "UNREGISTERED_TYPE");
+
+    command["type"] = "CUSTOM_MISSION";
+    const CommandValidationResult custom_passes = validate_command(command, context, CommandSchemaJson());
+    EXPECT_TRUE(custom_passes.ok());
+}
+
+TEST(WfsCommandValidationTest, ErrorsAreDeterministicAndOrdered) {
+    nlohmann::json command = ValidCommandJson();
+    command["type"] = "TELEPORT";
+    command["completion"] = nlohmann::json{{"condition", "teleport"}, {"params", nlohmann::json::object()}};
+    command["behavior"]["ammo_override"] = "rpg-7";
+
+    const CommandValidationResult first = Validate(command);
+    const CommandValidationResult second = Validate(command);
+    ASSERT_FALSE(first.ok());
+    ASSERT_EQ(first.errors.size(), second.errors.size());
+    for (std::size_t i = 0; i < first.errors.size(); ++i) {
+        EXPECT_EQ(first.errors[i].code, second.errors[i].code);
+        EXPECT_EQ(first.errors[i].message, second.errors[i].message);
+    }
+    EXPECT_EQ(ErrorCodes(first),
+              (std::vector<std::string>{"UNREGISTERED_TYPE", "CONDITION_NOT_EVALUABLE", "AMMO_NOT_FOUND"}));
+}
+
+TEST(WfsCommandValidationTest, ScenarioContextMapping) {
+    const auto load = load_scenario(RepoRoot() / "data" / "scenarios" / "scn-smoke-test.json");
+    ASSERT_TRUE(load.ok());
+    const CommandValidationContext context = make_validation_context(load.scenario);
+    EXPECT_EQ(context.commander_node_id, "platoon-alpha");
+    ASSERT_EQ(context.units.size(), 3u);
+    EXPECT_EQ(context.units[2].id, "squad-c");
+    EXPECT_EQ(context.known_zones, (std::vector<std::string>{"zone-hill"}));
+}
+
+TEST(WfsCommandValidationTest, MalformedSchemaReturnsStructuredError) {
+    // 畸形命令 Schema（required 为字符串而非数组）必须返回 SCHEMA_INVALID，
+    // 不得触发 nlohmann JSON_ASSERT 中止或让异常逃逸（PR #107 review F1）。
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "wfs-cmd-test-malformed";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    const std::filesystem::path schema_path = dir / "bad-command.schema.json";
+    {
+        std::ofstream out(schema_path);
+        out << R"({"schema_version":1,"required":"type"})";
+    }
+
+    const CommandValidationResult result =
+        validate_command(R"({"schema_version":1,"type":"SECURE_ZONE"})", DefaultContext(), schema_path);
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+}
+
+TEST(WfsCommandValidationTest, MissingSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // 公开 json 重载 + 未约束版本类型的 Schema：命令侧 schema_version 缺失时，
+    // 必须先 contains/find 判键再取数（const operator[] 在缺键时属未定义行为，
+    // Debug 下 JSON_ASSERT 会 abort），并返回结构化 SCHEMA_INVALID、不抛异常
+    // （PR #107 review round 3 R3-1）。
+    nlohmann::json command = ValidCommandJson();
+    command.erase("schema_version");
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(command, DefaultContext(), LaxSchema()));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, StringSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // schema_version 为字符串时同样走结构化错误路径，不抛异常（PR #107 review F2）。
+    nlohmann::json command = ValidCommandJson();
+    command["schema_version"] = "v1";
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(command, DefaultContext(), LaxSchema()));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, FloatSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // schema_version 为浮点（如 1.5）时同样返回结构化错误，不抛异常
+    // （PR #107 review F2）。
+    nlohmann::json command = ValidCommandJson();
+    command["schema_version"] = 1.5;
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(command, DefaultContext(), LaxSchema()));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, NonIntegerSchemaVersionInSchemaReturnsStructuredErrorWithoutThrow) {
+    // Schema 侧 schema_version 非整数时同样返回结构化错误，不抛异常
+    // （修复要求先检查两边字段，任一不满足即结构化报错）。
+    nlohmann::json lax_schema = LaxSchema();
+    lax_schema["schema_version"] = "v1";
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(ValidCommandJson(), DefaultContext(), lax_schema));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, MissingSchemaVersionKeyInSchemaReturnsStructuredErrorWithoutThrow) {
+    // Schema 侧完全缺失 schema_version 键（命令侧为合法整数）：两侧缺键都必须
+    // 走结构化错误路径，不得触发 const operator[] 的未定义行为
+    // （PR #107 review round 3 R3-4）。
+    nlohmann::json lax_schema = LaxSchema();
+    lax_schema.erase("schema_version");
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(ValidCommandJson(), DefaultContext(), lax_schema));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, HugeUnsignedSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // schema_version 为超出 INT64_MAX 的无符号整数（JSON 解析为 number_unsigned）：
+    // is_number_integer() 对其同样为 true，必须先做范围防护，否则 get<int64_t>()
+    // 将超界值环绕/截断，导致版本被错误归类（部分 nlohmann 版本直接抛
+    // type_error 逃逸）（PR #107 review round 3 R3-3）。
+    nlohmann::json command = ValidCommandJson();
+    command["schema_version"] = 9223372036854775808ULL;  // INT64_MAX + 1
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(command, DefaultContext(), LaxSchema()));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
