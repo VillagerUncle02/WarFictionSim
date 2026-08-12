@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <new>
 #include <set>
 #include <string>
 #include <utility>
@@ -200,6 +201,9 @@ ScenarioLoadResult load_scenario(const std::filesystem::path& scenario_path, con
     std::vector<detail::SchemaViolation> violations;
     try {
         violations = schema_file.validate(root);
+    } catch (const std::bad_alloc&) {
+        // 内存耗尽属内部故障，不得折叠为 SCHEMA_INVALID（伪装成非法数据），透传给上层定位。
+        throw;
     } catch (const std::exception& error) {
         return Failure({Issue("SCHEMA_INVALID", std::string("Schema 校验失败: ") + error.what())});
     }

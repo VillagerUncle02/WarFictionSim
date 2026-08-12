@@ -268,9 +268,10 @@ TEST(WfsCommandValidationTest, MalformedSchemaReturnsStructuredError) {
 }
 
 TEST(WfsCommandValidationTest, MissingSchemaVersionReturnsStructuredErrorWithoutThrow) {
-    // 公开 json 重载 + 未约束版本类型的 Schema：schema_version 缺失时
-    // 必须返回结构化 SCHEMA_INVALID，不得让 nlohmann type_error 逃逸
-    // （PR #107 review F2）。
+    // 公开 json 重载 + 未约束版本类型的 Schema：命令侧 schema_version 缺失时，
+    // 必须先 contains/find 判键再取数（const operator[] 在缺键时属未定义行为，
+    // Debug 下 JSON_ASSERT 会 abort），并返回结构化 SCHEMA_INVALID、不抛异常
+    // （PR #107 review round 3 R3-1）。
     nlohmann::json command = ValidCommandJson();
     command.erase("schema_version");
     CommandValidationResult result;
@@ -313,6 +314,35 @@ TEST(WfsCommandValidationTest, NonIntegerSchemaVersionInSchemaReturnsStructuredE
     lax_schema["schema_version"] = "v1";
     CommandValidationResult result;
     EXPECT_NO_THROW(result = validate_command(ValidCommandJson(), DefaultContext(), lax_schema));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, MissingSchemaVersionKeyInSchemaReturnsStructuredErrorWithoutThrow) {
+    // Schema 侧完全缺失 schema_version 键（命令侧为合法整数）：两侧缺键都必须
+    // 走结构化错误路径，不得触发 const operator[] 的未定义行为
+    // （PR #107 review round 3 R3-4）。
+    nlohmann::json lax_schema = LaxSchema();
+    lax_schema.erase("schema_version");
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(ValidCommandJson(), DefaultContext(), lax_schema));
+    ASSERT_FALSE(result.ok());
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");
+    EXPECT_NE(result.errors.front().message.find("schema_version"), std::string::npos);
+}
+
+TEST(WfsCommandValidationTest, HugeUnsignedSchemaVersionReturnsStructuredErrorWithoutThrow) {
+    // schema_version 为超出 INT64_MAX 的无符号整数（JSON 解析为 number_unsigned）：
+    // is_number_integer() 对其同样为 true，必须先做范围防护，否则 get<int64_t>()
+    // 将超界值环绕/截断，导致版本被错误归类（部分 nlohmann 版本直接抛
+    // type_error 逃逸）（PR #107 review round 3 R3-3）。
+    nlohmann::json command = ValidCommandJson();
+    command["schema_version"] = 9223372036854775808ULL;  // INT64_MAX + 1
+    CommandValidationResult result;
+    EXPECT_NO_THROW(result = validate_command(command, DefaultContext(), LaxSchema()));
     ASSERT_FALSE(result.ok());
     ASSERT_FALSE(result.errors.empty());
     EXPECT_EQ(result.errors.front().code, "SCHEMA_INVALID");

@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -248,6 +249,9 @@ CommandValidationResult validate_command(const nlohmann::json& command, const Co
     std::vector<detail::SchemaViolation> violations;
     try {
         violations = schema_file.validate(command);
+    } catch (const std::bad_alloc&) {
+        // 内存耗尽属内部故障，不得折叠为 SCHEMA_INVALID（伪装成非法数据），透传给上层定位。
+        throw;
     } catch (const std::exception& error) {
         return CommandValidationResult{{Error("SCHEMA_INVALID", std::string("Schema 校验失败: ") + error.what())}};
     }
@@ -261,14 +265,27 @@ CommandValidationResult validate_command(const nlohmann::json& command, const Co
     }
 
     // 数据契约：命令 schema_version 必须与 Schema 一致（T007 约定）。
-    // 公开 json 重载允许调用方传入未约束 schema_version 类型的 Schema，
-    // 取数前先确认两边均为整数，避免 nlohmann type_error 逃逸或浮点被
-    // 静默截断（PR #107 review F2）。
-    if (!command["schema_version"].is_number_integer() || !schema["schema_version"].is_number_integer()) {
+    // 公开 json 重载允许调用方传入未约束 schema_version 类型的 Schema。
+    // const operator[] 在键缺失时属未定义行为（Debug 下 JSON_ASSERT 直接
+    // abort、Release 下解引用 end()），必须先 find() 判键存在再取数；随后判
+    // 整数类型，并对超出 INT64_MAX 的无符号值做范围防护——缺失、越界、类型
+    // 非法三类形态均返回结构化 SCHEMA_INVALID，且不调用可能抛 type_error 的
+    // get()（PR #107 review round 3 R3-1/R3-3）。
+    const auto command_version = command.find("schema_version");
+    const auto schema_version = schema.find("schema_version");
+    if (command_version == command.end() || schema_version == schema.end()) {
         return CommandValidationResult{
-            {Error("SCHEMA_INVALID", "schema_version 缺失或类型非法（命令与 Schema 均须为整数）")}};
+            {Error("SCHEMA_INVALID", "schema_version 缺失（命令与 Schema 均须包含该字段）")}};
     }
-    if (command["schema_version"].get<std::int64_t>() != schema["schema_version"].get<std::int64_t>()) {
+    const auto exceeds_int64 = [](const nlohmann::json& version) {
+        return version.is_number_unsigned() && version.get<std::uint64_t>() > static_cast<std::uint64_t>(INT64_MAX);
+    };
+    if (exceeds_int64(*command_version) || exceeds_int64(*schema_version) || !command_version->is_number_integer() ||
+        !schema_version->is_number_integer()) {
+        return CommandValidationResult{
+            {Error("SCHEMA_INVALID", "schema_version 越界或类型非法（命令与 Schema 均须为 int64 范围内整数）")}};
+    }
+    if (command_version->get<std::int64_t>() != schema_version->get<std::int64_t>()) {
         return CommandValidationResult{{Error("SCHEMA_VERSION_MISMATCH", "命令 schema_version 与 Schema 不一致")}};
     }
 
