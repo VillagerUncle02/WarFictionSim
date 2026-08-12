@@ -75,8 +75,8 @@ description: "Task list template for feature implementation"
 
 > **NOTE**: 先编写测试并确认 FAIL，再开始实现
 
-- [ ] T023 [P] [US1] 命令链路集成测试（tests/cli_tests/test_command_chain.jsonl + runner：下达→确认接受→移动→完成、连排 3–10s 延迟时间戳比对、撤回/批量部分接受，见 quickstart §3.2）
-- [ ] T024 [P] [US1] 战斗结算黄金测试（tests/sim_tests/golden/combat_golden.cpp：命中/伤害/压制/失联固定种子逐字段一致、目标选择与自动选弹黄金样例，见 quickstart §3.3）
+- [x] T023 [P] [US1] 命令链路集成测试（tests/cli_tests/test_command_chain.jsonl + runner：下达→确认接受→移动→完成、连排 3–10s 延迟时间戳比对、撤回/批量部分接受，见 quickstart §3.2）
+- [x] T024 [P] [US1] 战斗结算黄金测试（tests/sim_tests/golden/combat_golden.cpp：命中/伤害/压制/失联固定种子逐字段一致、目标选择与自动选弹黄金样例，见 quickstart §3.3）
 
 ### Implementation for User Story 1
 
@@ -84,9 +84,9 @@ description: "Task list template for feature implementation"
 - [x] T026 [P] [US1] 创建士兵/班组/载具/武器/弹药模型（sim/include/wfs/sim/model/combat.h：Soldier/Squad/Vehicle/Weapon/Ammo、四方向防护、模块状态、乘员/载员、重装备标志）
 - [x] T027 [P] [US1] 创建地形/设施/工事/环境模型（sim/include/wfs/sim/model/terrain.h：TerrainElement/Facility/Fortification/EnvironmentState、统一 passability、两栖规则、设施可见性规则与生命周期（部署/取消/重布置、侦察残留，FR-014））
 - [x] T028 [P] [US1] 创建任务模型与 13 种任务类型注册表（sim/src/mission_registry.cpp：Mission/MissionType 全部 13 种、ConditionExpr 确定性求值器、任务状态机数据表，见 data-model §11）
-- [ ] T029 [US1] 实现命令下达与通讯延迟链路（sim/src/command_chain.cpp：下达→确认接受→执行、连排 3–10s 延迟、生效前撤回/修改、（优先级,序列号）裁决、批量部分接受）
-- [ ] T030 [US1] 实现机动系统（sim/src/movement.cpp：路径移动、地形速度系数/通行限制、行军/战斗队形自动选择与切换耗时、烟幕区域遮蔽）
-- [ ] T031 [US1] 实现战斗结算系统（sim/src/combat.cpp：动能/化学能穿深与伤害查表、过穿衰减、班组区域结算→个人防护衔接、自动目标选择/选弹与不匹配降级、压制量化、模块损伤、弃车与乘员/载员结算（FR-062））
+- [x] T029 [US1] 实现命令下达与通讯延迟链路（sim/src/command_chain.cpp：下达→确认接受→执行、连排 3–10s 延迟、生效前撤回/修改、（优先级,序列号）裁决、批量部分接受）
+- [x] T030 [US1] 实现机动系统（sim/src/movement.cpp：路径移动、地形速度系数/通行限制、行军/战斗队形自动选择与切换耗时、烟幕区域遮蔽）
+- [x] T031 [US1] 实现战斗结算系统（sim/src/combat.cpp：动能/化学能穿深与伤害查表、过穿衰减、班组区域结算→个人防护衔接、自动目标选择/选弹与不匹配降级、压制量化、模块损伤、弃车与乘员/载员结算（FR-062））
 - [ ] T032 [US1] 实现失联机制（sim/src/contact.cpp：失联概率统一 RNG、最后已知状态、恢复 60–180s、压制/失联/模块损伤复合状态取最严叠加）
 - [ ] T033 [US1] 实现迷雾/情报识别系统（sim/src/intel.cpp：可视距离与观察能力、识别分档 T1–T3、记忆保留、最后动向、情报来源标注与过期）
 - [ ] T034 [US1] 实现任务判定与事件上报（sim/src/mission_exec.cpp：确定性完成/失败判定、超时处置、失败后处置、持续任务循环、任务状态事件上报上级）
