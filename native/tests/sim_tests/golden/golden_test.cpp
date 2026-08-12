@@ -48,7 +48,7 @@ std::filesystem::path SampleScenario() {
 }
 
 std::filesystem::path GoldenHashFile() {
-    return RepoRoot() / "tests" / "sim_tests" / "golden" / "golden-run.hash";
+    return RepoRoot() / "native" / "tests" / "sim_tests" / "golden" / "golden-run.hash";
 }
 
 std::string Exe() {
