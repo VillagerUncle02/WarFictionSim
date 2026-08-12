@@ -36,7 +36,9 @@ Rng::Rng(const State& state) {
     pcg_ = detail::Pcg32Random{state.state, state.stream};
 }
 
-std::uint32_t Rng::next() noexcept { return detail::pcg32_random_r(pcg_); }
+std::uint32_t Rng::next() noexcept {
+    return detail::pcg32_random_r(pcg_);
+}
 
 std::uint32_t Rng::next_bounded(std::uint32_t bound) noexcept {
     if (bound == 0U) {
