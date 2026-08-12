@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "scn-smoke-test",
+  "name": "Smoke Test Scenario (Foundational)",
+  "player_node_id": "platoon-alpha",
+  "map": {
+    "width_km": 5.0,
+    "height_km": 5.0
+  },
+  "tick_hz": 20,
+  "seed": 42,
+  "zones": [
+    {
+      "id": "zone-hill",
+      "name": "Hill 204"
+    }
+  ],
+  "units": [
+    {
+      "id": "squad-a",
+      "type": "infantry_squad",
+      "node_id": "platoon-alpha",
+      "x": 1.0,
+      "y": 1.0,
+      "ammo": [
+        "5.56mm",
+        "frag_grenade"
+      ]
+    },
+    {
+      "id": "squad-b",
+      "type": "infantry_squad",
+      "node_id": "platoon-alpha",
+      "x": 1.2,
+      "y": 1.1,
+      "ammo": [
+        "5.56mm"
+      ]
+    },
+    {
+      "id": "squad-c",
+      "type": "infantry_squad",
+      "node_id": "enemy-command",
+      "x": 4.0,
+      "y": 4.0,
+      "ammo": [
+        "7.62mm"
+      ]
+    }
+  ],
+  "objectives": [
+    {
+      "id": "obj-secure-hill",
+      "kind": "zone",
+      "target_ref": "zone-hill",
+      "duration_ticks": 1200
+    }
+  ]
+}
