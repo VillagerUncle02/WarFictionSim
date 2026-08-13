@@ -37,7 +37,7 @@ struct SummaryConfig {
 
 // 任务状态分布（摘要字段，FR-044 状态机投影）。
 struct SummaryMissionCounts {
-    std::uint64_t active = 0U;      // 下达/确认/生效中。
+    std::uint64_t active = 0U;  // 下达/确认/生效中。
     std::uint64_t completed = 0U;
     std::uint64_t failed = 0U;
     std::uint64_t timed_out = 0U;

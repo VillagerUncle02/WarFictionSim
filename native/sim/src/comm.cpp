@@ -182,8 +182,7 @@ CommConfig CommConfig::FromScenario(
     config.base_range_km = ConfigDouble(json, "base_range_km", config.base_range_km, 0.0);
     config.power_scale = ConfigDouble(json, "power_scale", config.power_scale, 0.0);
     config.support_force_bonus_km = ConfigDouble(json, "support_force_bonus_km", config.support_force_bonus_km, 0.0);
-    config.support_disabled_factor =
-        ConfigDouble(json, "support_disabled_factor", config.support_disabled_factor, 0.0);
+    config.support_disabled_factor = ConfigDouble(json, "support_disabled_factor", config.support_disabled_factor, 0.0);
     config.civilian_facility_bonus_km =
         ConfigDouble(json, "civilian_facility_bonus_km", config.civilian_facility_bonus_km, 0.0);
     config.min_range_km = ConfigDouble(json, "min_range_km", config.min_range_km, 0.0);
@@ -245,8 +244,7 @@ double effective_comm_range_km(const CommConfig& config, const double power_from
                                const std::string& terrain_to, const double from_x, const double from_y,
                                const double to_x, const double to_y) {
     const double power_factor = (power_from + power_to) * 0.5;
-    const double terrain_penalty =
-        std::max(TerrainPenalty(config, terrain_from), TerrainPenalty(config, terrain_to));
+    const double terrain_penalty = std::max(TerrainPenalty(config, terrain_from), TerrainPenalty(config, terrain_to));
     const double civilian_bonus = CivilianFacilityBonus(config, from_x, from_y, to_x, to_y);
     const double range = (config.base_range_km * power_factor * config.power_scale) +
                          (config.support_force_bonus_km * support_factor) - terrain_penalty + civilian_bonus;
@@ -264,8 +262,8 @@ const CommLinkStatus* CommState::Find(const CommLinkKind kind, const std::string
 }
 
 std::size_t CommState::outage_count() const noexcept {
-    return static_cast<std::size_t>(std::count_if(links.begin(), links.end(),
-                                                  [](const CommLinkStatus& link) { return !link.connected; }));
+    return static_cast<std::size_t>(
+        std::count_if(links.begin(), links.end(), [](const CommLinkStatus& link) { return !link.connected; }));
 }
 
 void to_json(nlohmann::json& json, const CommLinkStatus& link) {
@@ -321,8 +319,8 @@ bool link_effective(const SimState& state, const CommLinkStatus& link) {
     (void)from_y;
     (void)to_x;
     (void)to_y;
-    const bool endpoint_disabled = from_unit->destroyed || from_unit->out_of_contact || to_unit->destroyed ||
-                                   to_unit->out_of_contact;
+    const bool endpoint_disabled =
+        from_unit->destroyed || from_unit->out_of_contact || to_unit->destroyed || to_unit->out_of_contact;
     return !endpoint_disabled;
 }
 
@@ -348,7 +346,7 @@ void initialize_comm_state(SimState& state) {
     std::uint64_t next_id = 0U;
     for (const RuntimeUnitState& unit : state.units) {
         state.comm_state.links.push_back(CommLinkStatus{"link-" + std::to_string(next_id++), CommLinkKind::kUnit,
-                                                       unit.id, unit.node_id, true, "", 0U, 0U, 0.0, 0.0, 0U});
+                                                        unit.id, unit.node_id, true, "", 0U, 0U, 0.0, 0.0, 0U});
     }
     for (const std::string& node_id : state.command_org.nodes_in_insertion_order()) {
         const model::CommandNode* node = state.command_org.find_node(node_id);
@@ -356,7 +354,7 @@ void initialize_comm_state(SimState& state) {
             continue;
         }
         state.comm_state.links.push_back(CommLinkStatus{"link-" + std::to_string(next_id++), CommLinkKind::kNode,
-                                                       node_id, node->parent_id, true, "", 0U, 0U, 0.0, 0.0, 0U});
+                                                        node_id, node->parent_id, true, "", 0U, 0U, 0.0, 0.0, 0U});
     }
 }
 
@@ -385,18 +383,17 @@ void step_comm(SimState& state) {
             to_profile_it == state.comm_units.end() ? CommUnitProfile{} : to_profile_it->second;
         const std::string support_node = link.kind == CommLinkKind::kUnit ? link.to_id : link.from_id;
         const double support_factor = SupportFactorForNode(state, config, support_node);
-        const double range =
-            effective_comm_range_km(config, from_profile.power, to_profile.power, support_factor,
-                                    TerrainIdAt(state, from_x, from_y), TerrainIdAt(state, to_x, to_y), from_x, from_y,
-                                    to_x, to_y);
+        const double range = effective_comm_range_km(config, from_profile.power, to_profile.power, support_factor,
+                                                     TerrainIdAt(state, from_x, from_y), TerrainIdAt(state, to_x, to_y),
+                                                     from_x, from_y, to_x, to_y);
         const double distance = std::sqrt(((from_x - to_x) * (from_x - to_x)) + ((from_y - to_y) * (from_y - to_y)));
         const bool endpoints_destroyed = from_unit->destroyed || to_unit->destroyed;
         const bool out_of_range = distance > range;
         const bool support_lost = support_factor < 1.0 && out_of_range;
         const bool now_connected = !endpoints_destroyed && !out_of_range;
-        const std::string reason = endpoints_destroyed  ? "ENDPOINT_DISABLED"
-                                  : support_lost       ? "SUPPORT_DISABLED"
-                                  : out_of_range       ? "OUT_OF_RANGE"
+        const std::string reason = endpoints_destroyed ? "ENDPOINT_DISABLED"
+                                   : support_lost      ? "SUPPORT_DISABLED"
+                                   : out_of_range      ? "OUT_OF_RANGE"
                                                        : "";
 
         if (now_connected) {
@@ -409,10 +406,9 @@ void step_comm(SimState& state) {
             link.reason = reason;
             link.outage_start_tick = tick;
             LogComm(state, EventSeverity::kWarning,
-                    "COMM_OUTAGE kind=" + std::string(to_string(link.kind)) + " from=" + link.from_id +
-                        " to=" + link.to_id + " reason=" + link.reason + " tick=" + std::to_string(tick) +
-                        " last_known=(" + std::to_string(link.last_known_x) + "," + std::to_string(link.last_known_y) +
-                        ")");
+                    "COMM_OUTAGE kind=" + std::string(to_string(link.kind)) + " from=" + link.from_id + " to=" +
+                        link.to_id + " reason=" + link.reason + " tick=" + std::to_string(tick) + " last_known=(" +
+                        std::to_string(link.last_known_x) + "," + std::to_string(link.last_known_y) + ")");
         } else if (!link.connected && now_connected) {
             link.connected = true;
             link.reason.clear();

@@ -18,10 +18,10 @@
 
 namespace {
 
-using wfs::sim::IntelRecord;
-using wfs::sim::SimState;
 using wfs::sim::find_intel;
+using wfs::sim::IntelRecord;
 using wfs::sim::load_scenario;
+using wfs::sim::SimState;
 using wfs::sim::step_sim_state;
 
 std::filesystem::path ScenarioPath() {
@@ -30,8 +30,8 @@ std::filesystem::path ScenarioPath() {
 
 SimState MakeState() {
     const auto load = load_scenario(ScenarioPath());
-    EXPECT_TRUE(load.ok()) << (load.issues.empty() ? "" : load.issues.front().code + ": " +
-                                                                 load.issues.front().message);
+    EXPECT_TRUE(load.ok()) << (load.issues.empty() ? ""
+                                                   : load.issues.front().code + ": " + load.issues.front().message);
     SimState state;
     state.scenario = load.scenario;
     state.clock = wfs::sim::GameClock(load.scenario.tick_hz);

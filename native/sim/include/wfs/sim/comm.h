@@ -64,14 +64,14 @@ struct CivilianCommFacility {
 
 // 通信配置（场景 raw["comm"] 可覆盖；command_org 未配置时整体不激活）。
 struct CommConfig {
-    double base_range_km = 5.0;              // 通信装备基线范围。
-    double power_scale = 1.0;               // 装备功率对范围的放大系数。
-    double support_force_bonus_km = 1.0;    // 通信保障部队增益。
-    double support_disabled_factor = 0.4;   // 保障部队失能后的范围系数。
+    double base_range_km = 5.0;                        // 通信装备基线范围。
+    double power_scale = 1.0;                          // 装备功率对范围的放大系数。
+    double support_force_bonus_km = 1.0;               // 通信保障部队增益。
+    double support_disabled_factor = 0.4;              // 保障部队失能后的范围系数。
     std::map<std::string, double> terrain_penalty_km;  // terrain_id → 罚值。
     double civilian_facility_bonus_km = 1.0;
     std::vector<CivilianCommFacility> civilian_facilities;
-    double min_range_km = 0.5;              // 有效范围下界（保底近距通信）。
+    double min_range_km = 0.5;  // 有效范围下界（保底近距通信）。
 
     static CommConfig FromScenario(const nlohmann::json& raw);
 

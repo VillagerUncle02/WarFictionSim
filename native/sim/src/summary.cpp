@@ -26,8 +26,8 @@
 #include <string>
 
 #include "sim_state.h"
-#include "wfs/sim/command_org.h"
 #include "wfs/sim/command_chain.h"
+#include "wfs/sim/command_org.h"
 #include "wfs/sim/event_log.h"
 #include "wfs/sim/intel_sync.h"
 #include "wfs/sim/support.h"
@@ -84,9 +84,7 @@ void from_json(const nlohmann::json& json, SummaryMissionCounts& counts) {
 }
 
 void to_json(nlohmann::json& json, const SummaryLosses& losses) {
-    json = nlohmann::json{{"soldiers", losses.soldiers},
-                          {"vehicles", losses.vehicles},
-                          {"squads", losses.squads}};
+    json = nlohmann::json{{"soldiers", losses.soldiers}, {"vehicles", losses.vehicles}, {"squads", losses.squads}};
 }
 
 void from_json(const nlohmann::json& json, SummaryLosses& losses) {
@@ -120,9 +118,7 @@ void from_json(const nlohmann::json& json, SummaryReport& report) {
 }
 
 void to_json(nlohmann::json& json, const MissionOutcomeCounts& counts) {
-    json = nlohmann::json{{"completed", counts.completed},
-                          {"failed", counts.failed},
-                          {"timed_out", counts.timed_out}};
+    json = nlohmann::json{{"completed", counts.completed}, {"failed", counts.failed}, {"timed_out", counts.timed_out}};
 }
 
 void from_json(const nlohmann::json& json, MissionOutcomeCounts& counts) {
@@ -171,8 +167,7 @@ void SummaryRegistry::Clear() noexcept {
 }
 
 void to_json(nlohmann::json& json, const SummaryRegistry& registry) {
-    json = nlohmann::json{{"reports", registry.reports_},
-                          {"last_report_tick", registry.last_report_tick_}};
+    json = nlohmann::json{{"reports", registry.reports_}, {"last_report_tick", registry.last_report_tick_}};
 }
 
 void from_json(const nlohmann::json& json, SummaryRegistry& registry) {
@@ -185,8 +180,7 @@ void from_json(const nlohmann::json& json, SummaryRegistry& registry) {
         }
         candidate.Add(std::move(report));
     }
-    candidate.last_report_tick_ =
-        json.value("last_report_tick", std::map<std::string, std::uint64_t>{});
+    candidate.last_report_tick_ = json.value("last_report_tick", std::map<std::string, std::uint64_t>{});
     registry = std::move(candidate);
 }
 
@@ -229,10 +223,9 @@ SummaryReport build_summary(const SimState& state, const std::string& from_node,
         if (command.unit_id.empty() || !IsActiveCommandState(command.state)) {
             continue;
         }
-        const auto unit = std::find_if(state.units.begin(), state.units.end(),
-                                       [&](const RuntimeUnitState& candidate) {
-                                           return candidate.id == command.unit_id;
-                                       });
+        const auto unit = std::find_if(state.units.begin(), state.units.end(), [&](const RuntimeUnitState& candidate) {
+            return candidate.id == command.unit_id;
+        });
         if (unit != state.units.end() && unit->node_id == from_node) {
             ++report.missions.active;
         }
@@ -240,8 +233,8 @@ SummaryReport build_summary(const SimState& state, const std::string& from_node,
     const std::uint64_t denominator =
         report.missions.completed + report.missions.failed + report.missions.timed_out + report.missions.active;
     if (denominator > 0U) {
-        report.completion_pct = static_cast<std::uint32_t>(std::llround(
-            100.0 * static_cast<double>(report.missions.completed) / static_cast<double>(denominator)));
+        report.completion_pct = static_cast<std::uint32_t>(
+            std::llround(100.0 * static_cast<double>(report.missions.completed) / static_cast<double>(denominator)));
     }
     for (const SupportRequest& request : state.support_chain.RequestsInSubmitOrder()) {
         if (request.from_node != from_node) {
@@ -308,9 +301,8 @@ nlohmann::json build_authorized_view_json(const SimState& state, const std::stri
         }
         subordinates.push_back(*latest);
     }
-    return nlohmann::json{{"node_id", node_id},
-                          {"own_units", std::move(own_units)},
-                          {"subordinates", std::move(subordinates)}};
+    return nlohmann::json{
+        {"node_id", node_id}, {"own_units", std::move(own_units)}, {"subordinates", std::move(subordinates)}};
 }
 
 }  // namespace wfs::sim

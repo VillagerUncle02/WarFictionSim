@@ -57,7 +57,8 @@ ParsedNode ParseNode(const nlohmann::json& json) {
     parsed.node.coordination = json.value("coordination", 0.0);
     parsed.node.experience = json.value("experience", nlohmann::json::object()).get<model::Experience>();
     if (!IsCommandEchelon(parsed.echelon)) {
-        throw std::invalid_argument("指挥节点层级必须是 platoon/company/battalion/brigade（不含班）: " + parsed.node.id);
+        throw std::invalid_argument("指挥节点层级必须是 platoon/company/battalion/brigade（不含班）: " +
+                                    parsed.node.id);
     }
     if (!parsed.node.is_valid()) {
         throw std::invalid_argument("指挥节点数值越界或归属非法（FR-048）: " + parsed.node.id);
@@ -242,10 +243,9 @@ void validate_command_org(const nlohmann::json& raw, std::vector<DataIssue>& iss
                                    "指挥节点父级不存在或自引用: " + parsed.node.id + " -> " + parent_id));
             continue;
         }
-        const auto parent_iterator = std::find_if(parsed_nodes.begin(), parsed_nodes.end(),
-                                                  [&](const ParsedNode& candidate) {
-                                                      return candidate.valid && candidate.node.id == parent_id;
-                                                  });
+        const auto parent_iterator = std::find_if(
+            parsed_nodes.begin(), parsed_nodes.end(),
+            [&](const ParsedNode& candidate) { return candidate.valid && candidate.node.id == parent_id; });
         if (parent_iterator != parsed_nodes.end() && parsed.echelon >= parent_iterator->echelon) {
             issues.push_back(Issue("COMMAND_ORG_NODE_ECHELON_CHAIN",
                                    "指挥层级链非法（子级必须低于父级）: " + parsed.node.id + " -> " + parent_id));
@@ -276,8 +276,9 @@ void validate_command_org(const nlohmann::json& raw, std::vector<DataIssue>& iss
             continue;
         }
         if (unit->echelon != parsed.echelon) {
-            issues.push_back(Issue("COMMAND_ORG_NODE_ORG_ECHELON_MISMATCH",
-                                   "指挥节点层级与编制单位层级不一致: " + parsed.node.id + " -> " + parsed.org_unit_id));
+            issues.push_back(
+                Issue("COMMAND_ORG_NODE_ORG_ECHELON_MISMATCH",
+                      "指挥节点层级与编制单位层级不一致: " + parsed.node.id + " -> " + parsed.org_unit_id));
         }
     }
 
@@ -286,8 +287,8 @@ void validate_command_org(const nlohmann::json& raw, std::vector<DataIssue>& iss
         const std::string unit_id = unit.value("id", std::string());
         const std::string node_id = unit.value("node_id", std::string());
         if (!node_id.empty() && !node_ids.contains(node_id)) {
-            issues.push_back(Issue("COMMAND_ORG_UNIT_NODE_UNKNOWN",
-                                   "场景单位 " + unit_id + " 归属的指挥节点不存在: " + node_id));
+            issues.push_back(
+                Issue("COMMAND_ORG_UNIT_NODE_UNKNOWN", "场景单位 " + unit_id + " 归属的指挥节点不存在: " + node_id));
         }
     }
 
@@ -310,8 +311,7 @@ CommandOrgLoadResult load_command_org(const nlohmann::json& raw) {
     const nlohmann::json& org = raw["command_org"];
     try {
         result.state.command_tree = nlohmann::json{{"nodes", org["nodes"]}}.get<model::CommandTree>();
-        result.state.organizations =
-            nlohmann::json{{"units", org["organizations"]}}.get<model::OrganizationTree>();
+        result.state.organizations = nlohmann::json{{"units", org["organizations"]}}.get<model::OrganizationTree>();
     } catch (const std::exception& error) {
         throw std::invalid_argument(std::string("command_org 构建失败: ") + error.what());
     }
@@ -327,17 +327,14 @@ CommandOrgLoadResult load_command_org(const nlohmann::json& raw) {
 void to_json(nlohmann::json& json, const CommandOrgState& state) {
     nlohmann::json nodes = nlohmann::json::array();
     for (const model::CommandNode& node : state.command_tree.NodesInInsertionOrder()) {
-        nodes.push_back(nlohmann::json{{"node", node},
-                                       {"echelon", state.node_echelon.contains(node.id)
-                                                      ? state.node_echelon.at(node.id)
-                                                      : model::Echelon::kPlatoon},
-                                       {"org_unit_id", state.node_org_unit.contains(node.id)
-                                                          ? state.node_org_unit.at(node.id)
-                                                          : std::string()}});
+        nodes.push_back(nlohmann::json{
+            {"node", node},
+            {"echelon",
+             state.node_echelon.contains(node.id) ? state.node_echelon.at(node.id) : model::Echelon::kPlatoon},
+            {"org_unit_id", state.node_org_unit.contains(node.id) ? state.node_org_unit.at(node.id) : std::string()}});
     }
-    json = nlohmann::json{{"configured", state.configured},
-                          {"nodes", std::move(nodes)},
-                          {"organizations", state.organizations}};
+    json = nlohmann::json{
+        {"configured", state.configured}, {"nodes", std::move(nodes)}, {"organizations", state.organizations}};
 }
 
 void from_json(const nlohmann::json& json, CommandOrgState& state) {

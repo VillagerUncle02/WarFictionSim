@@ -271,7 +271,7 @@ void step_sim_state(SimState& state) {
             state.clock.tick(), EventCategory::kCommand, EventSeverity::kInfo,
             "COMMAND_PROCESSED seq=" + std::to_string(event.seq) + " tick=" + std::to_string(state.clock.tick()));
     }
-    step_comm(state);          // T060：通信状态判定与指令到达门控（FR-077）。
+    step_comm(state);  // T060：通信状态判定与指令到达门控（FR-077）。
     state.command_chain.ProcessDue(state);
     step_support_pipeline(state);  // T047–T050：支援请求/配属/归建（FR-008/009）。
     step_movement(state);

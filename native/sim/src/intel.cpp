@@ -330,9 +330,8 @@ bool ObservePairWithIndex(SimState& state, const RuntimeUnitState& observer, con
         LogIntel(state, EventSeverity::kInfo,
                  "INTEL_OBSERVED observer=" + observer.id + " target=" + target.id +
                      " tier=" + std::string(to_string(record.tier)) + " source=direct source_unit=" + observer.id +
-                     " source_node=" + observer.node_id + " observed_count=" +
-                     std::to_string(record.observed_count) + " type_name=" + record.type_name + " composition=" +
-                     record.composition);
+                     " source_node=" + observer.node_id + " observed_count=" + std::to_string(record.observed_count) +
+                     " type_name=" + record.type_name + " composition=" + record.composition);
     }
     if (computed > previous) {
         LogIntel(state, EventSeverity::kInfo,

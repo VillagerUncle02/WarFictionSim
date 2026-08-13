@@ -21,8 +21,8 @@ using wfs::sim::CommandOrgState;
 using wfs::sim::DataIssue;
 using wfs::sim::direct_squad_base;
 using wfs::sim::load_command_org;
-using wfs::sim::model::Echelon;
 using wfs::sim::validate_command_org;
+using wfs::sim::model::Echelon;
 
 nlohmann::json NodeJson(const std::string& id, const std::string& name, const std::string& echelon,
                         const std::string& parent_id, const std::string& org_unit_id) {
@@ -34,8 +34,7 @@ nlohmann::json NodeJson(const std::string& id, const std::string& name, const st
                           {"owner", nlohmann::json{{"kind", "ai"}, {"ai_id", id + "-ai"}}},
                           {"command_limit", 4U},
                           {"coordination", 0.8},
-                          {"experience",
-                           nlohmann::json{{"training", 0.7}, {"service", 0.6}, {"combat", 0.5}}}};
+                          {"experience", nlohmann::json{{"training", 0.7}, {"service", 0.6}, {"combat", 0.5}}}};
 }
 
 nlohmann::json OrgJson(const std::string& id, const std::string& name, const std::string& echelon,
@@ -56,22 +55,19 @@ nlohmann::json ValidRoot() {
     return nlohmann::json{
         {"command_org",
          nlohmann::json{
-             {"nodes",
-              nlohmann::json::array({NodeJson("node-bn-1", "1营", "battalion", "", "org-bn-1"),
-                                     NodeJson("node-co-1", "1连", "company", "node-bn-1", "org-co-1"),
-                                     NodeJson("node-co-2", "2连", "company", "node-bn-1", "org-co-2"),
-                                     NodeJson("node-plt-1", "1排", "platoon", "node-co-1", "org-plt-1"),
-                                     NodeJson("node-plt-2", "2排", "platoon", "node-co-1", "org-plt-2"),
-                                     NodeJson("node-plt-3", "3排", "platoon", "node-co-2", "org-plt-3")})},
+             {"nodes", nlohmann::json::array({NodeJson("node-bn-1", "1营", "battalion", "", "org-bn-1"),
+                                              NodeJson("node-co-1", "1连", "company", "node-bn-1", "org-co-1"),
+                                              NodeJson("node-co-2", "2连", "company", "node-bn-1", "org-co-2"),
+                                              NodeJson("node-plt-1", "1排", "platoon", "node-co-1", "org-plt-1"),
+                                              NodeJson("node-plt-2", "2排", "platoon", "node-co-1", "org-plt-2"),
+                                              NodeJson("node-plt-3", "3排", "platoon", "node-co-2", "org-plt-3")})},
              {"organizations",
               nlohmann::json::array(
                   {OrgJson("org-bn-1", "1营", "battalion", "combined", "", {"org-co-1", "org-co-2"}),
                    OrgJson("org-co-1", "1连", "company", "infantry", "org-bn-1", {"org-plt-1", "org-plt-2"}),
                    OrgJson("org-co-2", "2连", "company", "infantry", "org-bn-1", {"org-plt-3"}),
-                   OrgJson("org-plt-1", "1排", "platoon", "infantry", "org-co-1",
-                           {"org-sq-1", "org-sq-2", "org-sq-3"}),
-                   OrgJson("org-plt-2", "2排", "platoon", "infantry", "org-co-1",
-                           {"org-sq-4", "org-sq-5", "org-sq-6"}),
+                   OrgJson("org-plt-1", "1排", "platoon", "infantry", "org-co-1", {"org-sq-1", "org-sq-2", "org-sq-3"}),
+                   OrgJson("org-plt-2", "2排", "platoon", "infantry", "org-co-1", {"org-sq-4", "org-sq-5", "org-sq-6"}),
                    OrgJson("org-plt-3", "3排", "platoon", "infantry", "org-co-2", {"org-sq-7", "org-sq-8"}),
                    OrgJson("org-sq-1", "1班", "squad", "infantry", "org-plt-1", {}),
                    OrgJson("org-sq-2", "2班", "squad", "infantry", "org-plt-1", {}),
@@ -94,8 +90,9 @@ bool HasIssueCode(const std::vector<DataIssue>& issues, const std::string& code)
 
 TEST(WfsCommandOrgTest, LoadsValidHierarchyAndMapsEchelons) {
     const CommandOrgLoadResult result = load_command_org(ValidRoot());
-    ASSERT_TRUE(result.ok()) << (result.issues.empty() ? "" : result.issues.front().code + ": " +
-                                                                   result.issues.front().message);
+    ASSERT_TRUE(result.ok()) << (result.issues.empty()
+                                     ? ""
+                                     : result.issues.front().code + ": " + result.issues.front().message);
     EXPECT_TRUE(result.state.configured);
     EXPECT_EQ(result.state.node_echelon.at("node-bn-1"), Echelon::kBattalion);
     EXPECT_EQ(result.state.node_echelon.at("node-co-1"), Echelon::kCompany);

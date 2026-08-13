@@ -20,10 +20,10 @@ namespace {
 
 using wfs::sim::CommConfig;
 using wfs::sim::CommLinkKind;
-using wfs::sim::SimState;
 using wfs::sim::effective_comm_range_km;
 using wfs::sim::load_scenario;
 using wfs::sim::node_link_effective;
+using wfs::sim::SimState;
 using wfs::sim::step_sim_state;
 using wfs::sim::unit_link_effective;
 
@@ -85,17 +85,16 @@ TEST(WfsCommTest, RangeCombinesPowerSupportTerrainAndCivilianModifiers) {
     // 保障部队失能：5 + 2×0.4 = 5.8 km。
     EXPECT_DOUBLE_EQ(effective_comm_range_km(config, 1.0, 1.0, 0.4, "", "", 1.0, 1.0, 2.0, 2.0), 5.8);
     // 地形修正取端点较严者：5 − max(0.5, 0.8) = 4.2 km。
-    EXPECT_DOUBLE_EQ(effective_comm_range_km(config, 1.0, 1.0, 0.0, "terrain-forest", "terrain-building", 1.0, 1.0,
-                                             2.0, 2.0),
-                     4.2);
+    EXPECT_DOUBLE_EQ(
+        effective_comm_range_km(config, 1.0, 1.0, 0.0, "terrain-forest", "terrain-building", 1.0, 1.0, 2.0, 2.0), 4.2);
     // 民用通讯设施：端点位于半径内 +1.5 → 6.5 km。
     EXPECT_DOUBLE_EQ(effective_comm_range_km(config, 1.0, 1.0, 0.0, "", "", 0.0, 0.0, 5.0, 5.0), 6.5);
     // 下界保底：极端地形罚值不回落到 min_range 以下。
     CommConfig clamped = config;
     clamped.terrain_penalty_km["terrain-forest"] = 100.0;
-    EXPECT_DOUBLE_EQ(effective_comm_range_km(clamped, 1.0, 1.0, 0.0, "terrain-forest", "terrain-forest", 0.0, 0.0,
-                                             2.0, 2.0),
-                     clamped.min_range_km);
+    EXPECT_DOUBLE_EQ(
+        effective_comm_range_km(clamped, 1.0, 1.0, 0.0, "terrain-forest", "terrain-forest", 0.0, 0.0, 2.0, 2.0),
+        clamped.min_range_km);
 }
 
 TEST(WfsCommTest, OutageRestoreAndStricterOfContact) {
@@ -111,8 +110,7 @@ TEST(WfsCommTest, OutageRestoreAndStricterOfContact) {
     Step(state, 1U);
     EXPECT_FALSE(unit_link_effective(state, "plt-1-sq-2"));
     EXPECT_TRUE(HasEventPrefix(state, "COMM_OUTAGE kind=unit from=plt-1-sq-2 to=node-plt-1 reason=OUT_OF_RANGE "));
-    const wfs::sim::CommLinkStatus* link =
-        state.comm_state.Find(CommLinkKind::kUnit, "plt-1-sq-2", "node-plt-1");
+    const wfs::sim::CommLinkStatus* link = state.comm_state.Find(CommLinkKind::kUnit, "plt-1-sq-2", "node-plt-1");
     ASSERT_NE(link, nullptr);
     EXPECT_FALSE(link->connected);
     EXPECT_DOUBLE_EQ(link->last_known_x, 0.3);
@@ -141,16 +139,16 @@ TEST(WfsCommTest, OutageDefersCommandArrival) {
     unit->x = 6.5;
     unit->y = 0.1;
     const std::filesystem::path schema = wfs::sim::resolve_schema_path(ScenarioPath(), "command.schema.json");
-    nlohmann::json command = {{"schema_version", 1},
-                              {"type", "MOVE"},
-                              {"target", nlohmann::json{{"kind", "unit"}, {"ref", "plt-1-sq-2"}}},
-                              {"completion",
-                               nlohmann::json{{"condition", "reach_point"},
-                                              {"params", nlohmann::json{{"point", nlohmann::json{{"x", 0.3}, {"y", 0.14}}}}}}},
-                              {"intent", "通信中断门控测试"},
-                              {"behavior", nlohmann::json{{"engagement", "balanced"}}},
-                              {"priority", 0},
-                              {"deadline", nlohmann::json{{"game_time", 20000}}}};
+    nlohmann::json command = {
+        {"schema_version", 1},
+        {"type", "MOVE"},
+        {"target", nlohmann::json{{"kind", "unit"}, {"ref", "plt-1-sq-2"}}},
+        {"completion", nlohmann::json{{"condition", "reach_point"},
+                                      {"params", nlohmann::json{{"point", nlohmann::json{{"x", 0.3}, {"y", 0.14}}}}}}},
+        {"intent", "通信中断门控测试"},
+        {"behavior", nlohmann::json{{"engagement", "balanced"}}},
+        {"priority", 0},
+        {"deadline", nlohmann::json{{"game_time", 20000}}}};
     ASSERT_TRUE(wfs::sim::inject_player_command(state, command.dump(), schema).accepted);
 
     Step(state, 150U);
@@ -186,10 +184,8 @@ TEST(WfsCommTest, CommStateRoundTripsThroughJson) {
     const nlohmann::json json = state.comm_state;
     const auto restored = json.get<wfs::sim::CommState>();
     EXPECT_EQ(restored.links.size(), state.comm_state.links.size());
-    const wfs::sim::CommLinkStatus* original =
-        state.comm_state.Find(CommLinkKind::kUnit, "plt-1-sq-2", "node-plt-1");
-    const wfs::sim::CommLinkStatus* restored_link =
-        restored.Find(CommLinkKind::kUnit, "plt-1-sq-2", "node-plt-1");
+    const wfs::sim::CommLinkStatus* original = state.comm_state.Find(CommLinkKind::kUnit, "plt-1-sq-2", "node-plt-1");
+    const wfs::sim::CommLinkStatus* restored_link = restored.Find(CommLinkKind::kUnit, "plt-1-sq-2", "node-plt-1");
     ASSERT_NE(original, nullptr);
     ASSERT_NE(restored_link, nullptr);
     EXPECT_EQ(restored_link->connected, original->connected);

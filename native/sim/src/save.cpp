@@ -457,7 +457,8 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
             next.summaries = parsed.at("summaries").get<wfs::sim::SummaryRegistry>();
         }
         if (parsed.contains("mission_outcomes")) {
-            next.mission_outcomes = parsed.at("mission_outcomes").get<std::map<std::string, wfs::sim::MissionOutcomeCounts>>();
+            next.mission_outcomes =
+                parsed.at("mission_outcomes").get<std::map<std::string, wfs::sim::MissionOutcomeCounts>>();
         }
         if (parsed.contains("comm_state")) {
             next.comm_state = parsed.at("comm_state").get<wfs::sim::CommState>();

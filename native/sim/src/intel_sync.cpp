@@ -117,10 +117,9 @@ std::size_t MergeChildIntel(SimState& state, const std::string& child_node_id, c
         }
         register_intel(state, relayed);
         LogSync(state, "INTEL_RELAY to=" + parent_node_id + " target=" + relayed.target_unit_id +
-                           " tier=" + std::string(to_string(relayed.tier)) +
-                           " source_kind=" + relayed.source.kind + " source_unit=" + relayed.source.unit_id +
-                           " source_node=" + relayed.source.node_id + " source_level=" + relayed.source.level +
-                           " tick=" + std::to_string(tick));
+                           " tier=" + std::string(to_string(relayed.tier)) + " source_kind=" + relayed.source.kind +
+                           " source_unit=" + relayed.source.unit_id + " source_node=" + relayed.source.node_id +
+                           " source_level=" + relayed.source.level + " tick=" + std::to_string(tick));
         ++merged;
     }
     return merged;
@@ -171,8 +170,7 @@ void to_json(nlohmann::json& json, const IntelSyncState& state) {
 }
 
 void from_json(const nlohmann::json& json, IntelSyncState& state) {
-    state.last_hierarchy_sync_tick =
-        json.value("last_hierarchy_sync_tick", std::map<std::string, std::uint64_t>{});
+    state.last_hierarchy_sync_tick = json.value("last_hierarchy_sync_tick", std::map<std::string, std::uint64_t>{});
     state.last_direct_sync_tick = json.value("last_direct_sync_tick", std::map<std::string, std::uint64_t>{});
 }
 

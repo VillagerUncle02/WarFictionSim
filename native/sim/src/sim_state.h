@@ -21,8 +21,8 @@
 #include "wfs/sim/clock.h"
 #include "wfs/sim/combat.h"
 #include "wfs/sim/comm.h"
-#include "wfs/sim/command_org.h"
 #include "wfs/sim/command_chain.h"
+#include "wfs/sim/command_org.h"
 #include "wfs/sim/contact.h"
 #include "wfs/sim/event_log.h"
 #include "wfs/sim/faction.h"
@@ -38,8 +38,8 @@
 #include "wfs/sim/queue.h"
 #include "wfs/sim/recon_tasks.h"
 #include "wfs/sim/rng.h"
-#include "wfs/sim/support.h"
 #include "wfs/sim/summary.h"
+#include "wfs/sim/support.h"
 #include "wfs/sim/tactical.h"
 
 namespace wfs::sim {

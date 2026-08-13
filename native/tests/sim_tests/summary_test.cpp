@@ -19,13 +19,13 @@
 
 namespace {
 
-using wfs::sim::PlayerCommandResult;
-using wfs::sim::SimState;
-using wfs::sim::SummaryReport;
 using wfs::sim::build_authorized_view_json;
 using wfs::sim::build_summary;
 using wfs::sim::load_scenario;
+using wfs::sim::PlayerCommandResult;
+using wfs::sim::SimState;
 using wfs::sim::step_sim_state;
+using wfs::sim::SummaryReport;
 
 std::filesystem::path ScenarioPath() {
     return std::filesystem::path(WFS_SOURCE_ROOT) / "data" / "scenarios" / "scn-intel-roles.json";
@@ -53,16 +53,16 @@ void Step(SimState& state, std::uint64_t ticks) {
 
 bool InjectMove(SimState& state, const std::string& unit_id, double x, double y) {
     const std::filesystem::path schema = wfs::sim::resolve_schema_path(ScenarioPath(), "command.schema.json");
-    nlohmann::json command = {{"schema_version", 1},
-                              {"type", "MOVE"},
-                              {"target", nlohmann::json{{"kind", "unit"}, {"ref", unit_id}}},
-                              {"completion",
-                               nlohmann::json{{"condition", "reach_point"},
-                                              {"params", nlohmann::json{{"point", nlohmann::json{{"x", x}, {"y", y}}}}}}},
-                              {"intent", "摘要测试机动"},
-                              {"behavior", nlohmann::json{{"engagement", "balanced"}}},
-                              {"priority", 1},
-                              {"deadline", nlohmann::json{{"game_time", 20000}}}};
+    nlohmann::json command = {
+        {"schema_version", 1},
+        {"type", "MOVE"},
+        {"target", nlohmann::json{{"kind", "unit"}, {"ref", unit_id}}},
+        {"completion", nlohmann::json{{"condition", "reach_point"},
+                                      {"params", nlohmann::json{{"point", nlohmann::json{{"x", x}, {"y", y}}}}}}},
+        {"intent", "摘要测试机动"},
+        {"behavior", nlohmann::json{{"engagement", "balanced"}}},
+        {"priority", 1},
+        {"deadline", nlohmann::json{{"game_time", 20000}}}};
     return wfs::sim::inject_player_command(state, command.dump(), schema).accepted;
 }
 
