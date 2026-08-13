@@ -1,0 +1,185 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim vehicle catalog",
+  "description": "Runtime schema for data/units/vehicles.json (F5). Mirrors model/combat.h Vehicle: four-direction armor, module states, crew/passenger capacities, amphibious and heavy-equipment flags; semantic weapon/ammo references are validated by load_data_library in sim/src/loader.cpp.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "const": "vehicle"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "chassis_id",
+          "armor",
+          "modules",
+          "amphibious",
+          "heavy_equipment",
+          "crew_capacity",
+          "passenger_capacity",
+          "weapons",
+          "ammo",
+          "crew",
+          "passengers"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "chassis_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "armor": {
+            "type": "object",
+            "required": [
+              "front",
+              "side",
+              "top",
+              "bottom"
+            ],
+            "properties": {
+              "front": {
+                "$ref": "#/definitions/directional_armor"
+              },
+              "side": {
+                "$ref": "#/definitions/directional_armor"
+              },
+              "top": {
+                "$ref": "#/definitions/directional_armor"
+              },
+              "bottom": {
+                "$ref": "#/definitions/directional_armor"
+              }
+            },
+            "additionalProperties": false
+          },
+          "modules": {
+            "type": "object",
+            "required": [
+              "mobility",
+              "optics",
+              "reloading"
+            ],
+            "properties": {
+              "mobility": {
+                "$ref": "#/definitions/module_state"
+              },
+              "optics": {
+                "$ref": "#/definitions/module_state"
+              },
+              "reloading": {
+                "$ref": "#/definitions/module_state"
+              }
+            },
+            "additionalProperties": false
+          },
+          "amphibious": {
+            "type": "boolean"
+          },
+          "heavy_equipment": {
+            "type": "boolean"
+          },
+          "crew_capacity": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "passenger_capacity": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "weapons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "ammo": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "crew": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "passengers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "protection": {
+            "type": "object",
+            "required": [
+              "helmet",
+              "body_armor"
+            ],
+            "properties": {
+              "helmet": {
+                "type": "boolean"
+              },
+              "body_armor": {
+                "enum": [
+                  "none",
+                  "light",
+                  "heavy"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "definitions": {
+    "directional_armor": {
+      "type": "object",
+      "required": [
+        "kinetic_mm",
+        "chemical_mm"
+      ],
+      "properties": {
+        "kinetic_mm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "chemical_mm": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "module_state": {
+      "enum": [
+        "functional",
+        "degraded",
+        "disabled"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,84 @@
+<!-- 文件总览：事件日志面板视图（T042）。
+     回看/过滤（分类、最低严重级、文本、单位）/关键置顶；时间戳统一为游戏时间
+     （FR-044：加速/暂停不改变日志时序语义）。刷新按节流+增量合并（N1），
+     全量重建时由代码后置按滚动锚点恢复滚动位置。 -->
+<UserControl x:Class="WarFictionSim.Ui.EventLogPanel.EventLogPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:log="clr-namespace:WarFictionSim.Ui.EventLogPanel"
+             mc:Ignorable="d"
+             d:DesignHeight="360" d:DesignWidth="520"
+             KeyboardNavigation.TabNavigation="Cycle">
+    <DockPanel Margin="8">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+            <ComboBox Width="110" SelectedValuePath="Tag" SelectedValue="{Binding SelectedCategory}"
+                      AutomationProperties.Name="按分类过滤">
+                <ComboBoxItem Content="全部分类"/>
+                <ComboBoxItem Content="命令" Tag="{x:Static log:SimEventCategory.Command}"/>
+                <ComboBoxItem Content="战斗" Tag="{x:Static log:SimEventCategory.Combat}"/>
+                <ComboBoxItem Content="情报" Tag="{x:Static log:SimEventCategory.Intel}"/>
+                <ComboBoxItem Content="任务" Tag="{x:Static log:SimEventCategory.Mission}"/>
+                <ComboBoxItem Content="后勤" Tag="{x:Static log:SimEventCategory.Logistics}"/>
+                <ComboBoxItem Content="系统" Tag="{x:Static log:SimEventCategory.System}"/>
+            </ComboBox>
+            <ComboBox Width="110" Margin="6,0,0,0" SelectedValuePath="Tag" SelectedValue="{Binding MinSeverity}"
+                      AutomationProperties.Name="按最低严重级过滤">
+                <ComboBoxItem Content="全部级别"/>
+                <ComboBoxItem Content="调试" Tag="{x:Static log:SimEventSeverity.Debug}"/>
+                <ComboBoxItem Content="信息" Tag="{x:Static log:SimEventSeverity.Info}"/>
+                <ComboBoxItem Content="警告" Tag="{x:Static log:SimEventSeverity.Warning}"/>
+                <ComboBoxItem Content="关键" Tag="{x:Static log:SimEventSeverity.Critical}"/>
+            </ComboBox>
+            <TextBox Width="140" Margin="6,0,0,0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     AutomationProperties.Name="搜索日志文本"/>
+            <TextBox Width="110" Margin="6,0,0,0" Text="{Binding UnitIdText, UpdateSourceTrigger=PropertyChanged}"
+                     AutomationProperties.Name="按单位筛选"/>
+            <TextBox Width="110" Margin="6,0,0,0" Text="{Binding SinceTickText, UpdateSourceTrigger=PropertyChanged}"
+                     AutomationProperties.Name="起始游戏时间筛选" ToolTip="起始游戏时间（tick，空=全部）"/>
+            <TextBlock Text="{Binding GameTimeFilterError}" Foreground="#B3261E"
+                       VerticalAlignment="Center" Margin="6,0,0,0" TextTrimming="CharacterEllipsis"/>
+            <CheckBox Content="关键事件置顶" Margin="10,0,0,0" VerticalAlignment="Center"
+                      IsChecked="{Binding PinCriticalEvents}"
+                      AutomationProperties.Name="关键事件置顶"/>
+        </StackPanel>
+
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding NativeSummaryText}"
+                   Foreground="#AAAAAA" Margin="0,4,0,0"/>
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding QueryErrorText}" TextWrapping="Wrap"
+                   Foreground="#B3261E" Margin="0,4,0,0"/>
+
+        <ListBox x:Name="EntriesList" ItemsSource="{Binding Entries}" HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="54"/>
+                            <ColumnDefinition Width="54"/>
+                            <ColumnDefinition Width="48"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding GameTimeText}" Foreground="#CCCCCC"/>
+                        <TextBlock Grid.Column="1" Text="{Binding CategoryText}" Foreground="#8FA8C8"/>
+                        <TextBlock Grid.Column="2" Text="{Binding SeverityText}" Foreground="#BBBBBB">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="#BBBBBB"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCritical}" Value="True">
+                                            <Setter Property="Foreground" Value="#FF6F4C"/>
+                                            <Setter Property="FontWeight" Value="Bold"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Grid.Column="3" Text="{Binding Message}" TextWrapping="Wrap"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

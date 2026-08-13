@@ -1,0 +1,48 @@
+<!-- 文件总览：战斗主屏视图（T039–T042 集成）。
+     顶部时间控制，中部兵牌地图，右侧命令面板/事件日志（Tab 切换）；
+     渲染定时器只拉快照，步进泵在后台按档位步进（FR-025 渲染与 tick 解耦）。 -->
+<UserControl x:Class="WarFictionSim.Ui.ViewModels.GameScreenView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="720" d:DesignWidth="1200"
+             KeyboardNavigation.TabNavigation="Cycle">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="380"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#1D1D1D">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding StateHash, StringFormat=哈希 {0}}"
+                           Foreground="#888888" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock DockPanel.Dock="Left" Text="{Binding ScenarioName}" Foreground="#EEEEEE"
+                           VerticalAlignment="Center" Margin="8,0" FontWeight="Bold"/>
+                <Button DockPanel.Dock="Left" Content="返回主菜单(_B)" Margin="12,0,0,0" Padding="6,2"
+                        Command="{Binding DataContext.BackToMenuCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        AutomationProperties.Name="返回主菜单"/>
+                <ContentControl Content="{Binding TimeControls}"/>
+                <TextBlock Text="{Binding StatusError}" Foreground="#B3261E" VerticalAlignment="Center"
+                           Margin="8,0" TextTrimming="CharacterEllipsis" MaxWidth="360"/>
+            </DockPanel>
+        </Border>
+
+        <ContentControl Grid.Row="1" Grid.Column="0" Content="{Binding BattleMap}"/>
+
+        <TabControl Grid.Row="1" Grid.Column="1">
+            <TabItem Header="命令面板">
+                <ContentControl Content="{Binding CommandPanel}"/>
+            </TabItem>
+            <TabItem Header="事件日志">
+                <ContentControl Content="{Binding EventLog}"/>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>
