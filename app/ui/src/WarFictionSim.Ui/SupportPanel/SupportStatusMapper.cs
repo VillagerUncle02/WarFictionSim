@@ -105,9 +105,11 @@ public static class SupportStatusMapper
         return info with { StatusText = $"请求 {requestId}：{info.StatusText}", RequestId = requestId };
     }
 
-    /// <summary>返回事件流中最近一次 SUPPORT_REQUESTED 的请求 id（面板状态追踪
-    /// 目标，复审 R1-4）；无 REQUESTED 事件时回退最后一个携带 request= 字段的
-    /// 事件；两者皆无返回 <see langword="null"/>。</summary>
+    /// <summary>返回事件流中最近一次"提交/登记来源"事件的请求 id（面板状态
+    /// 追踪目标）：SUPPORT_REQUESTED 与 SUPPORT_REQUEST_REGISTER_FAILED 都代表
+    /// 用户最新提交的结果，取两者中按事件流更晚者（复审 R2-1），避免新请求
+    /// 登记失败被旧请求 REQUESTED 过滤隐藏；两者皆无时回退最后一个携带
+    /// request= 字段的事件；再无可返回 <see langword="null"/>。</summary>
     /// <param name="events">支援相关事件（按 seq 升序）。</param>
     /// <returns>请求 id 或 <see langword="null"/>。</returns>
     public static string? FindLatestRequestId(IReadOnlyList<SimEventDto> events)
@@ -123,7 +125,10 @@ public static class SupportStatusMapper
             }
 
             latestAny = requestId;
-            if (entry.Message.StartsWith("SUPPORT_REQUESTED ", StringComparison.Ordinal))
+            // 登记失败同样是该请求的最新状态来源：若只认 REQUESTED，其后出现
+            // 的 REGISTER_FAILED（新 id）会被过滤隐藏，面板停留旧请求状态。
+            if (entry.Message.StartsWith("SUPPORT_REQUESTED ", StringComparison.Ordinal) ||
+                entry.Message.StartsWith("SUPPORT_REQUEST_REGISTER_FAILED ", StringComparison.Ordinal))
             {
                 latestSubmitted = requestId;
             }

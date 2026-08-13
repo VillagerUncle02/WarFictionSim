@@ -196,8 +196,9 @@ public static class CommandValidationRules
 
         // 有限分数预检仅适用于连排级：native attach.cpp 只在 limited_score
         // （scale == platoon）时扣分并以 INSUFFICIENT_SCORE 拒绝；营级由上级
-        // 按配属链评估可用力量，不提示分数余量（复审 R1-2）。
-        if (context.SupportScale != "battalion" &&
+        // 按配属链评估可用力量，不提示分数余量（复审 R1-2）。规模判定与
+        // native 同为白名单：空（缺省连排级）或 platoon 才按有限分数（R2-2）。
+        if ((string.IsNullOrEmpty(context.SupportScale) || context.SupportScale == "platoon") &&
             draft.SupportQuantity is > 0 &&
             draft.SupportKinds.Count > 0)
         {

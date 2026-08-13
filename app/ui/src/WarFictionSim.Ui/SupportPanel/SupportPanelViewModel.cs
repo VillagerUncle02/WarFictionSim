@@ -237,8 +237,9 @@ public sealed partial class SupportPanelViewModel : ObservableObject
     /// <summary>预计扣减是否超过剩余分数（连排级有限分数用尽即止提示）。</summary>
     public bool ScoreInsufficient => IsLimitedScore && EstimatedCost > _scoreRemaining;
 
-    /// <summary>是否按连排级有限分数语义展示（native 仅 scale == platoon 扣分）。</summary>
-    public bool IsLimitedScore => _options.Scale != "battalion";
+    /// <summary>是否按连排级有限分数语义展示。规模判定与 native 同为白名单
+    /// （scale 为空或 platoon 才扣分，复审 R2-2）：未来新增规模不误判为连排级。</summary>
+    public bool IsLimitedScore => string.IsNullOrEmpty(_options.Scale) || _options.Scale == "platoon";
 
     /// <summary>评估中请求数（快照摘要）。</summary>
     public ulong PendingRequests => _pendingRequests;
