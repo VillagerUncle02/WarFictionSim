@@ -17,6 +17,19 @@
 
 namespace wfs::sim {
 
+// 从场景文件向上查找仓库 data/ 根目录（data/units/squads.json + terrain）。
+// 找不到返回空路径；相对路径先解析为绝对路径（std::filesystem 语义）。
+std::filesystem::path find_scenario_data_root(const std::filesystem::path& scenario_path);
+
+// T047–T050：从场景 raw["support"] 与派系模板初始化支援/配属/战术状态。
+// 派系数据加载失败时记录结构化可见事件并保持支援链路未配置（宪法 17）。
+void initialize_support_state(SimState& state);
+
+// 每 tick 推进支援请求管线：脚本/命令来源请求登记 → 状态机评估 →
+// 确定性裁决（配属/拒绝/转请）→ 任务结束归建/重新配属（FR-008/009）。
+// 必须在命令链路处理之后、机动/战斗结算之前调用（保持确定性顺序）。
+void step_support_pipeline(SimState& state);
+
 struct PlayerCommandResult {
     bool accepted = false;
     std::vector<ValidationError> errors;  // 校验错误（确定性顺序，T014）。

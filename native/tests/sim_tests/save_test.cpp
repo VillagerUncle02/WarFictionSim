@@ -228,6 +228,51 @@ TEST(WfsSaveTest, SaveLoadMidBattleRestoresCombatState) {
     wfs_sim_destroy(restored);
 }
 
+TEST(WfsSaveTest, SupportStateSaveLoadRoundTripRestoresSupportPipeline) {
+    // T047–T050 集成：支援请求/配属/分数随存档往返一致（宪法第 13 条）。
+    // 用 scn-support-platoon 推进到支援链路已生效后存档，加载后状态哈希
+    // 必须一致，快照支援摘要（configured/score/pending/attaches）必须恢复。
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "support.wfs";
+    const std::filesystem::path scenario =
+        RepoRoot() / "data" / "scenarios" / "scn-support-platoon.json";
+    wfs_sim_handle* source = wfs_sim_create(scenario.string().c_str(), 7U, 1);
+    ASSERT_NE(source, nullptr);
+
+    // 与 T045 同一脚本：目标任务（完成后归建）+ 成功扣分请求 + 超分拒绝。
+    const std::vector<const char*> commands = {
+        R"({"schema_version":1,"type":"MOVE","target":{"kind":"unit","ref":"sp-squad-1"},"completion":{"condition":"reach_point","params":{"point":{"x":0.34,"y":0.31}}},"intent":"支援服务的目标任务（完成后归建）","behavior":{"engagement":"balanced"},"priority":2,"deadline":{"game_time":20000}})",
+        R"({"schema_version":1,"type":"SUPPORT_REQUEST","target":{"kind":"unit","ref":"sp-squad-1"},"completion":{"condition":"support"},"intent":"请求迫击炮加强（成功扣分）","behavior":{"engagement":"balanced"},"priority":1,"deadline":{"game_time":20000},"support":{"request_type":"reinforce","kinds":["squad-mortar-team"],"quantity":1,"to_node":"node-battalion-1","for_command_id":"cmd-0"}})",
+        R"({"schema_version":1,"type":"SUPPORT_REQUEST","target":{"kind":"unit","ref":"sp-squad-2"},"completion":{"condition":"support"},"intent":"请求超出剩余分数的加强（拒绝）","behavior":{"engagement":"balanced"},"priority":1,"deadline":{"game_time":20000},"support":{"request_type":"reinforce","kinds":["squad-atgm-team"],"quantity":2,"to_node":"node-battalion-1"}})",
+    };
+    for (const char* command : commands) {
+        EXPECT_EQ(wfs_sim_inject_command(source, command), WFS_SIM_RESULT_OK);
+    }
+    for (int i = 0; i < 400; ++i) {
+        EXPECT_EQ(wfs_sim_step(source), WFS_SIM_RESULT_OK);
+    }
+
+    const nlohmann::json before = SnapshotJson(source);
+    ASSERT_TRUE(before.at("support").at("configured").get<bool>());
+    EXPECT_EQ(before.at("support").at("scale").get<std::string>(), "platoon");
+    EXPECT_EQ(before.at("support").at("faction_id").get<std::string>(), "faction-china");
+    // 支援链只登记 SUPPORT_REQUEST 命令（cmd-1/cmd-2 共 2 条；cmd-0 是目标任务）。
+    EXPECT_EQ(before.at("support").at("pending_requests").get<std::size_t>(), 2U);
+    EXPECT_EQ(before.at("support").at("attaches").get<std::size_t>(), 1U);
+    EXPECT_EQ(before.at("support").at("score_remaining").get<std::uint64_t>(), 30U);
+    const std::string hash_before = StateHash(source);
+    EXPECT_EQ(wfs_sim_save(source, path.string().c_str()), WFS_SIM_RESULT_OK);
+
+    wfs_sim_handle* restored = wfs_sim_create(scenario.string().c_str(), 7U, 4);
+    ASSERT_NE(restored, nullptr);
+    EXPECT_EQ(wfs_sim_load_save(restored, path.string().c_str()), WFS_SIM_RESULT_OK);
+    EXPECT_EQ(StateHash(restored), hash_before);
+    const nlohmann::json after = SnapshotJson(restored);
+    EXPECT_EQ(after.at("support"), before.at("support"));
+    wfs_sim_destroy(source);
+    wfs_sim_destroy(restored);
+}
+
 TEST(WfsSaveTest, LegacyV1SaveWithoutCrewCountLoads) {
     // N1 存档兼容回归：fc62e4b 生成的 v1 存档（units 无 crew_count）必须可加载。
     // 构造方式：保存当前状态 → 从 state_blob 移除 units[].crew_count → 重建

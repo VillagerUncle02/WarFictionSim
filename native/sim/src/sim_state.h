@@ -17,11 +17,13 @@
 #include <vector>
 
 #include "wfs/sim/ai/decision_log.h"
+#include "wfs/sim/attach.h"
 #include "wfs/sim/clock.h"
 #include "wfs/sim/combat.h"
 #include "wfs/sim/command_chain.h"
 #include "wfs/sim/contact.h"
 #include "wfs/sim/event_log.h"
+#include "wfs/sim/faction.h"
 #include "wfs/sim/intel.h"
 #include "wfs/sim/loader.h"
 #include "wfs/sim/mission_exec.h"
@@ -33,6 +35,8 @@
 #include "wfs/sim/queue.h"
 #include "wfs/sim/recon_tasks.h"
 #include "wfs/sim/rng.h"
+#include "wfs/sim/support.h"
+#include "wfs/sim/tactical.h"
 
 namespace wfs::sim {
 
@@ -135,6 +139,15 @@ struct SimState {
     MissionExecConfig mission_config;
     ReconConfig recon_config;
     OutcomeConfig outcome_config;
+    // T047–T050：支援请求/配属/战术编成状态（确定性，随存档序列化）。
+    SupportConfig support_config;
+    SupportChain support_chain;
+    AttachRegistry attach_registry;
+    TacticalRegistry tactical_registry;
+    FactionTemplate support_faction;                 // 生效派系模板（数据派生）。
+    std::string support_pool_echelon = "battalion";  // 连排级分数取营编制池。
+    std::uint64_t support_score_remaining = 0U;      // 连排级剩余分数（FR-008）。
+    bool support_configured = false;                 // 场景声明支援配置后置 true。
     // T033/T036：情报记录与胜负/目标进度（确定性状态，随存档序列化）。
     std::map<std::string, IntelRecord> intel_records;
     std::vector<ObjectiveRuntimeState> objective_states;

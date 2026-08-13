@@ -88,6 +88,17 @@ nlohmann::json build_snapshot_json(const SimState& state) {
         {"intel_records", state.intel_records},
         {"objectives", state.objective_states},
         {"outcome", state.outcome},
+        // T047–T050：支援/配属摘要（快照只读消费；完整状态随存档序列化）。
+        {"support",
+         nlohmann::json{
+             {"configured", state.support_configured},
+             {"scale", state.support_config.scale},
+             {"faction_id", state.support_faction.id},
+             {"pool_echelon", state.support_pool_echelon},
+             {"pending_requests", state.support_chain.size()},
+             {"attaches", state.attach_registry.size()},
+             {"score_remaining", state.support_score_remaining},
+         }},
     };
 }
 
@@ -136,6 +147,14 @@ nlohmann::json serialize_state_json(const SimState& state) {
     root["intel_records"] = state.intel_records;
     root["objectives"] = state.objective_states;
     root["outcome"] = state.outcome;
+    // T047–T050：支援/配属/战术编成是确定性状态。未配置场景保持字段省略
+    // （与决策日志省略先例一致）：旧存档/旧场景加载后再次序列化字节不变。
+    if (state.support_configured) {
+        root["support_chain"] = state.support_chain;
+        root["attach_registry"] = state.attach_registry;
+        root["tactical_registry"] = state.tactical_registry;
+        root["support_score_remaining"] = state.support_score_remaining;
+    }
     return root;
 }
 

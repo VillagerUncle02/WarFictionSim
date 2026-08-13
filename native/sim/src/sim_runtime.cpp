@@ -44,26 +44,6 @@ constexpr double kBaselineCombat = 0.4;             // 基线战斗经验。
 constexpr double kFullCoverThreshold = 0.5;         // 掩蔽分档阈值（FR-022）。
 constexpr double kPartialCoverThreshold = 0.2;
 
-// 从场景文件向上查找仓库 data/ 根（data/units/squads.json + terrain 存在）。
-// 相对路径先解析为绝对路径：std::filesystem 对相对路径的 parent_path 不会
-// 隐式结合当前工作目录，直接上溯会得到空目录导致数据目录查找失败。
-std::filesystem::path FindDataRoot(const std::filesystem::path& scenario_path) {
-    std::filesystem::path directory = std::filesystem::absolute(scenario_path).parent_path();
-    while (!directory.empty()) {
-        std::filesystem::path data_dir = directory / "data";
-        if (std::filesystem::exists(data_dir / "units" / "squads.json") &&
-            std::filesystem::exists(data_dir / "terrain" / "terrain.json")) {
-            return data_dir;
-        }
-        const std::filesystem::path parent = directory.parent_path();
-        if (parent == directory) {
-            break;
-        }
-        directory = parent;
-    }
-    return {};
-}
-
 // 从数据目录加载运行期模型库（地形/弹药），失败时保持空库。
 void LoadRuntimeLibraries(SimState& state, const std::filesystem::path& data_root) {
     const DataLibraryLoadResult library = load_data_library(data_root);
@@ -201,6 +181,26 @@ RuntimeUnitState MakeRuntimeUnit(const ScenarioUnit& unit, const DataLibraryLoad
 
 }  // namespace
 
+// 从场景文件向上查找仓库 data/ 根（data/units/squads.json + terrain 存在）。
+// 相对路径先解析为绝对路径：std::filesystem 对相对路径的 parent_path 不会
+// 隐式结合当前工作目录，直接上溯会得到空目录导致数据目录查找失败。
+std::filesystem::path find_scenario_data_root(const std::filesystem::path& scenario_path) {
+    std::filesystem::path directory = std::filesystem::absolute(scenario_path).parent_path();
+    while (!directory.empty()) {
+        std::filesystem::path data_dir = directory / "data";
+        if (std::filesystem::exists(data_dir / "units" / "squads.json") &&
+            std::filesystem::exists(data_dir / "terrain" / "terrain.json")) {
+            return data_dir;
+        }
+        const std::filesystem::path parent = directory.parent_path();
+        if (parent == directory) {
+            break;
+        }
+        directory = parent;
+    }
+    return {};
+}
+
 void initialize_runtime_state(SimState& state) {
     state.command_delay_config = CommandDelayConfig::FromScenario(state.scenario.raw);
     state.movement_config = MovementConfig::FromScenario(state.scenario.raw);
@@ -221,7 +221,7 @@ void initialize_runtime_state(SimState& state) {
     state.terrain_cells = terrain_cells_from_scenario(state.scenario.raw);
 
     DataLibraryLoadResult library;
-    const std::filesystem::path data_root = FindDataRoot(state.scenario_path);
+    const std::filesystem::path data_root = find_scenario_data_root(state.scenario_path);
     if (!data_root.empty()) {
         library = load_data_library(data_root);
         if (library.ok()) {
@@ -236,6 +236,8 @@ void initialize_runtime_state(SimState& state) {
     for (RuntimeUnitState& unit : state.units) {
         unit.fire_cooldown_ticks = state.combat_config.fire_cooldown_ticks;  // F5：冷却数据驱动。
     }
+    // T047–T050：支援/配属/战术状态按场景配置与派系模板初始化。
+    initialize_support_state(state);
 }
 
 void step_sim_state(SimState& state) {
@@ -248,6 +250,7 @@ void step_sim_state(SimState& state) {
             "COMMAND_PROCESSED seq=" + std::to_string(event.seq) + " tick=" + std::to_string(state.clock.tick()));
     }
     state.command_chain.ProcessDue(state);
+    step_support_pipeline(state);  // T047–T050：支援请求/配属/归建（FR-008/009）。
     step_movement(state);
     step_combat(state);
     step_contact(state);      // T032：失联恢复（独立于战斗结算）。

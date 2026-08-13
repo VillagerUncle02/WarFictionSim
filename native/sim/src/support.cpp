@@ -221,4 +221,43 @@ void from_json(const nlohmann::json& json, SupportChain& chain) {
     chain = std::move(candidate);
 }
 
+SupportConfig SupportConfig::FromScenario(
+    const nlohmann::json& raw) {  // NOLINT(readability-convert-member-functions-to-static)
+    SupportConfig config;
+    if (!raw.contains("support") || !raw["support"].is_object()) {
+        return config;
+    }
+    const nlohmann::json& json = raw["support"];
+    config.scale = json.value("scale", config.scale);
+    if (config.scale != "platoon" && config.scale != "battalion") {
+        throw std::invalid_argument("support.scale 必须为 platoon/battalion: " + config.scale);
+    }
+    config.faction_id = json.value("faction_id", std::string());
+    config.player_node_id = json.value("player_node_id", std::string());
+    config.superior_node_id = json.value("superior_node_id", std::string());
+    config.evaluation_delay_ticks = json.value("evaluation_delay_ticks", config.evaluation_delay_ticks);
+    config.return_delay_ticks = json.value("return_delay_ticks", config.return_delay_ticks);
+    config.approval_step_ticks = json.value("approval_step_ticks", config.approval_step_ticks);
+    std::set<std::string> ids;
+    for (const nlohmann::json& scripted : json.value("scripted_requests", nlohmann::json::array())) {
+        SupportRequest request;
+        request.id = scripted.at("id").get<std::string>();
+        request.priority = scripted.value("priority", 0);
+        request.from_node = scripted.value("from_node", std::string());
+        request.to_node = scripted.value("to_node", config.superior_node_id);
+        request.request_type = scripted.value("request_type", std::string());
+        request.kinds = scripted.value("kinds", std::vector<std::string>{});
+        request.quantity = scripted.value("quantity", 1U);
+        request.return_after_ticks = scripted.value("return_after_ticks", 0U);
+        request.submitted_tick = scripted.value("submit_tick", 0U);
+        request.state = SupportRequestState::kSubmitted;
+        if (request.id.empty() || !ids.insert(request.id).second || request.kinds.empty() || request.quantity == 0U ||
+            request.request_type.empty() || request.from_node.empty() || request.to_node.empty()) {
+            throw std::invalid_argument("support.scripted_requests 非法（id 唯一且字段完整）: " + request.id);
+        }
+        config.scripted_requests.push_back(std::move(request));
+    }
+    return config;
+}
+
 }  // namespace wfs::sim
