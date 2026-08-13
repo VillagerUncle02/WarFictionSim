@@ -30,6 +30,7 @@ add_library(sim STATIC
     src/resource_pool.cpp
     src/attach.cpp
     src/interaction.cpp
+    src/faction.cpp
     src/schema_validator.cpp
     src/c_api.cpp
     src/sim_runtime.cpp

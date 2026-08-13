@@ -40,6 +40,7 @@ add_executable(sim_tests
     resource_pool_test.cpp
     attach_test.cpp
     interaction_test.cpp
+    faction_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)

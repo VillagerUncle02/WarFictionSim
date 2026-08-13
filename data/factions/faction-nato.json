@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "id": "faction-nato",
+  "name": "北约",
+  "approval_level": 1,
+  "command_style": {
+    "org_style": "task_force",
+    "dispatch_bias": {
+      "attack": 0.5,
+      "defend": 0.5
+    },
+    "support_approval_simplified": false,
+    "muster_time_scale": 0.85
+  },
+  "resource_pools": {
+    "squad": {
+      "support_score": 0,
+      "support_kinds": [],
+      "entries": []
+    },
+    "platoon": {
+      "support_score": 0,
+      "support_kinds": [],
+      "entries": []
+    },
+    "company": {
+      "support_score": 0,
+      "support_kinds": [
+        "mortar-82"
+      ],
+      "entries": [
+        {
+          "id": "squad-mortar-team",
+          "kind": "unit",
+          "quantity": 1,
+          "cost": 30
+        }
+      ]
+    },
+    "battalion": {
+      "support_score": 55,
+      "support_kinds": [
+        "mortar-82"
+      ],
+      "entries": [
+        {
+          "id": "squad-mortar-team",
+          "kind": "unit",
+          "quantity": 2,
+          "cost": 30
+        },
+        {
+          "id": "squad-atgm-team",
+          "kind": "unit",
+          "quantity": 2,
+          "cost": 25
+        },
+        {
+          "id": "vehicle-ifv-test",
+          "kind": "unit",
+          "quantity": 1,
+          "cost": 40
+        }
+      ]
+    }
+  }
+}

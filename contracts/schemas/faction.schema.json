@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim faction template",
+  "description": "Runtime schema for faction templates under data/factions/ (T052). Mirrors data-model.md §13 and FR-006/007: approval_level is the baseline 0/1/2; resource pools are per-echelon score budget, support kinds and assignable forces.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "approval_level",
+    "resource_pools"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approval_level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "审批层级基线：0=上级直接裁决（中国合成化）；1=经一级转发（北约任务链）；2=整建制申请经两级转发（苏俄）"
+    },
+    "command_style": {
+      "type": "object",
+      "description": "指挥风格参数（任务下发/执行倾向、配属审批简化度）；其余取值空间待 US3 登记（data-model §18）"
+    },
+    "resource_pools": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "enum": [
+          "squad",
+          "platoon",
+          "company",
+          "battalion",
+          "brigade"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "support_kinds",
+          "entries"
+        ],
+        "properties": {
+          "support_score": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "连排级每场战斗支援分数总额（FR-008）"
+          },
+          "support_kinds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "可用支援种类（火力支援等，航空后置）"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "kind",
+                "quantity",
+                "cost"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "unit",
+                    "fire_support",
+                    "engineer",
+                    "medical",
+                    "logistics"
+                  ]
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cost": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "连排级有限分数成本（每次请求按数量倍增）"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
