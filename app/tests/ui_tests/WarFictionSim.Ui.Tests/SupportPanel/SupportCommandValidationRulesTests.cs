@@ -180,6 +180,34 @@ public class SupportCommandValidationRulesTests
     }
 
     [Fact]
+    public void Validate_SupportInsufficientScore_EmptyScaleDefaultsPlatoon_IsWarning()
+    {
+        CommandDraft draft = ValidDraft();
+        draft.SupportKinds.Add("artillery-152"); // 30 + 50 = 80 > 60。
+
+        CommandValidationResult result = CommandValidationRules.Validate(draft, Context(scoreRemaining: 60, scale: string.Empty));
+
+        // 复审 R2-2：规模缺失（空串）与 native 缺省连排级一致，保持有限分数警告。
+        Assert.False(result.HasErrors);
+        Assert.Contains(
+            result.Issues,
+            issue => issue.Code == "SUPPORT_INSUFFICIENT_SCORE" && issue.Severity == CommandIssueSeverity.Warning);
+    }
+
+    [Fact]
+    public void Validate_SupportInsufficientScore_UnknownScale_NoScoreWarning()
+    {
+        CommandDraft draft = ValidDraft();
+        draft.SupportKinds.Add("artillery-152"); // 80 > 60，但规模未知不按有限分数。
+
+        CommandValidationResult result = CommandValidationRules.Validate(draft, Context(scoreRemaining: 60, scale: "company"));
+
+        // 复审 R2-2：规模判定与 native 同为白名单（仅 platoon 有限分数），
+        // 未知规模不得按黑名单误判为连排级。
+        Assert.DoesNotContain(result.Issues, issue => issue.Code == "SUPPORT_INSUFFICIENT_SCORE");
+    }
+
+    [Fact]
     public void Validate_SupportDefaultPriority_IsWarning()
     {
         CommandDraft draft = ValidDraft();

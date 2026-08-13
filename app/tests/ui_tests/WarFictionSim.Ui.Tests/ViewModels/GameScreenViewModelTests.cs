@@ -206,6 +206,27 @@ public class GameScreenViewModelTests
     }
 
     [Fact]
+    public void CommandPanelSubmit_WhenCoreRejects_ShowsErrorOnCommandPanel()
+    {
+        var client = new FakeSimClient(SupportSnapshot());
+        client.NextInjectError = new SimNativeException(SimResultCode.InvalidData, "核心拒绝命令测试");
+        var viewModel = new GameScreenViewModel(client, Scenario());
+        viewModel.ApplySnapshot(SnapshotWithUnits().Snapshot);
+        viewModel.CommandPanel.SetTypeCommand.Execute("MOVE");
+        viewModel.CommandPanel.SelectExecutorCommand.Execute("friendly-1");
+        viewModel.CommandPanel.SetPointTarget(1.0, 1.0);
+
+        viewModel.CommandPanel.TrySubmit(out _);
+
+        // 复审 R2-3：命令面板方向的对称壳层断言——拒绝回填命令面板，支援面板不受影响。
+        Assert.Contains(
+            viewModel.CommandPanel.Issues,
+            issue => issue.Code == "NATIVE_REJECTED" && issue.Message.Contains("核心拒绝命令", StringComparison.Ordinal));
+        Assert.DoesNotContain(viewModel.SupportPanel.Issues, issue => issue.Code == "NATIVE_REJECTED");
+        Assert.False(viewModel.CommandPanel.CanSubmit);
+    }
+
+    [Fact]
     public void OnPresentationFrame_CatchesSnapshotParseException()
     {
         (FakeSimClient client, _) = SnapshotWithUnits();

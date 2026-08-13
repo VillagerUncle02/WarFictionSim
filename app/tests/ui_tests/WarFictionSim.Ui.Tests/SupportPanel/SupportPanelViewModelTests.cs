@@ -275,6 +275,71 @@ public class SupportPanelViewModelTests
         Assert.DoesNotContain("已归建", viewModel.StatusText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ApplySnapshot_StatusShowsLatestRegisterFailed()
+    {
+        var client = new FakeSimClient(Snapshot());
+        client.Events.AddRange(
+        [
+            new SimEventDto(1, 1, SimEventCategory.Command, SimEventSeverity.Info,
+                "SUPPORT_REQUESTED request=req-cmd-1 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=reinforce priority=1 quantity=1"),
+            new SimEventDto(2, 1, SimEventCategory.Command, SimEventSeverity.Info,
+                "SUPPORT_EVALUATING request=req-cmd-1 interaction=SUPPORT_REQUEST evaluating_tick=1 resolve_tick=41"),
+            new SimEventDto(3, 5, SimEventCategory.Command, SimEventSeverity.Info,
+                "SUPPORT_REQUEST_REGISTER_FAILED request=req-cmd-2 reason=DUPLICATE_OR_INVALID"),
+        ]);
+        var viewModel = new SupportPanelViewModel(Options(), client);
+
+        viewModel.ApplySnapshot(Snapshot(tick: 6), friendlySide: "side-a");
+
+        // 复审 R2-1：最新登记失败不得被旧请求评估状态过滤隐藏。
+        Assert.Contains("req-cmd-2", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("登记失败", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("请求评估中", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmptyScaleOptions_DefaultToLimitedScoreSemantics()
+    {
+        var options = new SupportPanelOptions
+        {
+            Configured = true,
+            Scale = string.Empty, // 场景未声明 scale：与 native 缺省连排级一致。
+            SuperiorNodeId = "node-battalion-1",
+            AvailableKinds = [new SupportKindOption("squad-mortar-team", 30, "unit")],
+        };
+        var viewModel = new SupportPanelViewModel(options);
+        viewModel.ApplySnapshot(Snapshot(scoreRemaining: 60), friendlySide: "side-a");
+        viewModel.ToggleKind("squad-mortar-team");
+        viewModel.QuantityText = "3"; // 90 > 60。
+
+        // 复审 R2-2：规模判定与 native 同为白名单（空/platoon → 有限分数）。
+        Assert.True(viewModel.IsLimitedScore);
+        Assert.True(viewModel.ScoreInsufficient);
+        Assert.Contains("剩余分数", viewModel.ScoreRemainingText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnknownScaleOptions_DoNotUseLimitedScoreSemantics()
+    {
+        var options = new SupportPanelOptions
+        {
+            Configured = true,
+            Scale = "company", // 未来新增规模：native 白名单下不扣分。
+            SuperiorNodeId = "node-battalion-1",
+            AvailableKinds = [new SupportKindOption("squad-mortar-team", 30, "unit")],
+        };
+        var viewModel = new SupportPanelViewModel(options);
+        viewModel.ApplySnapshot(Snapshot(scoreRemaining: 60), friendlySide: "side-a");
+        viewModel.ToggleKind("squad-mortar-team");
+        viewModel.QuantityText = "3"; // 90 > 60。
+
+        // 复审 R2-2：黑名单改为白名单后未知规模视为营级语义（不扣分）。
+        Assert.False(viewModel.IsLimitedScore);
+        Assert.False(viewModel.ScoreInsufficient);
+        Assert.Contains("无分数扣减", viewModel.EstimatedCostText, StringComparison.Ordinal);
+    }
+
     private sealed class MutableTimeProvider : TimeProvider
     {
         private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);

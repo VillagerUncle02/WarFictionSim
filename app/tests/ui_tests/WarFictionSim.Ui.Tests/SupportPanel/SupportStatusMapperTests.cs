@@ -179,4 +179,36 @@ public class SupportStatusMapperTests
         Assert.Equal("req-cmd-2", SupportStatusMapper.FindLatestRequestId(events));
         Assert.Null(SupportStatusMapper.FindLatestRequestId([]));
     }
+
+    [Fact]
+    public void FindLatestRequestId_RegisterFailedAfterRequested_TracksFailedRegistration()
+    {
+        var events = new List<SimEventDto>
+        {
+            Event(1, 1, "SUPPORT_REQUESTED request=req-cmd-1 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=reinforce priority=1 quantity=1"),
+            Event(2, 1, "SUPPORT_EVALUATING request=req-cmd-1 interaction=SUPPORT_REQUEST evaluating_tick=1 resolve_tick=41"),
+            Event(3, 5, "SUPPORT_REQUEST_REGISTER_FAILED request=req-cmd-2 reason=DUPLICATE_OR_INVALID"),
+        };
+
+        // 复审 R2-1：登记失败也是"最新提交结果"来源，不得被旧请求 REQUESTED 覆盖。
+        Assert.Equal("req-cmd-2", SupportStatusMapper.FindLatestRequestId(events));
+        SupportStatusInfo info = SupportStatusMapper.MapForRequest(events, "req-cmd-2");
+        Assert.Equal(SupportRequestStatus.RegisterFailed, info.Status);
+        Assert.Contains("req-cmd-2", info.StatusText, StringComparison.Ordinal);
+        Assert.Contains("登记失败", info.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FindLatestRequestId_LaterRequestedWinsOverRegisterFailed()
+    {
+        var events = new List<SimEventDto>
+        {
+            Event(1, 1, "SUPPORT_REQUESTED request=req-cmd-1 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=reinforce priority=1 quantity=1"),
+            Event(2, 5, "SUPPORT_REQUEST_REGISTER_FAILED request=req-cmd-2 reason=DUPLICATE_OR_INVALID"),
+            Event(3, 9, "SUPPORT_REQUESTED request=req-cmd-3 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=medical priority=2 quantity=1"),
+        };
+
+        // 取 REQUESTED 与 REGISTER_FAILED 两者中最新者（按事件流顺序）。
+        Assert.Equal("req-cmd-3", SupportStatusMapper.FindLatestRequestId(events));
+    }
 }
