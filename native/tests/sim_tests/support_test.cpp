@@ -106,7 +106,10 @@ TEST(WfsSupportTest, MergeDepletedSquadsThenDissolveRestoresAdminOrganization) {
     // 解除战术编成、恢复行政编制：合并火力组解散，成员不丢失（FR-010）。
     EXPECT_TRUE(registry.DissolveFireTeams("squad-a"));
     EXPECT_FALSE(registry.IsSplit("squad-a"));
-    EXPECT_EQ(registry.FindFireTeam("ft-merged-1"), nullptr);
+    // 解散记录保留（存档/复盘可见），状态标记为已解散。
+    const FireTeam* dissolved_team = registry.FindFireTeam("ft-merged-1");
+    ASSERT_NE(dissolved_team, nullptr);
+    EXPECT_EQ(dissolved_team->state, TacticalState::kDissolved);
 }
 
 // ---- 拆分命令作用域（FR-010/045）----
@@ -267,7 +270,11 @@ TEST(WfsSupportTest, SupportRequestAndChainSerializeRoundTrip) {
     EXPECT_EQ(restored, request);
 
     SupportChain chain;
-    ASSERT_NE(chain.Submit(request), nullptr);
+    SupportRequest submitted = request;
+    submitted.state = SupportRequestState::kSubmitted;
+    ASSERT_NE(chain.Submit(submitted), nullptr);
+    ASSERT_TRUE(chain.Transition(request.id, SupportRequestState::kEvaluating));
+    ASSERT_TRUE(chain.Transition(request.id, SupportRequestState::kExecuting));
     const nlohmann::json chain_json = chain;
     const SupportChain restored_chain = chain_json.get<SupportChain>();
     EXPECT_EQ(restored_chain.RequestsInSubmitOrder(), chain.RequestsInSubmitOrder());
