@@ -451,6 +451,16 @@ void CommandChain::ProcessDue(SimState& state) {
             LogRejected(state, *command, "TARGET_NOT_FOUND");
             continue;
         }
+        // FR-010：拆分状态下命令作用域为火力组；整班命令在运行时显式拒绝。
+        // 支援请求是上下级交互（不为目标单位指派任务），不适用命令作用域。
+        if (command->type != "SUPPORT_REQUEST") {
+            const CommandScopeResult scope = state.tactical_registry.ResolveCommandScope(command->unit_id);
+            if (!scope.valid) {
+                command->state = CommandState::kRejected;
+                LogRejected(state, *command, scope.error);
+                continue;
+            }
+        }
         if (command->type == "SUPPORT_REQUEST") {
             // T047/T050：支援请求是上下级交互，不占用目标单位的任务槽、
             // 不参与单位任务仲裁；由支援管线（step_support_pipeline）在

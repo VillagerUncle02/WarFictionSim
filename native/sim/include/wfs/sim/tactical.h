@@ -115,7 +115,8 @@ class TacticalRegistry {
     bool FormTaskForce(TacticalTaskForce force);
     bool DissolveTaskForce(const std::string& task_force_id);
 
-    // 命令作用域：火力组 id 放行；已拆分班组 id 拒绝；其余按原单位放行。
+    // 命令作用域：活跃火力组 id 放行；已解散火力组/已拆分班组 id 拒绝；
+    // 其余按原单位放行。
     CommandScopeResult ResolveCommandScope(const std::string& unit_id) const;
 
     bool IsSplit(const std::string& squad_id) const;

@@ -202,9 +202,14 @@ CommandScopeResult TacticalRegistry::ResolveCommandScope(const std::string& unit
     if (unit_id.empty()) {
         return CommandScopeResult{false, "", "目标单位为空"};
     }
-    if (FindFireTeam(unit_id) != nullptr) {
-        // 火力组是拆分状态下的合法命令作用域（FR-010）。
-        return CommandScopeResult{true, unit_id, ""};
+    if (const FireTeam* team = FindFireTeam(unit_id); team != nullptr) {
+        if (IsActive(*team)) {
+            // 火力组是拆分状态下的合法命令作用域（FR-010）。
+            return CommandScopeResult{true, unit_id, ""};
+        }
+        // 已解散火力组：战术编成已解除，id 不再作为命令作用域放行
+        // （存档/复盘期防误放行，宪法 17 显式反馈）。
+        return CommandScopeResult{false, "", "FIRE_TEAM_DISSOLVED"};
     }
     if (IsSplit(unit_id)) {
         // 拆分状态下不对行政班组整体下发命令（FR-010/045，宪法 17 显式反馈）。

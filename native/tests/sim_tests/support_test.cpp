@@ -135,6 +135,16 @@ TEST(WfsSupportTest, SplitStateScopesCommandsToFireTeams) {
     EXPECT_EQ(restored.effective_unit_id, "squad-a");
 }
 
+TEST(WfsSupportTest, DissolvedFireTeamIdIsNotAValidCommandScope) {
+    TacticalRegistry registry;
+    ASSERT_TRUE(registry.SplitSquad("squad-a", SoldierIds(4U), 2U).ok);
+    ASSERT_TRUE(registry.DissolveFireTeams("squad-a"));
+
+    // 已解散火力组编成已解除：id 不得再作为命令作用域放行（存档/复盘防误放行）。
+    const CommandScopeResult dissolved = registry.ResolveCommandScope("ft-squad-a-0");
+    EXPECT_FALSE(dissolved.valid);
+}
+
 // ---- 战术分队归建：无单位丢失、损失/失联处置（FR-010/044）----
 
 TEST(WfsSupportTest, TaskForceDissolveReturnsAllMembersWithoutLoss) {
@@ -165,8 +175,7 @@ TEST(WfsSupportTest, ReturnToParentKeepsOnlySurvivorsAndRecordsCasualties) {
     force.member_unit_ids = {"squad-a", "squad-b", "squad-c", "vehicle-1"};
 
     // squad-b 被消灭、vehicle-1 失联：只归建存活单位，损失/失联进入伤亡记录。
-    const ReturnToParentResult result =
-        compute_return_to_parent(force, std::vector<std::string>{"squad-a", "squad-c"});
+    const ReturnToParentResult result = compute_return_to_parent(force, std::vector<std::string>{"squad-a", "squad-c"});
     ASSERT_TRUE(result.ok);
     ASSERT_EQ(result.returned_unit_ids.size(), 2U);
     EXPECT_EQ(result.returned_unit_ids[0], "squad-a");

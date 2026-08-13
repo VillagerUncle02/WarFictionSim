@@ -189,3 +189,48 @@ TEST(WfsCommandChainTest, DeadlineBoundaryFiresAtExactTick) {
     EXPECT_FALSE(HasEvent(before.event_log, "MISSION_TIMED_OUT"));
     EXPECT_TRUE(FindUnit(before, "squad-a")->mission_active);
 }
+
+// FR-010：拆分状态下命令作用域为火力组；整班命令在命令链运行时拒绝并产生
+// 可见事件（SPLIT_SQUAD_COMMAND_NOT_ALLOWED），火力组命令放行。
+TEST(WfsCommandChainTest, SplitSquadScopeRejectsSquadCommandAtRuntime) {
+    SimState state = MakeState(TutorialScenario());
+    ASSERT_TRUE(state.tactical_registry.SplitSquad("tutorial-squad-1", {"s1", "s2", "s3", "s4"}, 2U).ok);
+
+    // 直接经命令链下达（跳过注入校验，聚焦运行时作用域裁决）。
+    const nlohmann::json command_json = nlohmann::json::parse(MoveCommand("tutorial-squad-1"));
+    const wfs::sim::CommandChain::IssueResult issued = state.command_chain.Issue(
+        command_json, 0U, state.clock.tick(), state.clock.tick_hz(), state.command_delay_config, state.rng);
+    ASSERT_TRUE(issued.accepted) << issued.error;
+    state.clock.advance(issued.arrival_tick - state.clock.tick());
+    state.command_chain.ProcessDue(state);
+
+    const wfs::sim::ChainCommand* command = state.command_chain.Find(issued.command_id);
+    ASSERT_NE(command, nullptr);
+    EXPECT_EQ(command->state, wfs::sim::CommandState::kRejected);
+    EXPECT_TRUE(HasEvent(state.event_log,
+                         "COMMAND_REJECTED command=cmd-0 unit=tutorial-squad-1 type=MOVE "
+                         "reason=SPLIT_SQUAD_COMMAND_NOT_ALLOWED"))
+        << "拆分态整班命令必须产生可见拒绝事件";
+}
+
+TEST(WfsCommandChainTest, SplitSquadScopeAllowsFireTeamCommandAtRuntime) {
+    SimState state = MakeState(TutorialScenario());
+    ASSERT_TRUE(state.tactical_registry.SplitSquad("tutorial-squad-1", {"s1", "s2", "s3", "s4"}, 2U).ok);
+    // 火力组作为运行期最小可指挥单位存在（场景行政单位展开后的运行期形态）。
+    RuntimeUnitState team_unit = *FindUnit(state, "tutorial-squad-1");
+    team_unit.id = "ft-tutorial-squad-1-0";
+    state.units.push_back(team_unit);
+
+    const nlohmann::json command_json = nlohmann::json::parse(MoveCommand("ft-tutorial-squad-1-0"));
+    const wfs::sim::CommandChain::IssueResult issued = state.command_chain.Issue(
+        command_json, 0U, state.clock.tick(), state.clock.tick_hz(), state.command_delay_config, state.rng);
+    ASSERT_TRUE(issued.accepted) << issued.error;
+    state.clock.advance(issued.arrival_tick - state.clock.tick());
+    state.command_chain.ProcessDue(state);
+
+    const wfs::sim::ChainCommand* command = state.command_chain.Find(issued.command_id);
+    ASSERT_NE(command, nullptr);
+    EXPECT_EQ(command->state, wfs::sim::CommandState::kEffective);
+    EXPECT_TRUE(HasEvent(state.event_log, "COMMAND_ACKNOWLEDGED command=cmd-0 unit=ft-tutorial-squad-1-0"))
+        << "火力组命令必须在运行时放行";
+}
