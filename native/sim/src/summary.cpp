@@ -9,8 +9,9 @@
 //   结果累计（完成/失败/超时由 mission_exec 在判定处递增）；完成度为
 //   完成数 / 已进入判定视野的任务数（四舍五入为整数百分比）。
 // - 损失摘要按人员（士兵伤亡）、载具（摧毁的载具单位）、班组（摧毁的非载具
-//   单位）三类统计；支援需求取该节点未决请求数（submitted/evaluating/
-//   escalated）。
+//   单位）三类统计；损失/任务结果/执行中任务按该节点整棵编制子树聚合
+//   （下级层级结果上卷，CHK162 无信息遗漏）；支援需求取该节点自身未决
+//   请求数（submitted/evaluating/escalated）。
 // - 生成节奏 = 上级节点层级同步间隔（与 T058 共用 sync_ticks_for），
 //   即"上级按自身同步间隔获取最新摘要"（FR-028/051）。
 // - 统一裁剪规则只输出权限内信息：本节点直属单位完整状态 + 直接下级摘要；
@@ -51,6 +52,27 @@ std::string PairKey(const std::string& from_node, const std::string& to_node) {
 bool IsActiveCommandState(const CommandState command_state) {
     return command_state == CommandState::kIssued || command_state == CommandState::kAcknowledged ||
            command_state == CommandState::kEffective;
+}
+
+// from_node 及其全部下级节点（BFS，children_of 插入顺序，确定性）。
+// 下级摘要 = 该节点整棵编制子树聚合（CHK162 无信息遗漏）：连→营摘要
+// 必须包含排级单位的上卷损失/任务结果（FR-051 只限制"不含单位明细"，
+// 不限制聚合数值）。
+std::set<std::string> NodeSubtree(const CommandOrgState& command_org, const std::string& from_node) {
+    std::set<std::string> subtree{from_node};
+    std::vector<std::string> frontier{from_node};
+    while (!frontier.empty()) {
+        std::vector<std::string> next;
+        for (const std::string& node_id : frontier) {
+            for (const std::string& child_id : command_org.children_of(node_id)) {
+                if (subtree.insert(child_id).second) {
+                    next.push_back(child_id);
+                }
+            }
+        }
+        frontier = std::move(next);
+    }
+    return subtree;
 }
 
 }  // namespace
@@ -192,9 +214,10 @@ SummaryReport build_summary(const SimState& state, const std::string& from_node,
     report.to_node = to_node;
     report.generated_tick = generated_tick;
 
+    const std::set<std::string> subtree = NodeSubtree(state.command_org, from_node);
     MissionOutcomeCounts outcomes;
     for (const RuntimeUnitState& unit : state.units) {
-        if (unit.node_id != from_node) {
+        if (!subtree.contains(unit.node_id)) {
             continue;
         }
         for (const model::Soldier& soldier : unit.soldiers) {
@@ -226,7 +249,7 @@ SummaryReport build_summary(const SimState& state, const std::string& from_node,
         const auto unit = std::find_if(state.units.begin(), state.units.end(), [&](const RuntimeUnitState& candidate) {
             return candidate.id == command.unit_id;
         });
-        if (unit != state.units.end() && unit->node_id == from_node) {
+        if (unit != state.units.end() && subtree.contains(unit->node_id)) {
             ++report.missions.active;
         }
     }

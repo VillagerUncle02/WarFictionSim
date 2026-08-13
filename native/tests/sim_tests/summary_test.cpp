@@ -144,6 +144,53 @@ TEST(WfsSummaryTest, BuildSummaryComputesLossesAndOutcomes) {
     EXPECT_EQ(report.losses.vehicles, 0U);
 }
 
+TEST(WfsSummaryTest, BuildSummaryRollsUpSubtreeLossesAndOutcomes) {
+    // S1：下级摘要 = 该节点整棵子树聚合（CHK162 无信息遗漏）：连→营摘要
+    // 必须包含排级单位的损失与任务结果。
+    SimState state = MakeState();
+    for (wfs::sim::RuntimeUnitState& unit : state.units) {
+        if (unit.id == "plt-1-sq-1") {
+            unit.destroyed = true;
+            unit.soldiers[0].status = wfs::sim::model::SoldierStatus::kCasualty;
+        }
+    }
+    state.mission_outcomes["plt-1-sq-1"] = wfs::sim::MissionOutcomeCounts{2U, 1U, 0U};
+    const SummaryReport report = build_summary(state, "node-co-1", "node-bn-1", 42U);
+    EXPECT_EQ(report.missions.completed, 2U);
+    EXPECT_EQ(report.missions.failed, 1U);
+    EXPECT_EQ(report.losses.soldiers, 1U);
+    EXPECT_EQ(report.losses.squads, 1U);
+    EXPECT_EQ(report.losses.vehicles, 0U);
+}
+
+TEST(WfsSummaryTest, BattalionViewContainsCompanySummaryWithoutUnitInternals) {
+    // S1 多级：连→营摘要包含排级内容，且营级 authorized view 只含摘要、
+    // 不含 unit 明细（FR-051/CHK162 双向锁定）。
+    SimState state = MakeState();
+    for (wfs::sim::RuntimeUnitState& unit : state.units) {
+        if (unit.id == "plt-1-sq-1") {
+            unit.destroyed = true;
+            unit.soldiers[0].status = wfs::sim::model::SoldierStatus::kCasualty;
+        }
+    }
+    state.mission_outcomes["plt-1-sq-1"] = wfs::sim::MissionOutcomeCounts{2U, 1U, 0U};
+    Step(state, 300U);  // tick=300：营级按自身间隔获取连级摘要（15s）。
+    const SummaryReport* report = state.summaries.LatestFor("node-co-1", "node-bn-1");
+    ASSERT_NE(report, nullptr);
+    EXPECT_EQ(report->generated_tick, 300U);
+    EXPECT_GE(report->missions.completed, 2U);
+    EXPECT_GE(report->losses.soldiers, 1U);
+    EXPECT_GE(report->losses.squads, 1U);
+
+    const nlohmann::json view = build_authorized_view_json(state, "node-bn-1");
+    EXPECT_EQ(view.at("node_id").get<std::string>(), "node-bn-1");
+    ASSERT_EQ(view.at("subordinates").size(), 1U);
+    EXPECT_EQ(view.at("subordinates")[0].at("from_node").get<std::string>(), "node-co-1");
+    EXPECT_FALSE(view.at("subordinates")[0].contains("units"));
+    EXPECT_FALSE(view.at("subordinates")[0].contains("x"));
+    EXPECT_FALSE(view.at("subordinates")[0].contains("soldiers"));
+}
+
 TEST(WfsSummaryTest, RegistryAndOutcomeCountsRoundTrip) {
     SimState state = MakeState();
     ASSERT_TRUE(InjectMove(state, "plt-1-sq-1", 0.44, 0.4));
