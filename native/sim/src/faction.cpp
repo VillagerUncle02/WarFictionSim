@@ -13,6 +13,7 @@
 
 #include "wfs/sim/faction.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <fstream>
 #include <set>
@@ -63,6 +64,21 @@ void CheckPoolEntryIds(const FactionTemplate& faction, std::vector<DataIssue>& i
             if (!ids.insert(entry.id).second) {
                 issues.push_back(
                     Issue("DUPLICATE_ENTRY_ID", "派系 " + faction.id + " " + echelon + " 池条目 id 重复: " + entry.id));
+            }
+        }
+    }
+}
+
+// 契约一致性：support_kinds 声明的每种支援种类都必须能由同池 entries 解析
+// 为可消费条目（裁决只消费 entries；声明与消费必须一致，FR-008）。
+void CheckSupportKindsResolvable(const FactionTemplate& faction, std::vector<DataIssue>& issues) {
+    for (const auto& [echelon, pool] : faction.pools) {
+        for (const std::string& kind : pool.support_kinds) {
+            const bool found = std::any_of(pool.entries.begin(), pool.entries.end(),
+                                           [&](const ResourcePoolEntry& entry) { return entry.id == kind; });
+            if (!found) {
+                issues.push_back(Issue("SUPPORT_KIND_NOT_CONSUMABLE", "派系 " + faction.id + " " + echelon +
+                                                                          " 池声明的支援种类无可消费条目: " + kind));
             }
         }
     }
@@ -138,6 +154,7 @@ FactionLoadResult LoadFactionInternal(const std::filesystem::path& data_file, co
     }
 
     CheckPoolEntryIds(faction, issues);
+    CheckSupportKindsResolvable(faction, issues);
     if (data_root != nullptr) {
         const DataLibraryLoadResult library = load_data_library(*data_root);
         for (const DataIssue& issue : library.issues) {

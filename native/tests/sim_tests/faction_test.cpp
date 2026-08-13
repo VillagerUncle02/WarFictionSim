@@ -47,8 +47,7 @@ nlohmann::json MinimalFaction(std::uint32_t approval_level = 0U) {
            {{"support_score", 10},
             {"support_kinds", nlohmann::json::array()},
             {"entries",
-             nlohmann::json::array(
-                 {{{"id", "squad-rifle-us"}, {"kind", "unit"}, {"quantity", 1}, {"cost", 5}}})}}}}},
+             nlohmann::json::array({{{"id", "squad-rifle-us"}, {"kind", "unit"}, {"quantity", 1}, {"cost", 5}}})}}}}},
     };
 }
 
@@ -86,7 +85,7 @@ TEST(WfsFactionTest, ThreeBuiltInFactionsLoadWithApprovalBaselines) {
     const auto russia = load_faction(FactionFile("faction-russia"));
     ASSERT_TRUE(russia.ok()) << (russia.issues.empty() ? "" : russia.issues.front().message);
     EXPECT_EQ(russia.faction.name, "苏俄");
-    EXPECT_EQ(russia.faction.approval_level, 2U);  // 整建制申请：经两级转发。
+    EXPECT_EQ(russia.faction.approval_level, 2U);                        // 整建制申请：经两级转发。
     EXPECT_EQ(russia.faction.pools.at("battalion").entries.size(), 2U);  // 默认资源池最小。
 }
 
@@ -137,4 +136,35 @@ TEST(WfsFactionTest, FactionTemplateSerializeRoundTrip) {
     EXPECT_EQ(keys[1], "company");
     EXPECT_EQ(keys[2], "platoon");
     EXPECT_EQ(keys[3], "squad");
+}
+
+TEST(WfsFactionTest, SupportKindsResolveToConsumableEntries) {
+    // 契约一致性：support_kinds 声明的每种支援种类都必须能被同池 entries
+    // 解析为可消费条目（裁决只消费 entries，声明与消费必须一致，FR-008）。
+    for (const char* name : {"faction-china", "faction-nato", "faction-russia"}) {
+        const auto faction = load_faction(FactionFile(name));
+        ASSERT_TRUE(faction.ok()) << (faction.issues.empty() ? "" : faction.issues.front().message);
+        for (const auto& [echelon, pool] : faction.faction.pools) {
+            for (const std::string& kind : pool.support_kinds) {
+                bool found = false;
+                for (const ResourcePoolEntry& entry : pool.entries) {
+                    if (entry.id == kind) {
+                        found = true;
+                        break;
+                    }
+                }
+                EXPECT_TRUE(found) << name << " " << echelon << " 池声明的支援种类无可消费条目: " << kind;
+            }
+        }
+    }
+}
+
+TEST(WfsFactionTest, SupportKindWithoutEntryIsRejectedSemantically) {
+    TempDir temp_dir("wfs-faction");
+    nlohmann::json faction = MinimalFaction();
+    faction["resource_pools"]["battalion"]["support_kinds"] = nlohmann::json::array({"not-an-entry"});
+    const std::filesystem::path path = temp_dir.Write("bad-support-kind.json", faction.dump());
+    const auto result = load_faction(path, FactionSchema());
+    EXPECT_FALSE(result.ok());
+    EXPECT_TRUE(HasIssue(result, "SUPPORT_KIND_NOT_CONSUMABLE"));
 }

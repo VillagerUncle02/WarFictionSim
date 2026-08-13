@@ -25,9 +25,7 @@
     },
     "company": {
       "support_score": 0,
-      "support_kinds": [
-        "mortar-82"
-      ],
+      "support_kinds": [],
       "entries": [
         {
           "id": "squad-mortar-team",
@@ -39,9 +37,7 @@
     },
     "battalion": {
       "support_score": 55,
-      "support_kinds": [
-        "mortar-82"
-      ],
+      "support_kinds": [],
       "entries": [
         {
           "id": "squad-mortar-team",
