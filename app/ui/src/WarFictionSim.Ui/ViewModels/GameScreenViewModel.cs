@@ -1,7 +1,8 @@
-// 文件总览：应用壳 —— 战斗主屏视图模型（T039–T042 集成）。
+// 文件总览：应用壳 —— 战斗主屏视图模型（T039–T042 集成，T053 支援面板）。
 //
-// 职责：把一份快照分发给各面板（地图/命令上下文/事件计数），并把命令面板
-// 的提交 JSON 经 ISimClient 注入核心；核心拒绝时回填命令面板错误。
+// 职责：把一份快照分发给各面板（地图/命令上下文/支援面板/事件计数），并
+// 把命令面板与支援面板的提交 JSON 经 ISimClient 注入核心；核心拒绝时回填
+// 对应面板错误（命令注入是唯一写路径）。
 // 表现层帧由视图定时器驱动（渲染独立于模拟 tick，FR-025）；本类型只读快照
 // 与注入命令，不直改模拟状态（宪法第 14 条）。
 
@@ -12,6 +13,7 @@ using WarFictionSim.Ui.EventLogPanel;
 using WarFictionSim.Ui.GameControls;
 using WarFictionSim.Ui.Interop;
 using WarFictionSim.Ui.MainMenu;
+using WarFictionSim.Ui.SupportPanel;
 
 namespace WarFictionSim.Ui.ViewModels;
 
@@ -30,6 +32,7 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
     private string? _lastStepError;
     private CommandContext? _commandContext;
     private ulong _commandContextTick;
+    private readonly IReadOnlyList<SupportKindOption> _supportKinds;
     private DateTimeOffset _lastHashTime = DateTimeOffset.MinValue;
 
     /// <summary>初始化战斗主屏。</summary>
@@ -41,12 +44,24 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         _client = client;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _zoneIds = scenario.Zones;
+        _supportKinds = scenario.SupportKinds;
         ScenarioName = scenario.Name;
         BattleMap = new BattleMapViewModel(scenario.MapWidthKm, scenario.MapHeightKm);
         CommandPanel = new CommandPanelViewModel();
+        SupportPanel = new SupportPanelViewModel(
+            new SupportPanelOptions
+            {
+                Configured = scenario.SupportConfigured,
+                Scale = scenario.SupportScale,
+                SuperiorNodeId = scenario.SuperiorNodeId,
+                AvailableKinds = scenario.SupportKinds,
+            },
+            client,
+            timeProvider);
         TimeControls = new TimeControlsViewModel((int)scenario.TickHz);
         EventLog = new EventLogViewModel(_client, scenario.TickHz);
         CommandPanel.SubmitRequested += (_, json) => InjectCommand(json);
+        SupportPanel.SubmitRequested += (_, json) => InjectCommand(json);
         // 命令闭环：地图点选/框选 → 由选中己方单位派生命令面板执行单位（FR-045）。
         BattleMap.UnitSelected += OnBattleMapUnitSelected;
         BattleMap.UnitsSelected += OnBattleMapUnitsSelected;
@@ -60,6 +75,9 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
 
     /// <summary>命令面板。</summary>
     public CommandPanelViewModel CommandPanel { get; }
+
+    /// <summary>支援请求面板。</summary>
+    public SupportPanelViewModel SupportPanel { get; }
 
     /// <summary>时间控制。</summary>
     public TimeControlsViewModel TimeControls { get; }
@@ -135,6 +153,7 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         BattleMap.ApplySnapshot(snapshot);
         CommandContext context = BuildCommandContext(snapshot);
         CommandPanel.ApplyContext(context);
+        SupportPanel.ApplySnapshot(snapshot, context.FriendlySide);
         EventLog.ApplySummary(snapshot.EventLog, snapshot.Tick);
         TickDisplay = $"tick {snapshot.Tick}";
         UpdateStateHash();
@@ -142,7 +161,8 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
 
     /// <summary>把命令 JSON 注入核心；核心拒绝时回填面板错误。</summary>
     /// <param name="commandJson">已序列化的命令。</param>
-    public void InjectCommand(string commandJson)
+    /// <param name="sourcePanel">发起提交的面板（核心拒绝时回填到对应面板；缺省命令面板）。</param>
+    public void InjectCommand(string commandJson, object? sourcePanel = null)
     {
         try
         {
@@ -150,7 +170,18 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         }
         catch (SimNativeException exception)
         {
-            CommandPanel.ShowNativeRejection(exception);
+            switch (sourcePanel)
+            {
+                case SupportPanelViewModel support:
+                    support.ShowNativeRejection(exception);
+                    break;
+                case CommandPanelViewModel command:
+                    command.ShowNativeRejection(exception);
+                    break;
+                default:
+                    CommandPanel.ShowNativeRejection(exception);
+                    break;
+            }
         }
         catch (ObjectDisposedException)
         {
@@ -198,6 +229,9 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
         }
 
         CommandPanel.SetExecutors(friendlyIds);
+        // 支援目标联动：单选一个己方单位时同步为支援请求目标；空选/多选
+        // 目标不明确（支援请求目标为单一单位，command-schema §1.1），清除。
+        SupportPanel.SetTarget(friendlyIds.Count == 1 ? friendlyIds[0] : null);
     }
 
     /// <summary>按需更新状态哈希：暂停时每帧展示确定性身份，运行中节流到 1Hz。</summary>
@@ -242,6 +276,8 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
             CurrentTick = snapshot.Tick,
             Units = units,
             ZoneIds = _zoneIds,
+            SupportPool = _supportKinds,
+            SupportScoreRemaining = snapshot.Support.ScoreRemaining,
         };
         _commandContext = context;
         _commandContextTick = snapshot.Tick;

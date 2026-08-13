@@ -31,6 +31,10 @@ public sealed partial class CommandDraft : ObservableObject
     private string? _failureTarget;
     private long _priority;
     private ulong _deadlineTick;
+    private string? _supportRequestType;
+    private long? _supportQuantity;
+    private string? _supportToNode;
+    private string? _supportForCommandId;
 
     /// <summary>命令类型（13 种任务之一；未选择为 null）。</summary>
     public string? Type
@@ -166,5 +170,36 @@ public sealed partial class CommandDraft : ObservableObject
     {
         get => _deadlineTick;
         set => SetProperty(ref _deadlineTick, value);
+    }
+
+    /// <summary>支援请求需求类型（SUPPORT_REQUEST，5 种枚举之一）。</summary>
+    public string? SupportRequestType
+    {
+        get => _supportRequestType;
+        set => SetProperty(ref _supportRequestType, value);
+    }
+
+    /// <summary>支援请求种类多选（资源池条目 id；null = 未选）。</summary>
+    public ObservableCollection<string> SupportKinds { get; } = [];
+
+    /// <summary>每种支援种类的数量（≥1；null = 缺省 1，schema 允许缺省）。</summary>
+    public long? SupportQuantity
+    {
+        get => _supportQuantity;
+        set => SetProperty(ref _supportQuantity, value);
+    }
+
+    /// <summary>受理上级节点（null = 缺省取场景支援配置 superior_node_id）。</summary>
+    public string? SupportToNode
+    {
+        get => _supportToNode;
+        set => SetProperty(ref _supportToNode, value);
+    }
+
+    /// <summary>关联的任务命令 id（任务结束触发归建，FR-009；null = 不关联）。</summary>
+    public string? SupportForCommandId
+    {
+        get => _supportForCommandId;
+        set => SetProperty(ref _supportForCommandId, value);
     }
 }

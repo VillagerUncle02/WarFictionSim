@@ -45,6 +45,9 @@ public sealed class SimulationSnapshot
     /// <summary>命令链路摘要。</summary>
     public required CommandChainSummaryState CommandChain { get; init; }
 
+    /// <summary>支援/配属摘要（T047–T050；连排级有限分数与请求计数）。</summary>
+    public required SupportSummaryState Support { get; init; }
+
     /// <summary>场景全部单位运行期状态（含敌方；是否展示由迷雾层决定）。</summary>
     public required IReadOnlyList<UnitState> Units { get; init; }
 

@@ -4,6 +4,8 @@
 // 指挥节点、可指挥单位（id/节点/弹药）、已知区域、当前 tick。上下文由
 // 快照 + 场景目录静态元数据合成（快照不含区域，区域来自场景文件）。
 
+using WarFictionSim.Ui.SupportPanel;
+
 namespace WarFictionSim.Ui.CommandPanel;
 
 /// <summary>命令校验所需的单位纯数据视图（值相等：含弹药序列）。</summary>
@@ -85,4 +87,10 @@ public sealed class CommandContext
 
     /// <summary>场景已知区域 id。</summary>
     public required IReadOnlyList<string> ZoneIds { get; init; }
+
+    /// <summary>支援请求可用池（T053；空 = 未配置/池缺失，SUPPORT_REQUEST 预检提示）。</summary>
+    public IReadOnlyList<SupportKindOption> SupportPool { get; init; } = [];
+
+    /// <summary>连排级剩余支援分数（T053；来自快照 support 摘要，未配置为 0）。</summary>
+    public ulong SupportScoreRemaining { get; init; }
 }

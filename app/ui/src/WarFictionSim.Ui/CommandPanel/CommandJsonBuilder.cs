@@ -1,8 +1,11 @@
 // 文件总览：命令面板 —— 命令 JSON 构造（T041）。
 //
 // 输出必须与 contracts/schemas/command.schema.json 完全一致，键序固定
-// （schema_version → type → target → completion → intent → behavior →
-// priority → deadline），便于黄金字符串测试与核心确定性校验。
+// （schema_version → type → target → completion → support → intent →
+// behavior → priority → deadline），便于黄金字符串测试与核心确定性校验。
+// T053：SUPPORT_REQUEST 时额外输出 support 负载（request_type/kinds/
+// quantity/to_node/for_command_id），to_node/for_command_id 为空时省略
+// （核心按场景支援配置缺省，command-schema §1.1）。
 
 using System.IO;
 using System.Text;
@@ -44,6 +47,11 @@ public static class CommandJsonBuilder
             writer.WriteString("type", draft.Type);
             WriteTarget(writer, draft);
             WriteCompletion(writer, draft);
+            if (draft.Type == "SUPPORT_REQUEST")
+            {
+                WriteSupport(writer, draft);
+            }
+
             writer.WriteString("intent", draft.Intent ?? string.Empty);
             WriteBehavior(writer, draft);
             writer.WriteNumber("priority", draft.Priority);
@@ -54,6 +62,32 @@ public static class CommandJsonBuilder
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static void WriteSupport(Utf8JsonWriter writer, CommandDraft draft)
+    {
+        writer.WriteStartObject("support");
+        writer.WriteString("request_type", draft.SupportRequestType ?? string.Empty);
+        writer.WriteStartArray("kinds");
+        foreach (string kind in draft.SupportKinds)
+        {
+            writer.WriteStringValue(kind);
+        }
+
+        writer.WriteEndArray();
+        // quantity 缺省 1（schema minimum:1；native RequestFromCommand 同规则）。
+        writer.WriteNumber("quantity", draft.SupportQuantity is > 0 ? draft.SupportQuantity.Value : 1);
+        if (!string.IsNullOrWhiteSpace(draft.SupportToNode))
+        {
+            writer.WriteString("to_node", draft.SupportToNode);
+        }
+
+        if (!string.IsNullOrWhiteSpace(draft.SupportForCommandId))
+        {
+            writer.WriteString("for_command_id", draft.SupportForCommandId);
+        }
+
+        writer.WriteEndObject();
     }
 
     private static void WriteTarget(Utf8JsonWriter writer, CommandDraft draft)

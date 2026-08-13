@@ -4,6 +4,12 @@
 // 完成条件 → 弹药覆盖），错误项会阻断提交；面板额外提供 native 没有的
 // 表现层警告/建议（时限风险、取代现有任务、可选参数提示）。关键边界：
 // 面板校验只是预检，最终权威是注入时核心的双重校验（本文件头声明即契约）。
+// T053：SUPPORT_REQUEST 负载三级校验与 command-schema.md §1.1 对齐——未选
+// 目标/需求类型/种类、数量非法、池外种类 = 错误；分数余量不足、默认优先级
+// = 警告（可提交但提示风险，核心按 INSUFFICIENT_SCORE/SCOPE_VIOLATION
+// 拒绝时回填错误）。
+
+using WarFictionSim.Ui.SupportPanel;
 
 namespace WarFictionSim.Ui.CommandPanel;
 
@@ -13,7 +19,12 @@ public static class CommandValidationRules
     private static readonly string[] RegisteredConditions =
     [
         "secure_zone", "destroy_unit", "drive_out", "clear", "hold", "reach_point",
-        "patrol", "fortify", "recon",
+        "patrol", "fortify", "recon", "support",
+    ];
+
+    private static readonly string[] SupportRequestTypes =
+    [
+        "reinforce", "fire_support", "engineer", "medical", "logistics",
     ];
 
     /// <summary>按固定顺序校验草稿并产出错误/警告/建议。</summary>
@@ -95,6 +106,12 @@ public static class CommandValidationRules
             issues.Add(Error("PRIORITY_NEGATIVE", "优先级不能为负数（最低为 0，数值越小优先级越高）。"));
         }
 
+        // ---- T053：SUPPORT_REQUEST 负载语义（command-schema §1.1/§5）。 ----
+        if (draft.Type == "SUPPORT_REQUEST")
+        {
+            ValidateSupportPayload(draft, context, issues);
+        }
+
         // ---- 表现层警告：时限风险（native Schema 只要求 ≥0，不判语义）。 ----
         if (draft.DeadlineTick == 0)
         {
@@ -133,8 +150,97 @@ public static class CommandValidationRules
         return new CommandValidationResult(issues);
     }
 
+    private static void ValidateSupportPayload(
+        CommandDraft draft, CommandContext context, List<CommandValidationIssue> issues)
+    {
+        // 完成条件固定为 support（native command_validation.cpp 同规则）。
+        if (!string.IsNullOrWhiteSpace(draft.Condition) && draft.Condition != "support")
+        {
+            issues.Add(Error("SUPPORT_CONDITION_FIXED", "支援请求的完成条件固定为 support，不能更改。"));
+        }
+
+        if (string.IsNullOrWhiteSpace(draft.SupportRequestType))
+        {
+            issues.Add(Error("SUPPORT_REQUEST_TYPE_REQUIRED", "请选择支援需求类型（加强兵力/火力/工兵/医疗/后勤）。"));
+        }
+        else if (!SupportRequestTypes.Contains(draft.SupportRequestType))
+        {
+            issues.Add(Error(
+                "SUPPORT_REQUEST_TYPE_INVALID",
+                $"支援需求类型未注册：{draft.SupportRequestType}（reinforce/fire_support/engineer/medical/logistics）。"));
+        }
+
+        if (draft.SupportKinds.Count == 0)
+        {
+            issues.Add(Error("SUPPORT_KINDS_REQUIRED", "请至少选择一种支援种类（来自所属编制资源池）。"));
+        }
+
+        if (draft.SupportQuantity is <= 0)
+        {
+            issues.Add(Error("SUPPORT_QUANTITY_INVALID", "支援数量必须为 ≥ 1 的整数（缺省为 1）。"));
+        }
+
+        // 范围约束：种类必须全部存在于所属编制资源池（FR-008/SCOPE_VIOLATION）。
+        if (draft.SupportKinds.Count > 0)
+        {
+            List<string> missing = draft.SupportKinds
+                .Where(kind => context.SupportPool.All(option => option.Id != kind))
+                .ToList();
+            if (missing.Count > 0)
+            {
+                issues.Add(Error(
+                    "SCOPE_VIOLATION",
+                    $"支援种类不在所属编制资源池内：{string.Join("、", missing)}（只能请求上级编制资源池内的力量）。"));
+            }
+        }
+
+        // 有限分数预检：cost = quantity × Σ(条目成本)，与 native deduct_score
+        // 同式；面板只给警告，核心按 INSUFFICIENT_SCORE 拒绝时回填错误。
+        if (draft.SupportQuantity is > 0 && draft.SupportKinds.Count > 0)
+        {
+            ulong cost = 0;
+            foreach (string kind in draft.SupportKinds)
+            {
+                SupportKindOption? option = context.SupportPool.FirstOrDefault(item => item.Id == kind);
+                if (option is not null)
+                {
+                    // 数量/成本来自玩家输入，乘法可能溢出：饱和到 ulong.MaxValue，
+                    // 必然触发 INSUFFICIENT_SCORE 警告而非抛异常（宪法第 17 条）。
+                    ulong add = option.Cost * (ulong)draft.SupportQuantity.Value;
+                    cost = cost > ulong.MaxValue - add ? ulong.MaxValue : cost + add;
+                }
+            }
+
+            if (cost > context.SupportScoreRemaining)
+            {
+                issues.Add(Warning(
+                    "SUPPORT_INSUFFICIENT_SCORE",
+                    $"预计扣减 {cost} 分，超过剩余分数 {context.SupportScoreRemaining}：连排级有限分数用尽即止，核心可能拒绝。"));
+            }
+        }
+
+        if (draft.Priority == 0)
+        {
+            issues.Add(Warning("SUPPORT_LOW_PRIORITY", "未设置优先级（0）：竞争同一支援力量时可能被更高优先级请求抢占。"));
+        }
+
+        if (context.SupportPool.Count == 0)
+        {
+            issues.Add(Suggestion(
+                "SUPPORT_POOL_UNAVAILABLE",
+                "可用支援种类池为空（支援未配置或派系模板缺失），请求可能被核心以 POOL_NOT_FOUND/SCOPE_VIOLATION 拒绝。"));
+        }
+    }
+
     private static void ValidateCondition(CommandDraft draft, CommandContext context, List<CommandValidationIssue> issues)
     {
+        // support 完成条件只属于 SUPPORT_REQUEST（native 同规则），防止普通命令误用。
+        if (draft.Condition == "support" && draft.Type != "SUPPORT_REQUEST")
+        {
+            issues.Add(Error("CONDITION_NOT_EVALUABLE", "完成条件 support 仅用于 SUPPORT_REQUEST 命令。"));
+            return;
+        }
+
         if (!RegisteredConditions.Contains(draft.Condition))
         {
             issues.Add(Error("CONDITION_NOT_EVALUABLE", $"完成条件未注册：{draft.Condition}。"));

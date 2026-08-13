@@ -4,6 +4,7 @@
              xmlns:menu="clr-namespace:WarFictionSim.Ui.MainMenu"
              xmlns:map="clr-namespace:WarFictionSim.Ui.BattleMap"
              xmlns:cmd="clr-namespace:WarFictionSim.Ui.CommandPanel"
+             xmlns:sup="clr-namespace:WarFictionSim.Ui.SupportPanel"
              xmlns:gc="clr-namespace:WarFictionSim.Ui.GameControls"
              xmlns:log="clr-namespace:WarFictionSim.Ui.EventLogPanel"
              xmlns:vm="clr-namespace:WarFictionSim.Ui.ViewModels">
@@ -18,6 +19,9 @@
         </DataTemplate>
         <DataTemplate DataType="{x:Type cmd:CommandPanelViewModel}">
             <cmd:CommandPanelView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type sup:SupportPanelViewModel}">
+            <sup:SupportPanelView/>
         </DataTemplate>
         <DataTemplate DataType="{x:Type gc:TimeControlsViewModel}">
             <gc:GameControlsView/>

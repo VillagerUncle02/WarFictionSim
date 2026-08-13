@@ -40,6 +40,9 @@
             <TabItem Header="命令面板">
                 <ContentControl Content="{Binding CommandPanel}"/>
             </TabItem>
+            <TabItem Header="支援请求">
+                <ContentControl Content="{Binding SupportPanel}"/>
+            </TabItem>
             <TabItem Header="事件日志">
                 <ContentControl Content="{Binding EventLog}"/>
             </TabItem>

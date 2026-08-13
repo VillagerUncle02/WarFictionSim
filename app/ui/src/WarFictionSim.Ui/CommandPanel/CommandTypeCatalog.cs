@@ -30,7 +30,7 @@ public static class CommandTypeCatalog
         new("INFILTRATE_RECON", "渗透侦察", "recon"),
         new("OBSERVATION_POST", "观察哨", "hold"),
         new("FIRE_RECON", "火力侦察", "recon"),
-        new("SUPPORT_REQUEST", "支援请求", "reach_point"),
+        new("SUPPORT_REQUEST", "支援请求", "support"),
     ];
 
     /// <summary>返回类型的默认完成条件（未注册类型返回 null）。</summary>

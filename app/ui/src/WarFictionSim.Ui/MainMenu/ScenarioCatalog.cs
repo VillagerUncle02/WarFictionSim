@@ -6,6 +6,7 @@
 
 using System.IO;
 using System.Text.Json;
+using WarFictionSim.Ui.SupportPanel;
 
 namespace WarFictionSim.Ui.MainMenu;
 
@@ -115,12 +116,20 @@ public sealed class ScenarioCatalog : IScenarioCatalog
             }
 
             List<string> nodeIds = DeriveCommandNodes(root, playerNodeId);
+            SupportCatalogMetadata support = ReadSupportMetadata(root, path);
 
             if (!CombatScaleText.TryParse(OptionalNullableString(root, "scale"), out CombatScale scale))
             {
                 // 未知规模不是致命错误：条目仍可玩（按连排级），但必须显式
                 // 提示数据问题（宪法第 17 条不静默）。
                 warning = $"未知作战规模 '{OptionalNullableString(root, "scale")}'，已按连排级处理";
+            }
+
+            if (support.Issue is not null)
+            {
+                warning = warning is null
+                    ? $"{Path.GetFileName(path)}：{support.Issue}"
+                    : $"{warning}；{Path.GetFileName(path)}：{support.Issue}";
             }
 
             entry = new ScenarioCatalogEntry
@@ -138,6 +147,10 @@ public sealed class ScenarioCatalog : IScenarioCatalog
                 MapHeightKm = height,
                 Zones = zones,
                 CommandNodeIds = nodeIds,
+                SupportConfigured = support.Configured,
+                SupportScale = support.Scale,
+                SuperiorNodeId = support.SuperiorNodeId,
+                SupportKinds = support.Kinds,
             };
             return true;
         }
@@ -243,4 +256,98 @@ public sealed class ScenarioCatalog : IScenarioCatalog
         (value.ValueKind == JsonValueKind.True || value.ValueKind == JsonValueKind.False)
             ? value.GetBoolean()
             : fallback;
+
+    private sealed record SupportCatalogMetadata(
+        bool Configured,
+        string Scale,
+        string SuperiorNodeId,
+        IReadOnlyList<SupportKindOption> Kinds,
+        string? Issue);
+
+    // 支援静态元数据投影（T053）：support 块 + 派系资源池。可用种类不在
+    // 快照内（FR-008：由请求方所属营级编制资源池决定），这里在目录加载时
+    // 从 data/factions 投影一次；派系文件缺失/解析失败记录问题（宪法第 17
+    // 条不静默），面板以空池给出"池缺失"提示，最终权威仍是核心校验。
+    private static SupportCatalogMetadata ReadSupportMetadata(JsonElement root, string scenarioPath)
+    {
+        if (!root.TryGetProperty("support", out JsonElement supportElement) ||
+            supportElement.ValueKind != JsonValueKind.Object)
+        {
+            return new SupportCatalogMetadata(false, string.Empty, string.Empty, [], null);
+        }
+
+        string scale = OptionalString(supportElement, "scale");
+        string factionId = OptionalString(supportElement, "faction_id");
+        string superiorNodeId = OptionalString(supportElement, "superior_node_id");
+        string poolEchelon = OptionalString(supportElement, "pool_echelon");
+        if (string.IsNullOrWhiteSpace(poolEchelon))
+        {
+            poolEchelon = "battalion"; // 与 native initialize_support_state 缺省一致。
+        }
+
+        if (string.IsNullOrWhiteSpace(factionId))
+        {
+            return new SupportCatalogMetadata(true, scale, superiorNodeId, [], "支援配置缺少 faction_id，可用种类池为空");
+        }
+
+        string factionPath = Path.GetFullPath(Path.Combine(
+            Path.GetDirectoryName(scenarioPath) ?? ".",
+            "..",
+            "factions",
+            $"{factionId}.json"));
+        if (!File.Exists(factionPath))
+        {
+            return new SupportCatalogMetadata(
+                true, scale, superiorNodeId, [], $"支援派系模板缺失：{factionPath}（可用种类池为空）");
+        }
+
+        try
+        {
+            using JsonDocument faction = JsonDocument.Parse(File.ReadAllBytes(factionPath));
+            JsonElement pools = RequireObject(faction.RootElement, "resource_pools");
+            JsonElement pool = RequireObject(pools, poolEchelon);
+            var kinds = new List<SupportKindOption>();
+            foreach (JsonElement entry in RequireArray(pool, "entries"))
+            {
+                kinds.Add(new SupportKindOption(
+                    RequireString(entry, "id"),
+                    RequireUInt64(entry, "cost"),
+                    OptionalString(entry, "kind")));
+            }
+
+            return new SupportCatalogMetadata(true, scale, superiorNodeId, kinds, null);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return new SupportCatalogMetadata(
+                true, scale, superiorNodeId, [], $"支援派系资源池解析失败：{exception.Message}");
+        }
+    }
+
+    private static List<JsonElement> RequireArray(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value) || value.ValueKind != JsonValueKind.Array)
+        {
+            throw new KeyNotFoundException($"缺少数组字段 {name}");
+        }
+
+        var items = new List<JsonElement>();
+        foreach (JsonElement item in value.EnumerateArray())
+        {
+            items.Add(item);
+        }
+
+        return items;
+    }
+
+    private static ulong RequireUInt64(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value) || value.ValueKind != JsonValueKind.Number ||
+            !value.TryGetUInt64(out ulong result))
+        {
+            throw new KeyNotFoundException($"缺少非负整数字段 {name}");
+        }
+
+        return result;
+    }
 }

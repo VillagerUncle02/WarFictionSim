@@ -89,6 +89,7 @@ public static class SnapshotReader
             ProcessedEvents = RequireUInt64(root, "processed_events", "$"),
             EventLog = ParseEventLogSummary(RequireObject(root, "event_log", "$"), "$.event_log"),
             CommandChain = ParseCommandChainSummary(RequireObject(root, "command_chain", "$"), "$.command_chain"),
+            Support = ParseSupportSummary(RequireObject(root, "support", "$"), "$.support"),
             Units = new System.Collections.ObjectModel.ReadOnlyCollection<UnitState>(units),
             IntelRecords = new System.Collections.ObjectModel.ReadOnlyDictionary<string, IntelRecordState>(intel),
             Objectives = new System.Collections.ObjectModel.ReadOnlyCollection<ObjectiveState>(objectives),
@@ -201,6 +202,16 @@ public static class SnapshotReader
 
     private static CommandChainSummaryState ParseCommandChainSummary(JsonElement element, string path) =>
         new(RequireUInt64(element, "commands", path));
+
+    private static SupportSummaryState ParseSupportSummary(JsonElement element, string path) =>
+        new(
+            RequireBoolean(element, "configured", path),
+            RequireString(element, "scale", path),
+            RequireString(element, "faction_id", path),
+            RequireString(element, "pool_echelon", path),
+            RequireUInt64(element, "pending_requests", path),
+            RequireUInt64(element, "attaches", path),
+            RequireUInt64(element, "score_remaining", path));
 
     private static IntelTier ParseTier(string value, string path) => value switch
     {

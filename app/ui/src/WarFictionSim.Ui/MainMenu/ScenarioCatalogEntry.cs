@@ -6,6 +6,8 @@
 
 namespace WarFictionSim.Ui.MainMenu;
 
+using WarFictionSim.Ui.SupportPanel;
+
 /// <summary>可玩场景的静态元数据（只读）。</summary>
 public sealed class ScenarioCatalogEntry
 {
@@ -47,4 +49,16 @@ public sealed class ScenarioCatalogEntry
 
     /// <summary>玩家可扮演的己方指挥节点 id（按阵营派生）。</summary>
     public required IReadOnlyList<string> CommandNodeIds { get; init; }
+
+    /// <summary>场景是否配置支援管线（T053；false = 支援面板给出未配置提示）。</summary>
+    public bool SupportConfigured { get; init; }
+
+    /// <summary>支援规模（platoon/battalion；来自 support.scale）。</summary>
+    public string SupportScale { get; init; } = string.Empty;
+
+    /// <summary>受理上级节点（support.superior_node_id；to_node 缺省值）。</summary>
+    public string SuperiorNodeId { get; init; } = string.Empty;
+
+    /// <summary>可请求支援种类池（派系资源池投影；缺失时目录记录问题并留空）。</summary>
+    public IReadOnlyList<SupportKindOption> SupportKinds { get; init; } = [];
 }
