@@ -288,3 +288,23 @@ TEST(WfsSupportTest, SupportRequestAndChainSerializeRoundTrip) {
     const SupportChain restored_chain = chain_json.get<SupportChain>();
     EXPECT_EQ(restored_chain.RequestsInSubmitOrder(), chain.RequestsInSubmitOrder());
 }
+
+// ---- 场景裁决桩请求解析（data-model §14：请求含目标/关联命令）----
+
+TEST(WfsSupportTest, FromScenarioParsesScriptedTargetAndCommandLink) {
+    const nlohmann::json raw{{"support",
+                              {{"scale", "battalion"},
+                               {"scripted_requests", nlohmann::json::array({{{"id", "script-1"},
+                                                                             {"submit_tick", 3},
+                                                                             {"from_node", "node-platoon-1"},
+                                                                             {"to_node", "node-battalion-1"},
+                                                                             {"request_type", "reinforce"},
+                                                                             {"kinds", {"squad-mortar-team"}},
+                                                                             {"quantity", 1},
+                                                                             {"target_unit", "squad-a"},
+                                                                             {"for_command_id", "cmd-7"}}})}}}};
+    const wfs::sim::SupportConfig config = wfs::sim::SupportConfig::FromScenario(raw);
+    ASSERT_EQ(config.scripted_requests.size(), 1U);
+    EXPECT_EQ(config.scripted_requests[0].target_unit, "squad-a");
+    EXPECT_EQ(config.scripted_requests[0].for_command_id, "cmd-7");
+}

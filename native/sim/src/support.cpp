@@ -248,6 +248,8 @@ SupportConfig SupportConfig::FromScenario(
         request.request_type = scripted.value("request_type", std::string());
         request.kinds = scripted.value("kinds", std::vector<std::string>{});
         request.quantity = scripted.value("quantity", 1U);
+        request.target_unit = scripted.value("target_unit", std::string());
+        request.for_command_id = scripted.value("for_command_id", std::string());
         request.return_after_ticks = scripted.value("return_after_ticks", 0U);
         request.submitted_tick = scripted.value("submit_tick", 0U);
         request.state = SupportRequestState::kSubmitted;
