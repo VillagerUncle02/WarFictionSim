@@ -101,6 +101,12 @@ nlohmann::json build_snapshot_json(const SimState& state) {
              {"last_hierarchy_sync_tick", state.intel_sync_state.last_hierarchy_sync_tick},
              {"last_direct_sync_tick", state.intel_sync_state.last_direct_sync_tick},
          }},
+        // T059：摘要上报（快照只读消费；统一裁剪由 build_authorized_view_json）。
+        {"summaries",
+         nlohmann::json{
+             {"configured", state.command_org.configured},
+             {"reports", state.summaries.RecordsInInsertionOrder()},
+         }},
         // T047–T050：支援/配属摘要（快照只读消费；完整状态随存档序列化）。
         {"support",
          nlohmann::json{
@@ -165,6 +171,8 @@ nlohmann::json serialize_state_json(const SimState& state) {
     if (state.command_org.configured) {
         root["command_org"] = state.command_org;
         root["intel_sync_state"] = state.intel_sync_state;
+        root["summaries"] = state.summaries;
+        root["mission_outcomes"] = state.mission_outcomes;
     }
     // T047–T050：支援/配属/战术编成是确定性状态。未配置场景保持字段省略
     // （与决策日志省略先例一致）：旧存档/旧场景加载后再次序列化字节不变。

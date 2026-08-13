@@ -453,6 +453,12 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         if (parsed.contains("intel_sync_state")) {
             next.intel_sync_state = parsed.at("intel_sync_state").get<wfs::sim::IntelSyncState>();
         }
+        if (parsed.contains("summaries")) {
+            next.summaries = parsed.at("summaries").get<wfs::sim::SummaryRegistry>();
+        }
+        if (parsed.contains("mission_outcomes")) {
+            next.mission_outcomes = parsed.at("mission_outcomes").get<std::map<std::string, wfs::sim::MissionOutcomeCounts>>();
+        }
         // T047–T050：支援/配属/战术编成随存档恢复；旧存档缺失字段时保持
         // 句柄初始化的场景派生状态（非破坏性演进，宪法第 13 条）。
         if (parsed.contains("support_chain")) {

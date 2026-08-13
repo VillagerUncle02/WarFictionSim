@@ -38,6 +38,7 @@
 #include "wfs/sim/recon_tasks.h"
 #include "wfs/sim/rng.h"
 #include "wfs/sim/support.h"
+#include "wfs/sim/summary.h"
 #include "wfs/sim/tactical.h"
 
 namespace wfs::sim {
@@ -163,6 +164,10 @@ struct SimState {
     CommandOrgState command_org;
     IntelSyncConfig intel_sync_config;
     IntelSyncState intel_sync_state;
+    // T059：摘要上报状态与任务结果统计（确定性，随存档序列化）。
+    SummaryConfig summary_config;
+    SummaryRegistry summaries;
+    std::map<std::string, MissionOutcomeCounts> mission_outcomes;
 };
 
 // 玩家阵营：按 player_node_id 对应单位的 side 派生；缺省回退 node_id

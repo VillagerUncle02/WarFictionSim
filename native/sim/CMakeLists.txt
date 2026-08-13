@@ -24,6 +24,7 @@ add_library(sim STATIC
     src/intel.cpp
     src/intel_sync.cpp
     src/command_org.cpp
+    src/summary.cpp
     src/mission_exec.cpp
     src/recon_tasks.cpp
     src/outcome.cpp

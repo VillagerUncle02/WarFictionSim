@@ -33,6 +33,7 @@ add_executable(sim_tests
     intel_test.cpp
     intel_sync_test.cpp
     command_org_test.cpp
+    summary_test.cpp
     mission_exec_test.cpp
     recon_tasks_test.cpp
     outcome_test.cpp

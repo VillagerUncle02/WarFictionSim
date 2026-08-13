@@ -33,6 +33,7 @@
 #include "wfs/sim/outcome.h"
 #include "wfs/sim/queue.h"
 #include "wfs/sim/recon_tasks.h"
+#include "wfs/sim/summary.h"
 
 namespace wfs::sim {
 
@@ -221,6 +222,9 @@ void initialize_runtime_state(SimState& state) {
     state.command_org = command_org.state;
     state.intel_sync_config = IntelSyncConfig::FromScenario(state.scenario.raw);
     state.intel_sync_state = IntelSyncState{};
+    state.summary_config = SummaryConfig::FromScenario(state.scenario.raw);
+    state.summaries.Clear();
+    state.mission_outcomes.clear();
     state.intel_records.clear();
     state.objective_states.clear();
     for (const ScenarioObjective& objective : state.scenario.objectives) {
@@ -268,6 +272,7 @@ void step_sim_state(SimState& state) {
     step_intel_sync(state);   // T058：层级化情报同步（观察后合并上送）。
     step_recon_tasks(state);  // T035：侦察类任务判定。
     step_missions(state);     // T034：任务完成/失败/循环/上报。
+    step_summaries(state);    // T059：摘要上报（任务判定后，快照语义）。
     step_outcome(state);      // T036：胜负判定（最后执行，失败优先）。
 }
 

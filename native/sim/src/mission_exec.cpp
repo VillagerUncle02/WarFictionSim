@@ -317,6 +317,7 @@ void complete_mission(SimState& state, RuntimeUnitState& unit, const std::string
     LogMission(state, EventSeverity::kInfo,
                "MISSION_COMPLETED unit=" + unit.id + " command=" + unit.mission_command_id +
                    " type=" + unit.mission_type + " reason=" + reason);
+    ++state.mission_outcomes[unit.id].completed;  // T059：摘要任务状态历史。
     report_mission_status(state, unit, "COMPLETED", reason);
     bool continuous = false;
     try {
@@ -341,6 +342,7 @@ void fail_mission(SimState& state, RuntimeUnitState& unit, const std::string& re
     LogMission(state, EventSeverity::kWarning,
                "MISSION_FAILED unit=" + unit.id + " command=" + unit.mission_command_id + " type=" + unit.mission_type +
                    " reason=" + reason);
+    ++state.mission_outcomes[unit.id].failed;  // T059：摘要任务状态历史。
     report_mission_status(state, unit, "FAILED", reason);
     apply_failure_action(state, unit);
     state.command_chain.MarkCompleted(unit.mission_command_id);
@@ -404,6 +406,7 @@ void handle_mission_timeout(SimState& state, const std::string& command_id) {
     }
     LogMission(state, EventSeverity::kWarning,
                "MISSION_TIMED_OUT unit=" + unit->id + " command=" + command_id + " type=" + type_name);
+    ++state.mission_outcomes[unit->id].timed_out;  // T059：摘要任务状态历史。
     report_mission_status(state, *unit, "TIMED_OUT", "DEADLINE");
     apply_failure_action(state, *unit);
     if (command != nullptr) {
