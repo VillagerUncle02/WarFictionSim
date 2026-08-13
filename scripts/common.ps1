@@ -64,6 +64,39 @@ function Get-TaskIdsFromTasksFile {
     return @($ids | Select-Object -Unique)
 }
 
+# 获取"相对基线分支新增完成"的任务 ID：链式 PR 只应 Closes 本分支新完成的任务，
+# 前序 PR 已完成的 [x]（其 issue 已关闭）不应重复出现在正文。
+# TasksFile 为仓库内绝对路径；基线 tasks.md 通过 `git show <BaseRef>:<rel>` 读取。
+# -BaseRef 默认 origin/main；链式并行 PR（前序未合并）应传前序分支（如 origin/feature/xxx），
+# 使差集只含本分支新完成的任务。
+# 基线不可读时的回退语义（预期行为，非错误）：
+#   - 首次 PR（tasks.md 尚未合入 main）或基线漂移：回退为全量已完成任务并 Write-Err 警告，
+#     此时正文可能包含前序 PR 已关闭的 issue（冗余但不阻断）；调用方可人工核对。
+#   - 正常链式流程：基线可读，仅返回本分支新完成的任务。
+function Get-NewCompletedTaskIds {
+    param(
+        [string]$TasksFile,
+        [string]$RepoRoot,
+        [string]$BaseRef = "origin/main"
+    )
+    $current = @(Get-TaskIdsFromTasksFile -TasksFile $TasksFile -CompletedOnly)
+    $rel = $TasksFile
+    if ($rel.StartsWith($RepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $rel = $rel.Substring($RepoRoot.Length).TrimStart('\', '/')
+    }
+    $rel = $rel -replace '\\', '/'
+    $baseText = git -C $RepoRoot show "${BaseRef}:$rel" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $baseText) {
+        Write-Err "WARN: 无法读取 $BaseRef 的 tasks.md（$rel），回退为收集全部已完成任务。"
+        return $current
+    }
+    $baseSet = @{}
+    foreach ($line in $baseText) {
+        if ($line -match '^\s*- \[x\]\s+(T\d{3,})\b') { $baseSet[$Matches[1]] = $true }
+    }
+    return @($current | Where-Object { -not $baseSet.ContainsKey($_) })
+}
+
 # PR 正文 Closes 块管理：
 # 脚本生成的 Closes 放在 HTML 注释标记区内（GitHub 渲染时不可见），
 # 更新时只替换标记区，保留人工写的 Closes # 行（如"本 PR 还修复了非任务 issue"）。

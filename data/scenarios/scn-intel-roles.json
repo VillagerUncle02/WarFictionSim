@@ -1,0 +1,295 @@
+{
+  "schema_version": 1,
+  "id": "scn-intel-roles",
+  "name": "US3 Intel Roles Acceptance (FR-028/031/051)",
+  "player_node_id": "node-plt-1",
+  "map": {
+    "width_km": 4.0,
+    "height_km": 4.0
+  },
+  "tick_hz": 20,
+  "seed": 20260813,
+  "time_limit_ticks": 36000,
+  "zones": [
+    {
+      "id": "zone-obj",
+      "name": "Objective Zone"
+    }
+  ],
+  "intel": {
+    "base_visibility_range_km": 1.2,
+    "observer_ability_scale": 2.0,
+    "t1_threshold": 0.25,
+    "t2_threshold": 0.5,
+    "t3_threshold": 0.8,
+    "concealment_penalty": 1.0,
+    "moving_concealment_reduction": 0.15,
+    "vehicle_size_bonus": 0.15,
+    "smoke_obscuration": 0.9,
+    "degraded_observation_factor": 0.5,
+    "memory_ticks": 3600,
+    "source_expiry_ticks": 2400
+  },
+  "intel_sync": {
+    "platoon_sync_ticks": 100,
+    "company_sync_ticks": 100,
+    "battalion_sync_ticks": 300,
+    "brigade_sync_ticks": 1200,
+    "realtime_direct_units": true
+  },
+  "summary": {
+    "enabled": true
+  },
+  "comm": {
+    "base_range_km": 5.0,
+    "power_scale": 1.0,
+    "support_force_bonus_km": 1.0,
+    "support_disabled_factor": 0.4,
+    "terrain_penalty_km": {
+      "terrain-forest": 0.5,
+      "terrain-building": 0.8
+    },
+    "civilian_facility_bonus_km": 1.0,
+    "civilian_facilities": [],
+    "min_range_km": 0.5
+  },
+  "command_org": {
+    "nodes": [
+      {
+        "id": "node-bn-1",
+        "name": "1营",
+        "echelon": "battalion",
+        "parent_id": "",
+        "org_unit_id": "org-bn-1",
+        "owner": {
+          "kind": "ai",
+          "ai_id": "bn-ai-1"
+        },
+        "command_limit": 6,
+        "coordination": 0.85,
+        "experience": {
+          "training": 0.7,
+          "service": 0.6,
+          "combat": 0.5
+        }
+      },
+      {
+        "id": "node-co-1",
+        "name": "1连",
+        "echelon": "company",
+        "parent_id": "node-bn-1",
+        "org_unit_id": "org-co-1",
+        "owner": {
+          "kind": "ai",
+          "ai_id": "co-ai-1"
+        },
+        "command_limit": 4,
+        "coordination": 0.8,
+        "experience": {
+          "training": 0.7,
+          "service": 0.6,
+          "combat": 0.5
+        }
+      },
+      {
+        "id": "node-plt-1",
+        "name": "1排",
+        "echelon": "platoon",
+        "parent_id": "node-co-1",
+        "org_unit_id": "org-plt-1",
+        "owner": {
+          "kind": "player",
+          "ai_id": ""
+        },
+        "command_limit": 3,
+        "coordination": 0.75,
+        "experience": {
+          "training": 0.7,
+          "service": 0.6,
+          "combat": 0.5
+        }
+      },
+      {
+        "id": "node-enemy-1",
+        "name": "敌排",
+        "echelon": "platoon",
+        "parent_id": "",
+        "org_unit_id": "org-enemy-plt-1",
+        "owner": {
+          "kind": "ai",
+          "ai_id": "enemy-ai-1"
+        },
+        "command_limit": 3,
+        "coordination": 0.7,
+        "experience": {
+          "training": 0.6,
+          "service": 0.5,
+          "combat": 0.4
+        }
+      }
+    ],
+    "organizations": [
+      {
+        "id": "org-bn-1",
+        "name": "1营",
+        "echelon": "battalion",
+        "kind": "combined",
+        "parent_id": "",
+        "soldier_capability": 0.8,
+        "minimum_soldier_capability": 0.5,
+        "coordination": 0.85,
+        "subordinate_ids": [
+          "org-co-1"
+        ]
+      },
+      {
+        "id": "org-co-1",
+        "name": "1连",
+        "echelon": "company",
+        "kind": "infantry",
+        "parent_id": "org-bn-1",
+        "soldier_capability": 0.8,
+        "minimum_soldier_capability": 0.5,
+        "coordination": 0.8,
+        "subordinate_ids": [
+          "org-plt-1"
+        ]
+      },
+      {
+        "id": "org-plt-1",
+        "name": "1排",
+        "echelon": "platoon",
+        "kind": "infantry",
+        "parent_id": "org-co-1",
+        "soldier_capability": 0.8,
+        "minimum_soldier_capability": 0.5,
+        "coordination": 0.75,
+        "subordinate_ids": [
+          "org-sq-1",
+          "org-sq-2"
+        ]
+      },
+      {
+        "id": "org-sq-1",
+        "name": "1班",
+        "echelon": "squad",
+        "kind": "infantry",
+        "parent_id": "org-plt-1",
+        "soldier_capability": 0.8,
+        "minimum_soldier_capability": 0.5,
+        "coordination": 0.6,
+        "subordinate_ids": []
+      },
+      {
+        "id": "org-sq-2",
+        "name": "2班",
+        "echelon": "squad",
+        "kind": "infantry",
+        "parent_id": "org-plt-1",
+        "soldier_capability": 0.8,
+        "minimum_soldier_capability": 0.5,
+        "coordination": 0.6,
+        "subordinate_ids": []
+      },
+      {
+        "id": "org-enemy-plt-1",
+        "name": "敌排",
+        "echelon": "platoon",
+        "kind": "infantry",
+        "parent_id": "",
+        "soldier_capability": 0.7,
+        "minimum_soldier_capability": 0.5,
+        "coordination": 0.7,
+        "subordinate_ids": [
+          "org-enemy-sq-1"
+        ]
+      },
+      {
+        "id": "org-enemy-sq-1",
+        "name": "敌班",
+        "echelon": "squad",
+        "kind": "infantry",
+        "parent_id": "org-enemy-plt-1",
+        "soldier_capability": 0.7,
+        "minimum_soldier_capability": 0.5,
+        "coordination": 0.6,
+        "subordinate_ids": []
+      }
+    ]
+  },
+  "units": [
+    {
+      "id": "plt-1-sq-1",
+      "type": "squad-rifle-us",
+      "node_id": "node-plt-1",
+      "side": "blue",
+      "x": 0.4,
+      "y": 0.4,
+      "ammo": [
+        "ammo-556"
+      ],
+      "comm_power": 1.0,
+      "comm_role": "standard"
+    },
+    {
+      "id": "plt-1-sq-2",
+      "type": "squad-rifle-us",
+      "node_id": "node-plt-1",
+      "side": "blue",
+      "x": 0.3,
+      "y": 0.1,
+      "ammo": [
+        "ammo-556"
+      ],
+      "comm_power": 1.0,
+      "comm_role": "standard"
+    },
+    {
+      "id": "co-1-cp",
+      "type": "squad-rifle-us",
+      "node_id": "node-co-1",
+      "side": "blue",
+      "x": 3.68,
+      "y": 2.59,
+      "ammo": [
+        "ammo-556"
+      ],
+      "comm_power": 1.0,
+      "comm_role": "standard"
+    },
+    {
+      "id": "bn-1-cp",
+      "type": "squad-rifle-us",
+      "node_id": "node-bn-1",
+      "side": "blue",
+      "x": 3.8,
+      "y": 2.7,
+      "ammo": [
+        "ammo-556"
+      ],
+      "comm_power": 1.0,
+      "comm_role": "standard"
+    },
+    {
+      "id": "enemy-sq-1",
+      "type": "squad-rifle-opposition",
+      "node_id": "node-enemy-1",
+      "side": "red",
+      "x": 1.6,
+      "y": 1.2,
+      "ammo": [
+        "ammo-762"
+      ],
+      "comm_power": 1.0,
+      "comm_role": "standard"
+    }
+  ],
+  "objectives": [
+    {
+      "id": "obj-zone",
+      "kind": "zone",
+      "target_ref": "zone-obj",
+      "duration_ticks": 600
+    }
+  ]
+}

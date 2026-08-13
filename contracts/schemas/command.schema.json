@@ -1,0 +1,178 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim command",
+  "description": "Runtime schema for player and AI commands (T014). Mirrors specs/001-war-sim-command-battle/contracts/command-schema.md section 1; semantic checks beyond structure live in command_validation.cpp.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "type",
+    "target",
+    "completion",
+    "intent",
+    "behavior",
+    "priority",
+    "deadline"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "unit",
+            "zone",
+            "point",
+            "units"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "批量命令（kind=units）的目标单位集合（T029，FR-045）"
+        }
+      }
+    },
+    "completion": {
+      "type": "object",
+      "required": [
+        "condition"
+      ],
+      "properties": {
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "完成条件：secure_zone/destroy_unit/drive_out/clear/hold/reach_point/patrol/fortify/recon（语义参数校验见 command_validation.cpp，M1）"
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    "intent": {
+      "type": "string"
+    },
+    "behavior": {
+      "type": "object",
+      "properties": {
+        "engagement": {
+          "enum": [
+            "aggressive",
+            "balanced",
+            "cautious"
+          ]
+        },
+        "ammo_override": {
+          "type": "string",
+          "minLength": 1
+        },
+        "formation": {
+          "enum": [
+            "march",
+            "combat"
+          ],
+          "description": "队形手动覆盖（T030，FR-060）"
+        },
+        "failure_action": {
+          "enum": [
+            "withdraw_to",
+            "hold",
+            "report"
+          ]
+        }
+      }
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "deadline": {
+      "type": "object",
+      "required": [
+        "game_time"
+      ],
+      "properties": {
+        "game_time": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "withdraw_command_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "撤回命令指向的在途命令 id（T029，FR-045）"
+    },
+    "replace_with": {
+      "type": "object",
+      "description": "修改命令携带的完整替代命令（T029，FR-045）"
+    },
+    "support": {
+      "type": "object",
+      "required": [
+        "request_type",
+        "kinds"
+      ],
+      "properties": {
+        "request_type": {
+          "type": "string",
+          "enum": [
+            "reinforce",
+            "fire_support",
+            "engineer",
+            "medical",
+            "logistics"
+          ],
+          "description": "需求类型（FR-050 契约枚举：reinforce/fire_support/engineer/medical/logistics）"
+        },
+        "kinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "支援种类（受请求方所属编制资源池约束，FR-008）"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "每种支援种类的请求数量"
+        },
+        "to_node": {
+          "type": "string",
+          "minLength": 1,
+          "description": "受理上级节点（缺省取场景支援配置 superior_node_id）"
+        },
+        "for_command_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "关联的任务命令 id（任务结束触发归建，FR-009）"
+        }
+      },
+      "additionalProperties": false,
+      "description": "SUPPORT_REQUEST 负载（T047，data-model §14：目标/需求类型/支援种类）"
+    }
+  },
+  "additionalProperties": true
+}

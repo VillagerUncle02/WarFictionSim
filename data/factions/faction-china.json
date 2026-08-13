@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "id": "faction-china",
+  "name": "中国",
+  "approval_level": 0,
+  "command_style": {
+    "org_style": "builtin_combined",
+    "dispatch_bias": {
+      "attack": 0.55,
+      "defend": 0.45
+    },
+    "support_approval_simplified": true,
+    "muster_time_scale": 0.7
+  },
+  "resource_pools": {
+    "squad": {
+      "support_score": 0,
+      "support_kinds": [],
+      "entries": []
+    },
+    "platoon": {
+      "support_score": 0,
+      "support_kinds": [],
+      "entries": [
+        {
+          "id": "squad-hmg-team",
+          "kind": "unit",
+          "quantity": 1,
+          "cost": 15
+        }
+      ]
+    },
+    "company": {
+      "support_score": 0,
+      "support_kinds": [],
+      "entries": [
+        {
+          "id": "squad-mortar-team",
+          "kind": "unit",
+          "quantity": 2,
+          "cost": 30
+        },
+        {
+          "id": "vehicle-ifv-test",
+          "kind": "unit",
+          "quantity": 2,
+          "cost": 40
+        }
+      ]
+    },
+    "battalion": {
+      "support_score": 60,
+      "support_kinds": [
+        "artillery-152"
+      ],
+      "entries": [
+        {
+          "id": "squad-mortar-team",
+          "kind": "unit",
+          "quantity": 2,
+          "cost": 30
+        },
+        {
+          "id": "squad-atgm-team",
+          "kind": "unit",
+          "quantity": 3,
+          "cost": 25
+        },
+        {
+          "id": "squad-hmg-team",
+          "kind": "unit",
+          "quantity": 2,
+          "cost": 15
+        },
+        {
+          "id": "vehicle-ifv-test",
+          "kind": "unit",
+          "quantity": 2,
+          "cost": 40
+        },
+        {
+          "id": "artillery-152",
+          "kind": "fire_support",
+          "quantity": 1,
+          "cost": 50
+        }
+      ]
+    }
+  }
+}
