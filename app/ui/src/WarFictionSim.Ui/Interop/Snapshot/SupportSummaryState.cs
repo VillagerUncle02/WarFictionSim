@@ -14,7 +14,8 @@ namespace WarFictionSim.Ui.Interop;
 /// <param name="PoolEchelon">生效资源池编制层级（battalion）。</param>
 /// <param name="PendingRequests">评估中请求数。</param>
 /// <param name="Attaches">在编配属记录数。</param>
-/// <param name="ScoreRemaining">连排级剩余支援分数（营级恒为 0）。</param>
+/// <param name="ScoreRemaining">连排级剩余支援分数（扣减用）；营级快照仍
+/// 携带池额度（support_score），但按配属链裁决不参与扣减（复审 R1-2）。</param>
 public sealed record SupportSummaryState(
     bool Configured,
     string Scale,

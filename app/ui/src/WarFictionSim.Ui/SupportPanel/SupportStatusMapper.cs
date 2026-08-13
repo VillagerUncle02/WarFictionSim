@@ -80,6 +80,58 @@ public static class SupportStatusMapper
         return latest ?? new SupportStatusInfo(SupportRequestStatus.None, "暂无支援请求状态", null, null, null, null);
     }
 
+    /// <summary>按请求 id 过滤出该请求的状态链，文案前缀请求 id（复审 R1-4）。
+    /// 无请求 id 时回退全局最新事件（<see cref="Map"/>）；这保留了"尚未提交
+    /// 或事件未携带 request id"场景的可用展示，但不再承担多请求追踪职责。</summary>
+    /// <param name="events">支援相关事件（SUPPORT_* / ATTACH_* 子串过滤后的全集）。</param>
+    /// <param name="requestId">要追踪的请求 id（req-*）；空则回退全局最新事件。</param>
+    /// <returns>该请求的最新状态；无匹配事件返回 None（文案注明请求 id）。</returns>
+    public static SupportStatusInfo MapForRequest(IReadOnlyList<SimEventDto> events, string? requestId)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            return Map(events);
+        }
+
+        List<SimEventDto> chain = events
+            .Where(entry => string.Equals(ExtractRequestId(entry.Message), requestId, StringComparison.Ordinal))
+            .ToList();
+        SupportStatusInfo info = Map(chain);
+        if (info.Status == SupportRequestStatus.None)
+        {
+            return new SupportStatusInfo(SupportRequestStatus.None, $"暂无请求 {requestId} 的状态", requestId, null, null, null);
+        }
+
+        return info with { StatusText = $"请求 {requestId}：{info.StatusText}", RequestId = requestId };
+    }
+
+    /// <summary>返回事件流中最近一次 SUPPORT_REQUESTED 的请求 id（面板状态追踪
+    /// 目标，复审 R1-4）；无 REQUESTED 事件时回退最后一个携带 request= 字段的
+    /// 事件；两者皆无返回 <see langword="null"/>。</summary>
+    /// <param name="events">支援相关事件（按 seq 升序）。</param>
+    /// <returns>请求 id 或 <see langword="null"/>。</returns>
+    public static string? FindLatestRequestId(IReadOnlyList<SimEventDto> events)
+    {
+        string? latestSubmitted = null;
+        string? latestAny = null;
+        foreach (SimEventDto entry in events)
+        {
+            string? requestId = ExtractRequestId(entry.Message);
+            if (requestId is null)
+            {
+                continue;
+            }
+
+            latestAny = requestId;
+            if (entry.Message.StartsWith("SUPPORT_REQUESTED ", StringComparison.Ordinal))
+            {
+                latestSubmitted = requestId;
+            }
+        }
+
+        return latestSubmitted ?? latestAny;
+    }
+
     /// <summary>映射单条事件；无关事件返回 <see langword="null"/>。</summary>
     public static SupportStatusInfo? TryMapEvent(SimEventDto entry)
     {

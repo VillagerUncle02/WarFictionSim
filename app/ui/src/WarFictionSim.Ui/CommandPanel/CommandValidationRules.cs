@@ -194,9 +194,12 @@ public static class CommandValidationRules
             }
         }
 
-        // 有限分数预检：cost = quantity × Σ(条目成本)，与 native deduct_score
-        // 同式；面板只给警告，核心按 INSUFFICIENT_SCORE 拒绝时回填错误。
-        if (draft.SupportQuantity is > 0 && draft.SupportKinds.Count > 0)
+        // 有限分数预检仅适用于连排级：native attach.cpp 只在 limited_score
+        // （scale == platoon）时扣分并以 INSUFFICIENT_SCORE 拒绝；营级由上级
+        // 按配属链评估可用力量，不提示分数余量（复审 R1-2）。
+        if (context.SupportScale != "battalion" &&
+            draft.SupportQuantity is > 0 &&
+            draft.SupportKinds.Count > 0)
         {
             ulong cost = 0;
             foreach (string kind in draft.SupportKinds)

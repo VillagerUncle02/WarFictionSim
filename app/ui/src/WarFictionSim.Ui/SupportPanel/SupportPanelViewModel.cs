@@ -25,8 +25,9 @@ namespace WarFictionSim.Ui.SupportPanel;
 /// <summary>支援请求面板视图模型。</summary>
 public sealed partial class SupportPanelViewModel : ObservableObject
 {
-    /// <summary>运行中快照 tick 前进时的状态查询节流间隔（避免每帧两连查）。</summary>
-    public static readonly TimeSpan StatusRefreshThrottle = TimeSpan.FromMilliseconds(500);
+    /// <summary>状态查询墙钟节流间隔（与 EventLogViewModel.RefreshThrottle
+    /// 一致，N1 先例；跨 tick 生效，避免 20Hz 下每 tick 两连查，复审 R1-3）。</summary>
+    public static readonly TimeSpan StatusRefreshThrottle = TimeSpan.FromMilliseconds(250);
 
     private readonly SupportPanelOptions _options;
     private readonly ISimClient? _client;
@@ -54,6 +55,7 @@ public sealed partial class SupportPanelViewModel : ObservableObject
     private SupportRequestStatus _status = SupportRequestStatus.None;
     private bool _canSubmit;
     private ulong _lastSyncedTick = ulong.MaxValue;
+    private bool _pullPending;
     private DateTimeOffset _lastStatusPullAt = DateTimeOffset.MinValue;
 
     /// <summary>初始化支援请求面板。</summary>
@@ -233,7 +235,10 @@ public sealed partial class SupportPanelViewModel : ObservableObject
     }
 
     /// <summary>预计扣减是否超过剩余分数（连排级有限分数用尽即止提示）。</summary>
-    public bool ScoreInsufficient => EstimatedCost > _scoreRemaining;
+    public bool ScoreInsufficient => IsLimitedScore && EstimatedCost > _scoreRemaining;
+
+    /// <summary>是否按连排级有限分数语义展示（native 仅 scale == platoon 扣分）。</summary>
+    public bool IsLimitedScore => _options.Scale != "battalion";
 
     /// <summary>评估中请求数（快照摘要）。</summary>
     public ulong PendingRequests => _pendingRequests;
@@ -242,14 +247,19 @@ public sealed partial class SupportPanelViewModel : ObservableObject
     public ulong Attaches => _attaches;
 
     /// <summary>剩余分数展示文案。</summary>
-    public string ScoreRemainingText => $"剩余分数：{_scoreRemaining}";
+    public string ScoreRemainingText => IsLimitedScore
+        ? $"剩余分数：{_scoreRemaining}"
+        : $"分数额度：{_scoreRemaining}（营级配属链不扣减）";
 
     /// <summary>预计扣减展示文案。</summary>
-    public string EstimatedCostText => $"本次预计扣减：{EstimatedCost}";
+    public string EstimatedCostText => IsLimitedScore
+        ? $"本次预计扣减：{EstimatedCost}"
+        : "营级配属链模式：无分数扣减（由上级评估可用力量）";
 
     /// <summary>扣减后剩余展示文案（不足时明确提示，不静默）。</summary>
-    public string ScoreAfterText =>
-        ScoreInsufficient
+    public string ScoreAfterText => !IsLimitedScore
+        ? "营级不按分数扣减（分数不足不构成拒绝原因）"
+        : ScoreInsufficient
             ? "扣减后剩余：不足（核心将按 INSUFFICIENT_SCORE 拒绝）"
             : $"扣减后剩余：{_scoreRemaining - EstimatedCost}";
 
@@ -594,6 +604,7 @@ public sealed partial class SupportPanelViewModel : ObservableObject
             ZoneIds = [],
             SupportPool = _options.AvailableKinds,
             SupportScoreRemaining = _scoreRemaining,
+            SupportScale = _options.Scale,
         };
 
     private void RefreshStatusFromEvents(ulong tick)
@@ -603,20 +614,49 @@ public sealed partial class SupportPanelViewModel : ObservableObject
             return;
         }
 
-        // 同一 tick 内不重查；tick 前进后按节流间隔查询（与事件日志面板同策略）。
-        if (tick == _lastSyncedTick && _timeProvider.GetUtcNow() - _lastStatusPullAt < StatusRefreshThrottle)
+        // 墙钟节流（与 EventLogViewModel.ApplySummary 同策略）：距上次查询
+        // 不足 250ms 时不查；tick 前进被节流时挂起，到期补拉一次（复审 R1-3）。
+        if (tick == _lastSyncedTick)
+        {
+            if (_pullPending && _timeProvider.GetUtcNow() - _lastStatusPullAt >= StatusRefreshThrottle)
+            {
+                PullSupportStatus();
+                _lastSyncedTick = tick;
+                _pullPending = false;
+            }
+
+            return;
+        }
+
+        if (_timeProvider.GetUtcNow() - _lastStatusPullAt < StatusRefreshThrottle)
+        {
+            _pullPending = true;
+            return;
+        }
+
+        PullSupportStatus();
+        _lastSyncedTick = tick;
+        _pullPending = false;
+    }
+
+    private void PullSupportStatus()
+    {
+        if (_client is null)
         {
             return;
         }
 
-        _lastSyncedTick = tick;
         _lastStatusPullAt = _timeProvider.GetUtcNow();
         try
         {
             var events = new List<SimEventDto>();
             events.AddRange(EventQueryReader.Parse(_client.QueryEvents("{\"text\":\"SUPPORT_\"}")).Events);
             events.AddRange(EventQueryReader.Parse(_client.QueryEvents("{\"text\":\"ATTACH_RETURN\"}")).Events);
-            SupportStatusInfo info = SupportStatusMapper.Map(events.OrderBy(entry => entry.Seq).ToList());
+            List<SimEventDto> ordered = events.OrderBy(entry => entry.Seq).ToList();
+            // 状态按最近提交的请求过滤（复审 R1-4）：旧请求的归建事件不会
+            // 覆盖新请求的评估/结果展示；文案带请求 id。
+            string? latestRequestId = SupportStatusMapper.FindLatestRequestId(ordered);
+            SupportStatusInfo info = SupportStatusMapper.MapForRequest(ordered, latestRequestId);
             Status = info.Status;
             StatusText = info.StatusText;
         }

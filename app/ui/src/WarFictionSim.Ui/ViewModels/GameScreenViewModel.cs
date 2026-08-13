@@ -60,8 +60,9 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
             timeProvider);
         TimeControls = new TimeControlsViewModel((int)scenario.TickHz);
         EventLog = new EventLogViewModel(_client, scenario.TickHz);
-        CommandPanel.SubmitRequested += (_, json) => InjectCommand(json);
-        SupportPanel.SubmitRequested += (_, json) => InjectCommand(json);
+        // 核心拒绝时按提交来源面板回填（复审 R1-1）：sender 即发起面板。
+        CommandPanel.SubmitRequested += (sender, json) => InjectCommand(json, sender);
+        SupportPanel.SubmitRequested += (sender, json) => InjectCommand(json, sender);
         // 命令闭环：地图点选/框选 → 由选中己方单位派生命令面板执行单位（FR-045）。
         BattleMap.UnitSelected += OnBattleMapUnitSelected;
         BattleMap.UnitsSelected += OnBattleMapUnitsSelected;
@@ -278,6 +279,7 @@ public sealed partial class GameScreenViewModel : ObservableObject, IDisposable
             ZoneIds = _zoneIds,
             SupportPool = _supportKinds,
             SupportScoreRemaining = snapshot.Support.ScoreRemaining,
+            SupportScale = snapshot.Support.Scale,
         };
         _commandContext = context;
         _commandContextTick = snapshot.Tick;

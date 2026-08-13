@@ -93,4 +93,8 @@ public sealed class CommandContext
 
     /// <summary>连排级剩余支援分数（T053；来自快照 support 摘要，未配置为 0）。</summary>
     public ulong SupportScoreRemaining { get; init; }
+
+    /// <summary>支援规模（platoon/battalion；T053，来自快照 support 摘要）。
+    /// 仅连排级按有限分数扣减并提示 INSUFFICIENT_SCORE，营级走配属链。</summary>
+    public string SupportScale { get; init; } = string.Empty;
 }

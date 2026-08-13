@@ -43,7 +43,7 @@
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox Header="数量与分数（连排级有限分数）(_Q)" Margin="0,10,0,0">
+            <GroupBox Header="数量与分数(_Q)" Margin="0,10,0,0">
                 <StackPanel>
                     <DockPanel Margin="0,2">
                         <TextBlock DockPanel.Dock="Left" Text="数量（每种）" VerticalAlignment="Center" Width="88"/>
