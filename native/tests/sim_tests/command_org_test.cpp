@@ -169,6 +169,56 @@ TEST(WfsCommandOrgTest, RejectsNodeOrgEchelonMismatch) {
     EXPECT_TRUE(HasIssueCode(issues, "COMMAND_ORG_NODE_ORG_ECHELON_MISMATCH"));
 }
 
+TEST(WfsCommandOrgTest, RejectsOrganizationParentSubordinateMismatch) {
+    // S6：编制单位声明的 subordinate_ids 与 parent_id 推导不一致 → 结构化报错。
+    nlohmann::json root = ValidRoot();
+    for (nlohmann::json& unit : root["command_org"]["organizations"]) {
+        if (unit.at("id").get<std::string>() == "org-co-1") {
+            unit["subordinate_ids"] = nlohmann::json::array({"org-plt-1"});
+        }
+    }
+    std::vector<DataIssue> issues;
+    validate_command_org(root, issues);
+    EXPECT_TRUE(HasIssueCode(issues, "COMMAND_ORG_ORGANIZATION_MISMATCH"));
+}
+
+TEST(WfsCommandOrgTest, RejectsOrganizationCycle) {
+    // S6：编制树成环（同级互为父子触发 CanContain/成环校验）→ 结构化报错。
+    nlohmann::json root = ValidRoot();
+    for (nlohmann::json& unit : root["command_org"]["organizations"]) {
+        const std::string id = unit.at("id").get<std::string>();
+        if (id == "org-co-1") {
+            unit["parent_id"] = "org-co-2";
+        } else if (id == "org-co-2") {
+            unit["parent_id"] = "org-co-1";
+        }
+    }
+    std::vector<DataIssue> issues;
+    validate_command_org(root, issues);
+    EXPECT_TRUE(HasIssueCode(issues, "COMMAND_ORG_ORGANIZATION_LINK_INVALID"));
+}
+
+TEST(WfsCommandOrgTest, RejectsDuplicateNodeAndOrganizationIds) {
+    // S6：指挥节点与编制单位重复 id 均须产出结构化报错。
+    nlohmann::json root = ValidRoot();
+    root["command_org"]["nodes"].push_back(NodeJson("node-plt-1", "重复排", "platoon", "node-co-1", "org-plt-1"));
+    root["command_org"]["organizations"].push_back(
+        OrgJson("org-sq-1", "重复班", "squad", "infantry", "org-plt-1", {}));
+    std::vector<DataIssue> issues;
+    validate_command_org(root, issues);
+    EXPECT_TRUE(HasIssueCode(issues, "COMMAND_ORG_NODE_DUPLICATE_ID"));
+    EXPECT_TRUE(HasIssueCode(issues, "COMMAND_ORG_ORGANIZATION_DUPLICATE_ID"));
+}
+
+TEST(WfsCommandOrgTest, RejectsSquadCommandNode) {
+    // S6：玩家不扮演班一级（FR-001），squad 层级节点必须在解析阶段拒绝。
+    nlohmann::json root = ValidRoot();
+    root["command_org"]["nodes"].push_back(NodeJson("node-squad", "班节点", "squad", "node-co-1", "org-sq-1"));
+    std::vector<DataIssue> issues;
+    validate_command_org(root, issues);
+    EXPECT_TRUE(HasIssueCode(issues, "COMMAND_ORG_NODE_INVALID"));
+}
+
 TEST(WfsCommandOrgTest, RejectsUnitNodeNotInCommandTree) {
     nlohmann::json root = ValidRoot();
     root["units"] = nlohmann::json::array({nlohmann::json{{"id", "squad-x"}, {"node_id", "node-unknown"}}});
