@@ -49,6 +49,8 @@ const std::vector<ConditionSpec>& BuiltInConditions() {
         {"patrol", {"cycle_ticks"}, {}},
         {"fortify", {"construction_ticks"}, {}},
         {"recon", {"point"}, {"exit_point"}},
+        // T047：SUPPORT_REQUEST 完成条件（无必需参数，负载由 support 字段承载）。
+        {"support", {}, {}},
     };
     return conditions;
 }
@@ -267,6 +269,45 @@ void CheckAmmoOverride(const nlohmann::json& command, const UnitInfo* target_uni
     }
 }
 
+// ---- 语义检查：SUPPORT_REQUEST 负载（data-model §14；command-schema §5）。 ----
+void CheckSupportRequest(const nlohmann::json& command, std::vector<ValidationError>& errors) {
+    const std::string type = command["type"].get<std::string>();
+    if (type != "SUPPORT_REQUEST") {
+        return;
+    }
+    if (command["completion"]["condition"].get<std::string>() != "support") {
+        errors.push_back(Error("CONDITION_NOT_EVALUABLE", "SUPPORT_REQUEST 完成条件必须为 support"));
+    }
+    if (!command.contains("support") || !command["support"].is_object()) {
+        errors.push_back(Error("SUPPORT_PAYLOAD_REQUIRED", "SUPPORT_REQUEST 缺少 support 负载对象"));
+        return;
+    }
+    const nlohmann::json& support = command["support"];
+    if (!support.contains("request_type") || !support["request_type"].is_string() ||
+        support["request_type"].get<std::string>().empty()) {
+        errors.push_back(Error("SUPPORT_PAYLOAD_INVALID", "support.request_type 必须为非空字符串"));
+    }
+    if (!support.contains("kinds") || !support["kinds"].is_array() || support["kinds"].empty()) {
+        errors.push_back(Error("SUPPORT_PAYLOAD_INVALID", "support.kinds 必须为非空数组"));
+    } else {
+        for (const nlohmann::json& kind : support["kinds"]) {
+            if (!kind.is_string() || kind.get<std::string>().empty()) {
+                errors.push_back(Error("SUPPORT_PAYLOAD_INVALID", "support.kinds 元素必须为非空字符串"));
+                break;
+            }
+        }
+    }
+    if (support.contains("quantity") &&
+        (!support["quantity"].is_number_integer() || support["quantity"].get<std::int64_t>() < 1)) {
+        errors.push_back(Error("SUPPORT_PAYLOAD_INVALID", "support.quantity 必须为 >= 1 的整数"));
+    }
+    for (const char* field : {"to_node", "for_command_id"}) {
+        if (support.contains(field) && (!support[field].is_string() || support[field].get<std::string>().empty())) {
+            errors.push_back(Error("SUPPORT_PAYLOAD_INVALID", std::string("support.") + field + " 必须为非空字符串"));
+        }
+    }
+}
+
 }  // namespace
 
 CommandValidationContext make_validation_context(const Scenario& scenario) {
@@ -323,6 +364,7 @@ CommandValidationResult validate_command(const nlohmann::json& command, const Co
     // 第二层：语义校验（固定顺序：类型 → 目标 → 完成条件 → 弹药，全部收集）。
     std::vector<ValidationError> errors;
     CheckCommandType(command["type"].get<std::string>(), context, errors);
+    CheckSupportRequest(command, errors);
     const UnitInfo* target_unit = nullptr;
     CheckTarget(command, context, target_unit, errors);
     const bool meta = IsMetaCommandType(command["type"].get<std::string>());

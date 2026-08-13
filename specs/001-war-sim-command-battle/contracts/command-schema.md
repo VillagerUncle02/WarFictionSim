@@ -35,12 +35,39 @@
 - `fortify`：`construction_ticks`（构筑时长 tick）；
 - `recon`：`point`（侦察目标点，必填），`exit_point`（渗透撤离点，可选）。
 
+### 1.1 支援请求负载（SUPPORT_REQUEST，T047）
+
+`type == "SUPPORT_REQUEST"` 时命令必须携带 `support` 负载对象（data-model
+§14；FR-008/046），完成条件固定为 `"support"`：
+
+```json
+{
+  "type": "SUPPORT_REQUEST",
+  "target": {"kind": "unit", "ref": "<请求方目标单位>"},
+  "completion": {"condition": "support"},
+  "support": {
+    "request_type": "reinforce",
+    "kinds": ["squad-mortar-team"],
+    "quantity": 1,
+    "to_node": "node-battalion-1",
+    "for_command_id": "cmd-0"
+  }
+}
+```
+
+- `request_type`：需求类型（reinforce/fire_support/engineer/medical/logistics）；
+- `kinds`：支援种类（受请求方所属编制资源池约束，SCOPE_VIOLATION 拒绝）；
+- `quantity`：每种支援种类的数量（≥1，缺省 1）；
+- `to_node`：受理上级节点（缺省取场景支援配置的 superior_node_id）；
+- `for_command_id`：关联的任务命令，任务完成触发支援归建（FR-009）。
+
 ## 2. 语义校验规则（双重校验管道）
 
 - 类型必须已注册（未注册类型拒绝）；
 - 目标必须存在且属于可指挥范围（越权命令拒绝）；
 - 完成条件必须可求值（区域、单位、时长参数完整）；
 - 弹药覆盖指定必须存在于单位装备中；
+- SUPPORT_REQUEST 必须携带合法 `support` 负载且完成条件为 `support`；
 - 同优先级冲突命令按到达顺序，新命令取代旧命令并产生可见事件。
 
 ## 3. 确定性仲裁
@@ -65,4 +92,5 @@
 
 ## 6. 契约镜像
 
-`contracts/schemas/command.schema.json` 为运行时校验文件，与本文档保持同步（T007/T014）。
+`contracts/schemas/command.schema.json` 为运行时校验文件，与本文档保持同步
+（T007/T014；T047 新增 §1.1 `support` 负载）。

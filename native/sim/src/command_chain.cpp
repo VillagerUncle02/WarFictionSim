@@ -428,7 +428,8 @@ void CommandChain::ProcessDue(SimState& state) {
     if (arrivals.empty()) {
         // 2) 时限检查：生效任务超过时限 → 超时终止（FR-045）。
         for (ChainCommand& command : commands_) {
-            if (command.state == CommandState::kEffective && command.arrival_tick <= state.clock.tick()) {
+            if (command.type != "SUPPORT_REQUEST" && command.state == CommandState::kEffective &&
+                command.arrival_tick <= state.clock.tick()) {
                 RuntimeUnitState* unit = FindUnit(state, command.unit_id);
                 if (unit != nullptr && unit->mission_active && unit->mission_deadline_ticks > 0U &&
                     state.clock.tick() >= unit->mission_deadline_ticks) {  // F11：到期即超时（>=）。
@@ -448,6 +449,15 @@ void CommandChain::ProcessDue(SimState& state) {
         if (unit == nullptr) {
             command->state = CommandState::kRejected;
             LogRejected(state, *command, "TARGET_NOT_FOUND");
+            continue;
+        }
+        if (command->type == "SUPPORT_REQUEST") {
+            // T047/T050：支援请求是上下级交互，不占用目标单位的任务槽、
+            // 不参与单位任务仲裁；由支援管线（step_support_pipeline）在
+            // 命令生效后登记并裁决（FR-046：确认接受时发起加强共用通道）。
+            command->state = CommandState::kAcknowledged;
+            LogAcknowledged(state, *command);
+            command->state = CommandState::kEffective;
             continue;
         }
 
@@ -472,7 +482,8 @@ void CommandChain::ProcessDue(SimState& state) {
         // 收集同一单位同一到达 tick 的竞争者。
         std::vector<ChainCommand*> competitors;
         for (ChainCommand* candidate : arrivals) {
-            if (candidate->unit_id == command->unit_id && !(candidate->batch && candidate->unit_id.empty())) {
+            if (candidate->unit_id == command->unit_id && !(candidate->batch && candidate->unit_id.empty()) &&
+                candidate->type != "SUPPORT_REQUEST") {
                 competitors.push_back(candidate);
             }
         }
@@ -626,7 +637,8 @@ void CommandChain::ProcessDue(SimState& state) {
 
     // 时限检查（与空到达路径共用）。
     for (ChainCommand& command : commands_) {
-        if (command.state == CommandState::kEffective && command.arrival_tick <= state.clock.tick()) {
+        if (command.type != "SUPPORT_REQUEST" && command.state == CommandState::kEffective &&
+            command.arrival_tick <= state.clock.tick()) {
             RuntimeUnitState* unit = FindUnit(state, command.unit_id);
             if (unit != nullptr && unit->mission_active && unit->mission_deadline_ticks > 0U &&
                 state.clock.tick() >= unit->mission_deadline_ticks) {  // F11：到期即超时（>=）。

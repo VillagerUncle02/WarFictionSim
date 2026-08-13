@@ -121,6 +121,13 @@ TEST(WfsCommandValidationTest, DefaultTypeTableMatchesMissionRegistry) {
     for (const wfs::sim::model::MissionType type : wfs::sim::model::registered_mission_types()) {
         nlohmann::json command = ValidCommandJson();
         command["type"] = wfs::sim::model::to_string(type);
+        if (type == wfs::sim::model::MissionType::kSupportRequest) {
+            // T047：SUPPORT_REQUEST 有专用完成条件与 support 负载契约
+            // （command-schema §1.1），按契约形状构造后仍须通过校验。
+            command["completion"]["condition"] = "support";
+            command["support"] =
+                nlohmann::json{{"request_type", "reinforce"}, {"kinds", nlohmann::json::array({"squad-mortar-team"})}};
+        }
         const CommandValidationResult result = Validate(command);
         EXPECT_TRUE(result.ok()) << wfs::sim::model::to_string(type);
     }

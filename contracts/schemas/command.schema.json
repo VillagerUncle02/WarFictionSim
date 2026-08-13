@@ -125,6 +125,47 @@
     "replace_with": {
       "type": "object",
       "description": "修改命令携带的完整替代命令（T029，FR-045）"
+    },
+    "support": {
+      "type": "object",
+      "required": [
+        "request_type",
+        "kinds"
+      ],
+      "properties": {
+        "request_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "需求类型（reinforce/fire_support/engineer/medical/logistics）"
+        },
+        "kinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "支援种类（受请求方所属编制资源池约束，FR-008）"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "每种支援种类的请求数量"
+        },
+        "to_node": {
+          "type": "string",
+          "minLength": 1,
+          "description": "受理上级节点（缺省取场景支援配置 superior_node_id）"
+        },
+        "for_command_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "关联的任务命令 id（任务结束触发归建，FR-009）"
+        }
+      },
+      "additionalProperties": false,
+      "description": "SUPPORT_REQUEST 负载（T047，data-model §14：目标/需求类型/支援种类）"
     }
   },
   "additionalProperties": true
