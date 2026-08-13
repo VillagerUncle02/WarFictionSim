@@ -53,6 +53,9 @@ sim_headless inject --scenario data/scenarios/scn-battalion-v1.json --seed 42 --
 
 ### 3.6 支援与配属链（FR-008–010，SC-004）
 
+连排级与营级请求用例各完成一场标准任务：连排级有限分数闭环与营级完整配属链
+覆盖 SC-004 指挥链闭环，两个 v1 扮演层级均可运行覆盖 SC-009 层级覆盖。
+
 ```bash
 sim_headless inject --scenario data/scenarios/scn-support-platoon.json --seed 7 --threads 1 --ticks 1200 \
   --script native/tests/cli_tests/test_support_chain.jsonl --out support-platoon.jsonl --hash
@@ -90,10 +93,11 @@ sim_headless inject --scenario data/scenarios/scn-battalion-v1.json --seed 42 --
 # 断电按电网连接传播、居民协作、撤离车队、人道主义疏散告知任务
 ```
 
-### 3.10 派系差异（FR-006）
+### 3.10 派系差异（FR-006，SC-004/SC-009）
 
 同一连排级请求脚本在三派系场景分别运行（场景 `support.faction_id` 选择模板，
-CTest `faction_chain_tests` 强制验证）：
+CTest `faction_chain_tests` 强制验证）；同一连排级标准任务在三大派系下均能
+完成且差异可观察，覆盖 SC-009 层级/派系组合与 SC-004 明确响应闭环：
 
 ```bash
 sim_headless inject --scenario data/scenarios/scn-support-faction-china.json --seed 7 --threads 1 --ticks 1200 \
