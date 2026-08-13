@@ -136,7 +136,9 @@ void RegisterRequest(SimState& state, SupportRequest request) {
         static_cast<std::uint64_t>(state.support_faction.approval_level) * state.support_config.approval_step_ticks;
     registered->resolved_tick = state.clock.tick() + state.support_config.evaluation_delay_ticks + approval_delay;
     LogSupport(state, "SUPPORT_EVALUATING request=" + id + " interaction=SUPPORT_REQUEST evaluating_tick=" +
-                          std::to_string(registered->evaluating_tick) +
+                          std::to_string(registered->evaluating_tick) + " faction=" + state.support_faction.id +
+                          " approval_level=" + std::to_string(state.support_faction.approval_level) +
+                          " approval_delay=" + std::to_string(approval_delay) +
                           " resolve_tick=" + std::to_string(registered->resolved_tick));
 }
 
