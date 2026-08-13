@@ -80,7 +80,7 @@ TEST(WfsCommTest, RangeCombinesPowerSupportTerrainAndCivilianModifiers) {
     config.civilian_facilities.push_back(wfs::sim::CivilianCommFacility{"facility-comms-1", 0.0, 0.0, 0.5});
     config.min_range_km = 0.5;
 
-    // 装备功率平均 × power_scale：2 与 2 → 10 km。
+    // base_range_km × 装备功率平均 × power_scale：5 × 2 × 1 → 10 km。
     EXPECT_DOUBLE_EQ(effective_comm_range_km(config, 2.0, 2.0, 0.0, "", "", 1.0, 1.0, 2.0, 2.0), 10.0);
     // 保障部队失能：5 + 2×0.4 = 5.8 km。
     EXPECT_DOUBLE_EQ(effective_comm_range_km(config, 1.0, 1.0, 0.4, "", "", 1.0, 1.0, 2.0, 2.0), 5.8);
@@ -95,6 +95,21 @@ TEST(WfsCommTest, RangeCombinesPowerSupportTerrainAndCivilianModifiers) {
     EXPECT_DOUBLE_EQ(
         effective_comm_range_km(clamped, 1.0, 1.0, 0.0, "terrain-forest", "terrain-forest", 0.0, 0.0, 2.0, 2.0),
         clamped.min_range_km);
+}
+
+TEST(WfsCommTest, RangeFormulaIncludesBaseRangeMultiplier) {
+    // S4：与 data-model.md §18 登记口径一致——base_range_km × 装备功率平均
+    // × power_scale + 保障增益 × 系数 − 地形罚值 + 民用增益，下限保底。
+    CommConfig config;
+    config.base_range_km = 8.0;
+    config.power_scale = 1.0;
+    config.support_force_bonus_km = 0.0;
+    config.support_disabled_factor = 0.4;
+    config.civilian_facility_bonus_km = 0.0;
+    config.min_range_km = 0.0;
+    EXPECT_DOUBLE_EQ(effective_comm_range_km(config, 1.0, 1.0, 0.0, "", "", 0.0, 0.0, 1.0, 1.0), 8.0);
+    // 功率平均参与乘算：8 × ((2+2)/2) × 1 = 16 km。
+    EXPECT_DOUBLE_EQ(effective_comm_range_km(config, 2.0, 2.0, 0.0, "", "", 0.0, 0.0, 1.0, 1.0), 16.0);
 }
 
 TEST(WfsCommTest, OutageRestoreAndStricterOfContact) {

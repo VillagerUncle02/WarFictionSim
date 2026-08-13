@@ -107,8 +107,9 @@ void from_json(const nlohmann::json& json, CommLinkStatus& link);
 void to_json(nlohmann::json& json, const CommState& state);
 void from_json(const nlohmann::json& json, CommState& state);
 
-// 两点通信有效范围（纯确定性）：功率平均 × power_scale + 保障增益 ×
-// 保障系数 − 地形罚值（端点较严者）+ 民用通讯设施增益；下界 min_range_km。
+// 两点通信有效范围（纯确定性）：base_range_km × 装备功率平均 × power_scale
+// + 保障增益 × 保障系数 − 地形罚值（端点较严者）+ 民用通讯设施增益；
+// 下界 min_range_km。
 double effective_comm_range_km(const CommConfig& config, double power_from, double power_to, double support_factor,
                                const std::string& terrain_from, const std::string& terrain_to, double from_x,
                                double from_y, double to_x, double to_y);
