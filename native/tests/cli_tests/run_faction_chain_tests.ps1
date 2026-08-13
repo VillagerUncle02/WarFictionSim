@@ -271,13 +271,20 @@ foreach ($faction in $factions) {
         Fail "$($faction.Id) 最终剩余分数错误：池总额 $($faction.PoolTotal) − 扣分合计 $totalConsumed = $finalRemaining（应 $($faction.FinalRemaining)）"
     }
 
-    # 目标任务完成 → 支援归建（SC-004 闭环在三派系均成立）。
+    # 归建链（SC-004 闭环在三派系均成立）。拆成两条独立序列，不假设
+    # ASSIGNED 与 MISSION_COMPLETED 的相对顺序（系统不变量仅为：配属后
+    # 关联任务完成触发归建；通讯延迟/移动完成时刻变化不影响断言）：
+    # 配属链：ASSIGNED → RETURNING → RETURNED；归建触发链：
+    # MISSION_COMPLETED → RETURNING（触发归建的唯一前提）。
     Assert-Sequence $events @(
         '^SUPPORT_ASSIGNED request=req-cmd-1 ',
-        'MISSION_COMPLETED unit=sp-squad-1',
         '^ATTACH_RETURNING request=req-cmd-1 ',
         '^ATTACH_RETURNED request=req-cmd-1 '
-    ) "$($faction.Id) 归建序列"
+    ) "$($faction.Id) 配属→归建序列"
+    Assert-Sequence $events @(
+        'MISSION_COMPLETED unit=sp-squad-1',
+        '^ATTACH_RETURNING request=req-cmd-1 '
+    ) "$($faction.Id) 任务完成→触发归建序列"
 
     $results[$faction.Id] = [pscustomobject]@{
         Hash = $hashFirst
