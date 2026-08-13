@@ -287,7 +287,9 @@ public sealed partial class SupportPanelViewModel : ObservableObject
     /// <summary>场景是否配置支援管线。</summary>
     public bool IsSupportConfigured => _options.Configured;
 
-    /// <summary>支援模式提示（连排级有限分数 / 营级配属链 / 未配置）。</summary>
+    /// <summary>支援模式提示（有限分数 ↔ 上级评估配属 / 未配置）。
+    /// 与 IsLimitedScore 共用同一白名单判定（复审 R3）：未知规模不会同时
+    /// 显示"连排级有限分数"与"营级不扣减"的自相矛盾文案。</summary>
     public string SupportModeHint
     {
         get
@@ -297,9 +299,9 @@ public sealed partial class SupportPanelViewModel : ObservableObject
                 return "当前场景未配置支援（提交可能被核心拒绝）。";
             }
 
-            return _options.Scale == "battalion"
-                ? "营级规模：走完整配属链，由上级评估配属/拒绝/转请（不扣分数）。"
-                : "连排级规模：有限分数支援（按种类成本扣分，用尽即止）。";
+            return IsLimitedScore
+                ? "连排级规模：有限分数支援（按种类成本扣分，用尽即止）。"
+                : "营级及以上规模：走完整配属链，由上级评估配属/拒绝/转请（不扣分数）。";
         }
     }
 

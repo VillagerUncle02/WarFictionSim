@@ -340,6 +340,50 @@ public class SupportPanelViewModelTests
         Assert.Contains("无分数扣减", viewModel.EstimatedCostText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SupportModeHint_UnknownScale_ShowsSuperiorEvaluationWithoutPlatoonText()
+    {
+        var options = new SupportPanelOptions
+        {
+            Configured = true,
+            Scale = "company", // 未知规模：与 IsLimitedScore 白名单一致按上级评估语义。
+            SuperiorNodeId = "node-battalion-1",
+            AvailableKinds = [],
+        };
+        var viewModel = new SupportPanelViewModel(options);
+
+        // 复审 R3：SupportModeHint 不得与 IsLimitedScore 自相矛盾。
+        Assert.Contains("上级评估", viewModel.SupportModeHint, StringComparison.Ordinal);
+        Assert.DoesNotContain("有限分数", viewModel.SupportModeHint, StringComparison.Ordinal);
+        Assert.DoesNotContain("按种类成本扣分", viewModel.SupportModeHint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SupportModeHint_PlatoonScale_ShowsLimitedScore()
+    {
+        var viewModel = new SupportPanelViewModel(Options()); // Options().Scale == "platoon"。
+
+        Assert.Contains("有限分数", viewModel.SupportModeHint, StringComparison.Ordinal);
+        Assert.Contains("按种类成本扣分", viewModel.SupportModeHint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SupportModeHint_EmptyScale_ShowsLimitedScore()
+    {
+        var options = new SupportPanelOptions
+        {
+            Configured = true,
+            Scale = string.Empty, // 缺省连排级，与 IsLimitedScore 白名单一致。
+            SuperiorNodeId = "node-battalion-1",
+            AvailableKinds = [],
+        };
+
+        string hint = new SupportPanelViewModel(options).SupportModeHint;
+
+        Assert.Contains("有限分数", hint, StringComparison.Ordinal);
+        Assert.Contains("按种类成本扣分", hint, StringComparison.Ordinal);
+    }
+
     private sealed class MutableTimeProvider : TimeProvider
     {
         private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
