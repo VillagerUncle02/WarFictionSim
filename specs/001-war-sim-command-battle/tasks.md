@@ -88,7 +88,7 @@ description: "Task list template for feature implementation"
 - [x] T030 [US1] 实现机动系统（sim/src/movement.cpp：路径移动、地形速度系数/通行限制、行军/战斗队形自动选择与切换耗时、烟幕区域遮蔽）
 - [x] T031 [US1] 实现战斗结算系统（sim/src/combat.cpp：动能/化学能穿深与伤害查表、过穿衰减、班组区域结算→个人防护衔接、自动目标选择/选弹与不匹配降级、压制量化、模块损伤、弃车与乘员/载员结算（FR-062））
 - [x] T032 [US1] 实现失联机制（sim/src/contact.cpp：失联概率统一 RNG、最后已知状态、恢复 60–180s、压制/失联/模块损伤复合状态取最严叠加）
-- [x] T033 [US1] 实现迷雾/情报识别系统（sim/src/intel.cpp：可视距离与观察能力、识别分档 T1–T3、记忆保留、最后动向、情报来源标注与过期）。待办登记：核心 intel to_json 补输出识别档位核心字段 observed_count/type_name/composition（US1 UI 第 2 轮审查 F5）。
+- [x] T033 [US1] 实现迷雾/情报识别系统（sim/src/intel.cpp：可视距离与观察能力、识别分档 T1–T3、记忆保留、最后动向、情报来源标注与过期）。US1 UI 第 2 轮审查 F5 已落实：observed_count/type_name/composition 由 T058 顺带输出（data-model §18 登记）。
 - [x] T034 [US1] 实现任务判定与事件上报（sim/src/mission_exec.cpp：确定性完成/失败判定、超时处置、失败后处置、持续任务循环、任务状态事件上报上级）
 - [x] T035 [US1] 实现侦察类任务判定机制（sim/src/recon_tasks.cpp：HIDDEN_RECON/INFILTRATE_RECON/OBSERVATION_POST/FIRE_RECON 判定机制实现，并按 CHK064 登记"实现阶段判定机制"待办）
 - [x] T036 [US1] 实现基础胜负判定（sim/src/outcome.cpp：关键目标/关键失败条件/时间上限、完成度加权、失败优先、部署超时兜底）
@@ -139,15 +139,15 @@ description: "Task list template for feature implementation"
 
 ### Tests for User Story 3（宪法第 2 条强制，先写后实现）⚠️
 
-- [ ] T055 [P] [US3] 情报权限验收测试（tests/cli_tests/test_intel_roles.jsonl：上级仅见摘要、下级完整状态、摘要快照语义、来源标注，FR-051/CHK159/162/165）
+- [x] T055 [P] [US3] 情报权限验收测试（tests/cli_tests/test_intel_roles.jsonl：上级仅见摘要、下级完整状态、摘要快照语义、来源标注，FR-051/CHK159/162/165）
 - [ ] T056 [P] [US3] 后勤闭环测试（tests/cli_tests/test_logistics.jsonl：送达/未送达反馈、按实际送达量结算、车队遇袭、补员冷却限制，SC-012/CHK055/057）
 
 ### Implementation for User Story 3
 
-- [ ] T057 [P] [US3] 实现营级指挥节点与编制校验（sim/src/command_org.cpp：BATTALION 层级、直属班协调能力基数、指挥树无环/层级链校验、非法编制报错）
-- [ ] T058 [P] [US3] 实现层级化情报同步（sim/src/intel_sync.cpp：连排 5s/营 15s 同步间隔、三类信息共用间隔、直属可指挥单位实时同步、最后已知状态）
-- [ ] T059 [P] [US3] 实现摘要上报与信息权限裁剪（sim/src/summary.cpp：下级摘要（任务状态/完成度/损失摘要/支援需求）、统一裁剪规则、生成时刻快照语义）
-- [ ] T060 [US3] 实现通信状态模型（sim/src/comm.cpp：通信装备/保障部队/地形与民用设施修正、通信范围判定、中断与失联取更严、恢复独立）
+- [x] T057 [P] [US3] 实现营级指挥节点与编制校验（sim/src/command_org.cpp：BATTALION 层级、直属班协调能力基数、指挥树无环/层级链校验、非法编制报错）
+- [x] T058 [P] [US3] 实现层级化情报同步（sim/src/intel_sync.cpp：连排 5s/营 15s 同步间隔、三类信息共用间隔、直属可指挥单位实时同步、最后已知状态）
+- [x] T059 [P] [US3] 实现摘要上报与信息权限裁剪（sim/src/summary.cpp：下级摘要（任务状态/完成度/损失摘要/支援需求）、统一裁剪规则、生成时刻快照语义）
+- [x] T060 [US3] 实现通信状态模型（sim/src/comm.cpp：通信装备/保障部队/地形与民用设施修正、通信范围判定、中断与失联取更严、恢复独立）
 - [ ] T061 [US3] 实现火力任务系统（sim/src/fire_mission.cpp：预标定/未标定反应时间、诸元计算、散布圈与校射收敛、观察引导、有效打击阈值、观察单位失联退回预标定）
 - [ ] T062 [US3] 实现后勤规划/执行链路（sim/src/logistics.cpp：请求→调度→延迟效果→反馈闭环、分层运输、车辆/人力模式、途中遇袭、伤员后送与补员冷却）
 - [ ] T063 [US3] 实现参谋 AI（sim/src/ai/staff.cpp：态势汇总与态势报告、≤3 个方案建议、冲突以指挥官决策为准、探讨界面不改变模拟状态、连排级规模不实例化参谋 AI 与下级 AI 的配置断言（FR-053））
