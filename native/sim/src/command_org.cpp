@@ -340,15 +340,19 @@ void to_json(nlohmann::json& json, const CommandOrgState& state) {
 void from_json(const nlohmann::json& json, CommandOrgState& state) {
     state = CommandOrgState{};
     state.configured = json.value("configured", false);
+    // 指挥树构建顺序无关（与 load_command_org 同构）：存档节点按插入顺序
+    // 保存，"子节点在前"的合法存档同样可加载（宪法第 13 条）。
+    nlohmann::json nodes = nlohmann::json::array();
     for (const nlohmann::json& node_json : json.value("nodes", nlohmann::json::array())) {
-        const model::CommandNode node = node_json.at("node").get<model::CommandNode>();
+        nodes.push_back(node_json.at("node"));
+    }
+    state.command_tree = nlohmann::json{{"nodes", std::move(nodes)}}.get<model::CommandTree>();
+    for (const nlohmann::json& node_json : json.value("nodes", nlohmann::json::array())) {
+        const std::string node_id = node_json.at("node").at("id").get<std::string>();
         const model::Echelon echelon = node_json.value("echelon", model::Echelon::kPlatoon);
         const std::string org_unit_id = node_json.value("org_unit_id", std::string());
-        if (!state.command_tree.AddNode(node)) {
-            throw std::invalid_argument("指挥组织存档包含重复 id/未知父节点: " + node.id);
-        }
-        state.node_echelon[node.id] = echelon;
-        state.node_org_unit[node.id] = org_unit_id;
+        state.node_echelon[node_id] = echelon;
+        state.node_org_unit[node_id] = org_unit_id;
     }
     state.organizations = json.at("organizations").get<model::OrganizationTree>();
 }

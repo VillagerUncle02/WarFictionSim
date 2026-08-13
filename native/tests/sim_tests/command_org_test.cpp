@@ -113,6 +113,35 @@ TEST(WfsCommandOrgTest, DirectSquadBaseCountsSquadsNotPersonnel) {
     EXPECT_EQ(direct_squad_base(result.state, "node-missing"), 0U);
 }
 
+TEST(WfsCommandOrgTest, LoadsChildBeforeParentInInsertionOrder) {
+    // R1 正例：合法但"子节点声明在前"的顺序必须成功加载（校验与构建顺序无关）。
+    nlohmann::json root = ValidRoot();
+    const nlohmann::json& nodes = root["command_org"]["nodes"];
+    root["command_org"]["nodes"] =
+        nlohmann::json::array({nodes[4], nodes[3], nodes[5], nodes[2], nodes[1], nodes[0]});
+    const CommandOrgLoadResult result = load_command_org(root);
+    ASSERT_TRUE(result.ok()) << (result.issues.empty()
+                                     ? ""
+                                     : result.issues.front().code + ": " + result.issues.front().message);
+    EXPECT_TRUE(result.state.configured);
+    EXPECT_EQ(result.state.children_of("node-bn-1").size(), 2U);
+    EXPECT_EQ(direct_squad_base(result.state, "node-bn-1"), 8U);
+    // 节点插入顺序保持 JSON 声明顺序（宪法第 7 条：确定性）。
+    EXPECT_EQ(result.state.nodes_in_insertion_order(),
+              (std::vector<std::string>{"node-plt-2", "node-plt-1", "node-plt-3", "node-co-2", "node-co-1",
+                                        "node-bn-1"}));
+}
+
+TEST(WfsCommandOrgTest, IllegalTreeReportsStructuredIssuesWithoutThrowing) {
+    // R1 非法树：校验已产出结构化 issue，构建路径不得再抛异常（宪法第 17 条）。
+    nlohmann::json root = ValidRoot();
+    root["command_org"]["nodes"].push_back(NodeJson("node-cycle-a", "环A", "platoon", "node-cycle-b", "org-sq-1"));
+    root["command_org"]["nodes"].push_back(NodeJson("node-cycle-b", "环B", "company", "node-cycle-a", "org-co-1"));
+    const CommandOrgLoadResult result = load_command_org(root);
+    EXPECT_FALSE(result.ok());
+    EXPECT_TRUE(HasIssueCode(result.issues, "COMMAND_ORG_NODE_CYCLE"));
+}
+
 TEST(WfsCommandOrgTest, RejectsCycleWithStructuredIssue) {
     nlohmann::json root = ValidRoot();
     root["command_org"]["nodes"].push_back(NodeJson("node-cycle-a", "环A", "platoon", "node-cycle-b", "org-sq-1"));

@@ -129,7 +129,9 @@ class CommandTree {
 };
 
 void to_json(nlohmann::json& json, const CommandTree& tree);
-// 反序列化失败（重复 id/未知父节点/父节点缺失）抛 std::invalid_argument。
+// 反序列化失败（重复 id/未知父节点/自环/成环）抛 std::invalid_argument。
+// JSON 声明顺序无关：先全部入树再统一 SetParent 接线（与 OrganizationTree
+// 的 from_json 同构），"子节点声明在前"同样可成功加载。
 void from_json(const nlohmann::json& json, CommandTree& tree);
 
 // ---- 内联实现（头文件契约 + 值语义，保持 T025 自包含）----
@@ -299,10 +301,20 @@ inline void to_json(nlohmann::json& json, const CommandTree& tree) {
 
 inline void from_json(const nlohmann::json& json, CommandTree& tree) {
     CommandTree candidate;
+    std::vector<std::pair<std::string, std::string>> parent_links;
     for (const nlohmann::json& node_json : json.at("nodes")) {
         const CommandNode node = node_json.get<CommandNode>();
-        if (!candidate.AddNode(node)) {
-            throw std::invalid_argument("指挥树包含重复 id/未知父节点: " + node.id);
+        CommandNode detached = node;
+        detached.parent_id.clear();
+        if (!candidate.AddNode(detached)) {
+            throw std::invalid_argument("指挥树包含重复 id: " + node.id);
+        }
+        parent_links.emplace_back(node.id, node.parent_id);
+    }
+    // 父节点可能晚于子节点出现：全部入树后再统一接线（顺序无关）。
+    for (const auto& [node_id, parent_id] : parent_links) {
+        if (!parent_id.empty() && !candidate.SetParent(node_id, parent_id)) {
+            throw std::invalid_argument("指挥树父节点/自环/成环校验失败: " + node_id);
         }
     }
     tree = std::move(candidate);
