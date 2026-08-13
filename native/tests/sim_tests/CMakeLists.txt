@@ -38,6 +38,7 @@ add_executable(sim_tests
     side_faction_test.cpp
     support_test.cpp
     resource_pool_test.cpp
+    attach_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)
