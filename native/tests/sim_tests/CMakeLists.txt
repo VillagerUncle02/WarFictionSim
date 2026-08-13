@@ -31,6 +31,7 @@ add_executable(sim_tests
     tutorial_scenario_test.cpp
     contact_test.cpp
     intel_test.cpp
+    command_org_test.cpp
     mission_exec_test.cpp
     recon_tasks_test.cpp
     outcome_test.cpp

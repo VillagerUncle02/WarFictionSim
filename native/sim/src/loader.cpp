@@ -21,6 +21,8 @@
 #include <utility>
 #include <vector>
 
+#include "wfs/sim/command_org.h"
+
 #include "schema_validator.h"
 
 namespace wfs::sim {
@@ -261,6 +263,9 @@ bool ExtractScenarioData(const nlohmann::json& root, const detail::SchemaFileRes
                 Issue("PLAYER_NODE_NOT_FOUND", "player_node_id 不存在于场景单位中: " + scenario.player_node_id));
         }
     }
+    // T057：营级指挥组织语义校验（指挥树无环/层级链/编制约束/单位归属；
+    // 未配置 command_org 时为空操作，旧场景兼容）。
+    validate_command_org(root, issues);
     return issues.empty();
 }
 
