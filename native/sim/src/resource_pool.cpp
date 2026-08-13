@@ -88,8 +88,7 @@ ScoreDeductionResult deduct_score(const EchelonResourcePool& pool, const std::ui
     for (const std::string& kind : kinds) {
         const ResourcePoolEntry* entry = FindEntry(pool, kind);
         if (entry == nullptr) {
-            return ScoreDeductionResult{false, 0U, current_remaining,
-                                        "支援种类不在资源池内: " + kind};
+            return ScoreDeductionResult{false, 0U, current_remaining, "支援种类不在资源池内: " + kind};
         }
         cost += entry->cost * quantity;
     }

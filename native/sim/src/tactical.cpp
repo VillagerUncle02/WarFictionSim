@@ -40,8 +40,12 @@ bool HasDuplicate(const std::vector<std::string>& ids) {
     return false;
 }
 
-bool IsActive(const FireTeam& team) { return team.state == TacticalState::kActive; }
-bool IsActive(const TacticalTaskForce& force) { return force.state == TacticalState::kActive; }
+bool IsActive(const FireTeam& team) {
+    return team.state == TacticalState::kActive;
+}
+bool IsActive(const TacticalTaskForce& force) {
+    return force.state == TacticalState::kActive;
+}
 
 }  // namespace
 
@@ -210,9 +214,8 @@ CommandScopeResult TacticalRegistry::ResolveCommandScope(const std::string& unit
 }
 
 bool TacticalRegistry::IsSplit(const std::string& squad_id) const {
-    return std::any_of(fire_teams_.begin(), fire_teams_.end(), [&](const FireTeam& team) {
-        return team.admin_squad_id == squad_id && IsActive(team);
-    });
+    return std::any_of(fire_teams_.begin(), fire_teams_.end(),
+                       [&](const FireTeam& team) { return team.admin_squad_id == squad_id && IsActive(team); });
 }
 
 const FireTeam* TacticalRegistry::FindFireTeam(const std::string& id) const {

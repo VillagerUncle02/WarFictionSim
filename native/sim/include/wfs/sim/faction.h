@@ -44,19 +44,19 @@ PoolEntryKind pool_entry_kind_from_string(std::string_view name);
 
 // 资源池条目（data-model §13/§14；cost 为连排级有限分数成本，FR-008）。
 struct ResourcePoolEntry {
-    std::string id;            // 单位类型 id 或支援种类 id。
+    std::string id;  // 单位类型 id 或支援种类 id。
     PoolEntryKind kind = PoolEntryKind::kUnit;
     std::uint64_t quantity = 0U;
-    std::uint64_t cost = 0U;   // 每次请求该资源的分数成本（quantity 倍增）。
+    std::uint64_t cost = 0U;  // 每次请求该资源的分数成本（quantity 倍增）。
 
     bool operator==(const ResourcePoolEntry&) const = default;
 };
 
 // 单层级资源池：分数总额 + 支援种类 + 可配属力量。
 struct EchelonResourcePool {
-    std::uint64_t support_score = 0U;         // 连排级每场战斗支援分数总额。
-    std::vector<std::string> support_kinds;   // 可用支援种类（火力支援等）。
-    std::vector<ResourcePoolEntry> entries;   // 可配属力量清单（固定顺序）。
+    std::uint64_t support_score = 0U;        // 连排级每场战斗支援分数总额。
+    std::vector<std::string> support_kinds;  // 可用支援种类（火力支援等）。
+    std::vector<ResourcePoolEntry> entries;  // 可配属力量清单（固定顺序）。
 
     bool operator==(const EchelonResourcePool&) const = default;
 };
@@ -73,9 +73,7 @@ struct FactionTemplate {
     // 由 US3 消费；字段语义登记于 data-model §18。
     nlohmann::json command_style = nlohmann::json::object();
 
-    bool is_valid() const noexcept {
-        return !id.empty() && !name.empty() && approval_level <= 2U;
-    }
+    bool is_valid() const noexcept { return !id.empty() && !name.empty() && approval_level <= 2U; }
 
     bool operator==(const FactionTemplate&) const = default;
 };
@@ -99,11 +97,9 @@ struct FactionLoadResult {
 // 交叉引用检查（宪法 12：数据引用必须存在）。
 FactionLoadResult load_faction(const std::filesystem::path& data_file);
 // 显式 Schema 路径（测试/临时数据）；跳过 data/units 交叉检查。
-FactionLoadResult load_faction(const std::filesystem::path& data_file,
-                               const std::filesystem::path& schema_path);
+FactionLoadResult load_faction(const std::filesystem::path& data_file, const std::filesystem::path& schema_path);
 // 显式 Schema + 数据根目录：始终执行 data/units 交叉检查。
-FactionLoadResult load_faction(const std::filesystem::path& data_file,
-                               const std::filesystem::path& schema_path,
+FactionLoadResult load_faction(const std::filesystem::path& data_file, const std::filesystem::path& schema_path,
                                const std::filesystem::path& data_root);
 
 }  // namespace wfs::sim

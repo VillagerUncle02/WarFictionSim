@@ -37,8 +37,7 @@ struct PoolSnapshot {
 };
 
 // 确定性可用力量计算：available.quantity = max(0, 池数量 - 已配属数量)。
-PoolSnapshot available_force(const EchelonResourcePool& pool,
-                             const std::vector<ResourceAllocation>& assigned);
+PoolSnapshot available_force(const EchelonResourcePool& pool, const std::vector<ResourceAllocation>& assigned);
 
 // 请求范围约束：kinds 非空且全部存在于资源池；数量为正。
 struct ScopeCheckResult {

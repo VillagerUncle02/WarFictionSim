@@ -25,10 +25,10 @@ namespace wfs::sim {
 
 // 功能组类型（data-model.md §4：破障组/火力组/突击组/保障组等，可扩展）。
 enum class TacticalKind : std::uint8_t {
-    kFireTeam = 0,    // 火力组。
-    kBreachTeam = 1,  // 破障组。
-    kAssaultTeam = 2, // 突击组。
-    kSupportTeam = 3, // 保障组。
+    kFireTeam = 0,     // 火力组。
+    kBreachTeam = 1,   // 破障组。
+    kAssaultTeam = 2,  // 突击组。
+    kSupportTeam = 3,  // 保障组。
 };
 
 // 战术编成生命周期状态。
@@ -44,8 +44,8 @@ TacticalState tactical_state_from_string(std::string_view name);
 
 // 火力组：行政班的临时战术拆分（不影响行政编制，FR-010）。
 struct FireTeam {
-    std::string id;                // "ft-<squad>-<n>"（确定性命名）。
-    std::string admin_squad_id;    // 行政班 id。
+    std::string id;                        // "ft-<squad>-<n>"（确定性命名）。
+    std::string admin_squad_id;            // 行政班 id。
     std::vector<std::string> soldier_ids;  // 成员（最小配备单位/士兵 id）。
     TacticalKind kind = TacticalKind::kFireTeam;
     TacticalState state = TacticalState::kActive;
@@ -56,7 +56,7 @@ struct FireTeam {
 // 战术分队：按任务跨行政编制临时组合（data-model.md §4）。
 struct TacticalTaskForce {
     std::string id;
-    std::string task_id;                 // 关联任务（原任务/命令 id）。
+    std::string task_id;                       // 关联任务（原任务/命令 id）。
     std::vector<std::string> member_unit_ids;  // 成员最小可指挥单位（含火力组）。
     TacticalState state = TacticalState::kActive;
 
@@ -87,8 +87,8 @@ struct CommandScopeResult {
 // 归建结算（纯函数）：仅存活成员归建，损失/失联成员按伤亡记录不归建。
 struct ReturnToParentResult {
     bool ok = false;
-    std::vector<std::string> returned_unit_ids;    // 存活归建成员（顺序确定）。
-    std::vector<std::string> casualty_unit_ids;    // 损失/失联成员（伤亡记录）。
+    std::vector<std::string> returned_unit_ids;  // 存活归建成员（顺序确定）。
+    std::vector<std::string> casualty_unit_ids;  // 损失/失联成员（伤亡记录）。
     std::string error;
 };
 

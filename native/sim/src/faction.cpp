@@ -61,8 +61,8 @@ void CheckPoolEntryIds(const FactionTemplate& faction, std::vector<DataIssue>& i
         std::set<std::string> ids;
         for (const ResourcePoolEntry& entry : pool.entries) {
             if (!ids.insert(entry.id).second) {
-                issues.push_back(Issue("DUPLICATE_ENTRY_ID",
-                                       "派系 " + faction.id + " " + echelon + " 池条目 id 重复: " + entry.id));
+                issues.push_back(
+                    Issue("DUPLICATE_ENTRY_ID", "派系 " + faction.id + " " + echelon + " 池条目 id 重复: " + entry.id));
             }
         }
     }
@@ -80,8 +80,8 @@ void CheckUnitReferences(const FactionTemplate& faction, const DataLibrary& libr
     for (const auto& [echelon, pool] : faction.pools) {
         for (const ResourcePoolEntry& entry : pool.entries) {
             if (entry.kind == PoolEntryKind::kUnit && !unit_ids.contains(entry.id)) {
-                issues.push_back(Issue("DATA_REF_NOT_FOUND", "派系 " + faction.id + " " + echelon +
-                                                                " 池引用不存在的单位类型: " + entry.id));
+                issues.push_back(Issue("DATA_REF_NOT_FOUND",
+                                       "派系 " + faction.id + " " + echelon + " 池引用不存在的单位类型: " + entry.id));
             }
         }
     }
@@ -98,8 +98,7 @@ bool IsRepoContractSchema(const std::filesystem::path& schema_path) {
 
 // 内部实现：data_root 为空跳过 data/units 交叉校验（显式双路径重载兼容）。
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-FactionLoadResult LoadFactionInternal(const std::filesystem::path& data_file,
-                                      const std::filesystem::path& schema_path,
+FactionLoadResult LoadFactionInternal(const std::filesystem::path& data_file, const std::filesystem::path& schema_path,
                                       const std::filesystem::path* data_root) {
     std::vector<DataIssue> issues;
     nlohmann::json root;
@@ -192,10 +191,8 @@ PoolEntryKind pool_entry_kind_from_string(const std::string_view name) {
 }
 
 void to_json(nlohmann::json& json, const ResourcePoolEntry& entry) {
-    json = nlohmann::json{{"id", entry.id},
-                          {"kind", to_string(entry.kind)},
-                          {"quantity", entry.quantity},
-                          {"cost", entry.cost}};
+    json = nlohmann::json{
+        {"id", entry.id}, {"kind", to_string(entry.kind)}, {"quantity", entry.quantity}, {"cost", entry.cost}};
 }
 
 void from_json(const nlohmann::json& json, ResourcePoolEntry& entry) {
@@ -209,9 +206,8 @@ void from_json(const nlohmann::json& json, ResourcePoolEntry& entry) {
 }
 
 void to_json(nlohmann::json& json, const EchelonResourcePool& pool) {
-    json = nlohmann::json{{"support_score", pool.support_score},
-                          {"support_kinds", pool.support_kinds},
-                          {"entries", pool.entries}};
+    json = nlohmann::json{
+        {"support_score", pool.support_score}, {"support_kinds", pool.support_kinds}, {"entries", pool.entries}};
 }
 
 void from_json(const nlohmann::json& json, EchelonResourcePool& pool) {
@@ -244,8 +240,8 @@ void from_json(const nlohmann::json& json, FactionTemplate& faction) {
 FactionLoadResult load_faction(const std::filesystem::path& data_file) {
     const std::filesystem::path schema_path = resolve_schema_path(data_file, kFactionSchemaFile);
     if (schema_path.empty()) {
-        return Failure({Issue("SCHEMA_NOT_FOUND",
-                              "无法按仓库约定从 " + data_file.string() + " 解析 contracts/schemas/faction.schema.json")});
+        return Failure({Issue("SCHEMA_NOT_FOUND", "无法按仓库约定从 " + data_file.string() +
+                                                      " 解析 contracts/schemas/faction.schema.json")});
     }
     return load_faction(data_file, schema_path, RepoDataRoot(schema_path));
 }

@@ -29,16 +29,16 @@ namespace wfs::sim {
 
 // 配属单位生命周期（data-model.md §14：任务结束归建）。
 enum class AttachUnitState : std::uint8_t {
-    kAssigned = 0,  // 已配属（临时移交指挥权）。
-    kReturning = 1, // 归建途中。
-    kReturned = 2,  // 已归建（资源回到原属编制）。
+    kAssigned = 0,   // 已配属（临时移交指挥权）。
+    kReturning = 1,  // 归建途中。
+    kReturned = 2,   // 已归建（资源回到原属编制）。
 };
 
 // 裁决结果类型。
 enum class AttachDecisionKind : std::uint8_t {
-    kAssign = 0,   // 配属。
-    kReject = 1,   // 明确拒绝。
-    kEscalate = 2, // 向上转请。
+    kAssign = 0,    // 配属。
+    kReject = 1,    // 明确拒绝。
+    kEscalate = 2,  // 向上转请。
 };
 
 std::string_view to_string(AttachUnitState state) noexcept;
@@ -49,9 +49,9 @@ AttachDecisionKind attach_decision_kind_from_string(std::string_view name);
 // 单请求裁决结果（确定性规则桩；US3 AI 接入前使用）。
 struct AttachDecision {
     AttachDecisionKind kind = AttachDecisionKind::kReject;
-    std::string reason;               // 稳定错误码/原因。
-    std::vector<std::string> units;   // 配属资源类型清单（assign 时非空）。
-    std::uint64_t score_cost = 0U;    // 连排级扣分（limited_score 时）。
+    std::string reason;              // 稳定错误码/原因。
+    std::vector<std::string> units;  // 配属资源类型清单（assign 时非空）。
+    std::uint64_t score_cost = 0U;   // 连排级扣分（limited_score 时）。
     std::uint64_t score_remaining = 0U;
 
     bool operator==(const AttachDecision&) const = default;
@@ -59,9 +59,9 @@ struct AttachDecision {
 
 // 配属记录：每个记录对应一种资源的配属/归建生命周期。
 struct AttachRecord {
-    std::string id;         // "att-<n>"（确定性单调）。
+    std::string id;  // "att-<n>"（确定性单调）。
     std::string request_id;
-    std::string kind_id;    // 资源类型（资源池条目 id）。
+    std::string kind_id;           // 资源类型（资源池条目 id）。
     std::string assigned_to_node;  // 接收方（请求方）节点。
     std::string parent_node;       // 原属节点（营）。
     AttachUnitState state = AttachUnitState::kAssigned;
@@ -91,10 +91,10 @@ std::vector<AttachDecision> arbitrate_requests(const std::vector<SupportRequest>
 
 // 途中补给/维修动作（US3 本体后置，hook 返回结构化动作）。
 enum class TransitLogisticsAction : std::uint8_t {
-    kProceed = 0,            // 可直接前往接收方。
-    kSupplyThenProceed = 1,  // 先补给再出发（最近补给点/就地申请，US3）。
-    kRepairThenProceed = 2,  // 战场抢修后转移（FR-009/078）。
-    kBlockedHeavyRepair = 3, // 需要大修/拖运：阻塞配属（不参与重新配属）。
+    kProceed = 0,             // 可直接前往接收方。
+    kSupplyThenProceed = 1,   // 先补给再出发（最近补给点/就地申请，US3）。
+    kRepairThenProceed = 2,   // 战场抢修后转移（FR-009/078）。
+    kBlockedHeavyRepair = 3,  // 需要大修/拖运：阻塞配属（不参与重新配属）。
 };
 
 std::string_view to_string(TransitLogisticsAction action) noexcept;
@@ -118,16 +118,16 @@ void from_json(const nlohmann::json& json, AttachRecord& record);
 class AttachRegistry {
    public:
     // 配属一种资源：id 自动分配 "att-<n>"，失败返回 nullptr。
-    AttachRecord* Attach(const std::string& request_id, const std::string& kind_id,
-                         const std::string& assigned_to_node, const std::string& parent_node, std::uint64_t tick);
+    AttachRecord* Attach(const std::string& request_id, const std::string& kind_id, const std::string& assigned_to_node,
+                         const std::string& parent_node, std::uint64_t tick);
     // 任务结束启动归建（RETURNING）；非法状态/未知 id 返回 false。
     bool StartReturn(const std::string& id, std::uint64_t tick);
     // 归建完成（RETURNED），资源回到原属（占用释放）。
     bool CompleteReturn(const std::string& id, std::uint64_t tick);
     // 归建途中重新配属：新请求优先于归建，原归建流程取消（FR-009）。
     // 瘫痪（需大修/拖运）单位阻塞配属，返回 false。
-    bool Reassign(const std::string& id, const std::string& new_request_id,
-                  const std::string& new_assigned_to_node, std::uint64_t tick);
+    bool Reassign(const std::string& id, const std::string& new_request_id, const std::string& new_assigned_to_node,
+                  std::uint64_t tick);
 
     const AttachRecord* Find(const std::string& id) const;
     AttachRecord* FindMutable(const std::string& id);

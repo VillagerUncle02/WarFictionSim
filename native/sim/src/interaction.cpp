@@ -40,8 +40,7 @@ std::size_t NodeDepth(const model::CommandTree& tree, const std::string& node_id
 }
 
 // 最近共同上级；无共同上级返回空串。
-std::string LowestCommonAncestor(const model::CommandTree& tree, const std::string& first,
-                                 const std::string& second) {
+std::string LowestCommonAncestor(const model::CommandTree& tree, const std::string& first, const std::string& second) {
     std::set<std::string> ancestors;
     std::string current = first;
     while (!current.empty()) {
@@ -109,8 +108,7 @@ InteractionParseResult parse_interaction(const nlohmann::json& json) {
             result.errors.push_back(error.what());
         }
     }
-    if (!json.contains("from_node") || !json["from_node"].is_string() ||
-        json["from_node"].get<std::string>().empty()) {
+    if (!json.contains("from_node") || !json["from_node"].is_string() || json["from_node"].get<std::string>().empty()) {
         result.errors.push_back("缺少非空 from_node");
     } else {
         result.record.from_node = json["from_node"].get<std::string>();

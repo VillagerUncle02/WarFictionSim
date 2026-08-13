@@ -36,10 +36,9 @@ const ResourcePoolEntry* FindEntry(const PoolSnapshot& pool, const std::string& 
 void AddAllocations(std::vector<ResourceAllocation>& working, const std::vector<std::string>& kinds,
                     const std::uint64_t quantity) {
     for (const std::string& kind : kinds) {
-        const auto found = std::find_if(working.begin(), working.end(),
-                                        [&](const ResourceAllocation& allocation) {
-                                            return allocation.kind_id == kind;
-                                        });
+        const auto found = std::find_if(working.begin(), working.end(), [&](const ResourceAllocation& allocation) {
+            return allocation.kind_id == kind;
+        });
         if (found == working.end()) {
             working.push_back(ResourceAllocation{kind, quantity});
         } else {
@@ -120,8 +119,8 @@ std::string_view to_string(const TransitLogisticsAction action) noexcept {
 AttachDecision adjudicate(const SupportRequest& request, const PoolSnapshot& pool, const bool limited_score,
                           const bool has_superior) {
     if (request.kinds.empty() || request.quantity == 0U) {
-        return AttachDecision{AttachDecisionKind::kReject, "SCOPE_VIOLATION kinds 为空或数量为 0", {}, 0U,
-                              pool.remaining_score};
+        return AttachDecision{
+            AttachDecisionKind::kReject, "SCOPE_VIOLATION kinds 为空或数量为 0", {}, 0U, pool.remaining_score};
     }
     // 范围约束：支援种类必须存在于资源池（快照条目 = 池条目 + 扣减数量）。
     std::vector<std::string> missing;
@@ -157,8 +156,8 @@ AttachDecision adjudicate(const SupportRequest& request, const PoolSnapshot& poo
     if (limited_score) {
         const ScoreDeductionResult deduction = deduct_score(pool, request.kinds, request.quantity);
         if (!deduction.ok) {
-            return AttachDecision{AttachDecisionKind::kReject, deduction.error, {}, deduction.cost,
-                                  deduction.remaining};
+            return AttachDecision{
+                AttachDecisionKind::kReject, deduction.error, {}, deduction.cost, deduction.remaining};
         }
         cost = deduction.cost;
         remaining = deduction.remaining;
@@ -208,16 +207,14 @@ TransitLogisticsResult resolve_transit_logistics(const AttachRecord& record, con
     // 瘫痪单位需要拖运/大修：阻塞配属，不参与重新配属（FR-009/078）。
     // 该判定优先于补给/维修标记：瘫痪本身即需要修理，不得误判为可直行。
     if (record.immobilized) {
-        return TransitLogisticsResult{TransitLogisticsAction::kBlockedHeavyRepair,
-                                      "IMMOBILIZED_REQUIRES_TOW_OR_DEPOT"};
+        return TransitLogisticsResult{TransitLogisticsAction::kBlockedHeavyRepair, "IMMOBILIZED_REQUIRES_TOW_OR_DEPOT"};
     }
     if (!record.needs_supply && !record.needs_repair) {
         return TransitLogisticsResult{TransitLogisticsAction::kProceed, "无需补给/维修"};
     }
     if (record.needs_repair) {
         if (field_repair_possible) {
-            return TransitLogisticsResult{TransitLogisticsAction::kRepairThenProceed,
-                                          "FIELD_REPAIR_THEN_TRANSFER"};
+            return TransitLogisticsResult{TransitLogisticsAction::kRepairThenProceed, "FIELD_REPAIR_THEN_TRANSFER"};
         }
         return TransitLogisticsResult{TransitLogisticsAction::kBlockedHeavyRepair,
                                       "REPAIR_IMPOSSIBLE_FIELD_REQUIRES_DEPOT"};
@@ -359,10 +356,9 @@ std::vector<ResourceAllocation> AttachRegistry::ActiveAllocations() const {
         if (record.state == AttachUnitState::kReturned) {
             continue;  // 已归建：占用释放，资源回到原属编制。
         }
-        const auto found = std::find_if(allocations.begin(), allocations.end(),
-                                        [&](const ResourceAllocation& allocation) {
-                                            return allocation.kind_id == record.kind_id;
-                                        });
+        const auto found =
+            std::find_if(allocations.begin(), allocations.end(),
+                         [&](const ResourceAllocation& allocation) { return allocation.kind_id == record.kind_id; });
         if (found == allocations.end()) {
             allocations.push_back(ResourceAllocation{record.kind_id, 1U});
         } else {
