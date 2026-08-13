@@ -6,6 +6,7 @@
 // 与场景 Schema 的 additionalProperties 兼容（不改动 data/）。
 
 using WarFictionSim.Ui.MainMenu;
+using WarFictionSim.Ui.SupportPanel;
 using Xunit;
 
 namespace WarFictionSim.Ui.Tests.MainMenu;
@@ -30,6 +31,51 @@ public class ScenarioCatalogTests
             { "id": "tutorial-enemy-1", "type": "squad-rifle-opposition", "node_id": "node-tutorial-enemy", "x": 1.1, "y": 1.1, "ammo": ["ammo-762"] }
           ],
           "objectives": [ { "id": "obj-1", "kind": "zone", "target_ref": "zone-objective-hill", "duration_ticks": 2400 } ]
+        }
+        """;
+
+    private const string FactionJson = """
+        {
+          "schema_version": 1,
+          "id": "faction-china",
+          "name": "中国",
+          "approval_level": 0,
+          "command_style": { "org_style": "builtin_combined" },
+          "resource_pools": {
+            "battalion": {
+              "support_score": 60,
+              "support_kinds": [ "artillery-152" ],
+              "entries": [
+                { "id": "squad-mortar-team", "kind": "unit", "quantity": 2, "cost": 30 },
+                { "id": "artillery-152", "kind": "fire_support", "quantity": 1, "cost": 50 }
+              ]
+            }
+          }
+        }
+        """;
+
+    private const string SupportScenarioJson = """
+        {
+          "schema_version": 1,
+          "id": "scn-support-platoon",
+          "name": "Support Chain: Platoon Limited Score",
+          "player_node_id": "node-platoon-1",
+          "map": { "width_km": 1.5, "height_km": 1.5 },
+          "tick_hz": 20,
+          "seed": 20260813,
+          "time_limit_ticks": 18000,
+          "zones": [ { "id": "zone-support-obj" } ],
+          "units": [
+            { "id": "sp-squad-1", "type": "squad-rifle-us", "node_id": "node-platoon-1", "x": 0.3, "y": 0.3, "ammo": [ "ammo-556" ] }
+          ],
+          "support": {
+            "scale": "platoon",
+            "faction_id": "faction-china",
+            "player_node_id": "node-platoon-1",
+            "superior_node_id": "node-battalion-1",
+            "evaluation_delay_ticks": 20,
+            "return_delay_ticks": 30
+          }
         }
         """;
 
@@ -92,6 +138,56 @@ public class ScenarioCatalogTests
 
         Assert.Single(catalog.Entries);
         Assert.Contains(catalog.LoadIssues, issue => issue.Contains("broken.json", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Load_WithSupportConfig_LoadsFactionPoolKinds()
+    {
+        using var root = new TempDirectory();
+        string scenariosDir = Path.Combine(root.Path, "scenarios");
+        string factionsDir = Path.Combine(root.Path, "factions");
+        Directory.CreateDirectory(scenariosDir);
+        Directory.CreateDirectory(factionsDir);
+        File.WriteAllText(Path.Combine(scenariosDir, "support.json"), SupportScenarioJson);
+        File.WriteAllText(Path.Combine(factionsDir, "faction-china.json"), FactionJson);
+
+        ScenarioCatalog catalog = ScenarioCatalog.Load(scenariosDir);
+
+        ScenarioCatalogEntry entry = Assert.Single(catalog.Entries);
+        Assert.True(entry.SupportConfigured);
+        Assert.Equal("platoon", entry.SupportScale);
+        Assert.Equal("node-battalion-1", entry.SuperiorNodeId);
+        Assert.Equal(["squad-mortar-team", "artillery-152"], entry.SupportKinds.Select(kind => kind.Id));
+        Assert.Equal((ulong)30, entry.SupportKinds[0].Cost);
+        Assert.Equal("unit", entry.SupportKinds[0].Kind);
+        Assert.Empty(catalog.LoadIssues);
+    }
+
+    [Fact]
+    public void Load_WithoutSupportConfig_DefaultsToUnconfigured()
+    {
+        using var directory = new TempDirectory();
+        File.WriteAllText(Path.Combine(directory.Path, "tutorial.json"), TutorialJson);
+
+        ScenarioCatalogEntry entry = Assert.Single(ScenarioCatalog.Load(directory.Path).Entries);
+
+        Assert.False(entry.SupportConfigured);
+        Assert.Equal(string.Empty, entry.SuperiorNodeId);
+        Assert.Empty(entry.SupportKinds);
+    }
+
+    [Fact]
+    public void Load_WithSupportConfigButMissingFaction_RecordsIssue()
+    {
+        using var directory = new TempDirectory();
+        File.WriteAllText(Path.Combine(directory.Path, "support.json"), SupportScenarioJson);
+
+        ScenarioCatalog catalog = ScenarioCatalog.Load(directory.Path);
+
+        ScenarioCatalogEntry entry = Assert.Single(catalog.Entries);
+        Assert.True(entry.SupportConfigured);
+        Assert.Empty(entry.SupportKinds);
+        Assert.Contains(catalog.LoadIssues, issue => issue.Contains("faction", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

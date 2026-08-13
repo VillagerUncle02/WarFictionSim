@@ -28,6 +28,9 @@ public class SnapshotReaderTests
           "processed_events": 99,
           "event_log": { "size": 7, "capacity": 5000, "critical_count": 2 },
           "command_chain": { "commands": 4 },
+          "support": { "configured": true, "scale": "platoon", "faction_id": "faction-china",
+                       "pool_echelon": "battalion", "pending_requests": 2, "attaches": 1,
+                       "score_remaining": 30 },
           "units": [
             {
               "id": "tutorial-squad-1",
@@ -117,6 +120,9 @@ public class SnapshotReaderTests
         Assert.Equal((ulong)99, snapshot.ProcessedEvents);
         Assert.Equal(new EventLogSummaryState(7, 5000, 2), snapshot.EventLog);
         Assert.Equal((ulong)4, snapshot.CommandChain.CommandCount);
+        Assert.Equal(
+            new SupportSummaryState(true, "platoon", "faction-china", "battalion", 2, 1, 30),
+            snapshot.Support);
         Assert.Equal(2, snapshot.Units.Count);
         Assert.Single(snapshot.Objectives);
         Assert.False(snapshot.Outcome.Decided);
@@ -246,6 +252,7 @@ public class SnapshotReaderTests
         AssertReadOnly(typeof(OutcomeState));
         AssertReadOnly(typeof(EventLogSummaryState));
         AssertReadOnly(typeof(CommandChainSummaryState));
+        AssertReadOnly(typeof(SupportSummaryState));
     }
 
     private static void AssertReadOnly(Type type)

@@ -13,7 +13,8 @@ public static class SnapshotFactory
         ulong tick,
         IReadOnlyList<UnitState> units,
         IReadOnlyDictionary<string, IntelRecordState>? intel = null,
-        string playerNodeId = "node-player")
+        string playerNodeId = "node-player",
+        SupportSummaryState? support = null)
     {
         return new SimulationSnapshot
         {
@@ -33,6 +34,7 @@ public static class SnapshotFactory
             IntelRecords = intel ?? new Dictionary<string, IntelRecordState>(),
             Objectives = [],
             Outcome = new OutcomeState(false, "undecided", 0, string.Empty, 0),
+            Support = support ?? new SupportSummaryState(false, "platoon", string.Empty, "battalion", 0, 0, 0),
         };
     }
 

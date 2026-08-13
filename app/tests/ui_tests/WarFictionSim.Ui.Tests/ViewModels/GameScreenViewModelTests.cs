@@ -7,6 +7,7 @@
 using WarFictionSim.Ui.BattleMap;
 using WarFictionSim.Ui.Interop;
 using WarFictionSim.Ui.MainMenu;
+using WarFictionSim.Ui.SupportPanel;
 using WarFictionSim.Ui.Tests.TestDoubles;
 using WarFictionSim.Ui.ViewModels;
 using Xunit;
@@ -43,6 +44,39 @@ public class GameScreenViewModelTests
         };
         var client = new FakeSimClient(SnapshotFactory.Create(0, [friendly, enemy], intel));
         return (client, client.Snapshot);
+    }
+
+    private static ScenarioCatalogEntry SupportScenario() =>
+        new()
+        {
+            Id = "scn-support-platoon",
+            Name = "支援请求测试场景",
+            Path = "scn-support-platoon.json",
+            PlayerNodeId = "node-player",
+            IsTutorial = false,
+            SaveSlot = null,
+            Scale = CombatScale.Platoon,
+            Seed = 42,
+            TickHz = 20,
+            MapWidthKm = 5,
+            MapHeightKm = 5,
+            Zones = ["zone-a"],
+            CommandNodeIds = ["node-player"],
+            SupportConfigured = true,
+            SupportScale = "platoon",
+            SuperiorNodeId = "node-battalion-1",
+            SupportKinds = [new SupportKindOption("squad-mortar-team", 30, "unit")],
+        };
+
+    private static SimulationSnapshot SupportSnapshot(ulong scoreRemaining = 60)
+    {
+        UnitState friendly = SnapshotFactory.Unit("friendly-1", "node-player", "side-a", 1, 1);
+        UnitState enemy = SnapshotFactory.Unit("enemy-1", "node-enemy", "side-b", 2, 2);
+        return SnapshotFactory.Create(
+            0,
+            [friendly, enemy],
+            playerNodeId: "node-player",
+            support: new SupportSummaryState(true, "platoon", "faction-china", "battalion", 0, 0, scoreRemaining));
     }
 
     [Fact]
@@ -102,6 +136,52 @@ public class GameScreenViewModelTests
             viewModel.CommandPanel.Issues,
             issue => issue.Code == "TARGET_REQUIRED" && issue.Message.Contains("未选择执行单位", StringComparison.Ordinal));
         Assert.False(viewModel.CommandPanel.CanSubmit);
+    }
+
+    [Fact]
+    public void UnitSelected_SyncsSupportPanelTarget()
+    {
+        (FakeSimClient client, SimulationSnapshot snapshot) = SnapshotWithUnits();
+        var viewModel = new GameScreenViewModel(client, Scenario());
+        viewModel.ApplySnapshot(snapshot);
+
+        viewModel.BattleMap.SelectUnit("friendly-1");
+        Assert.Equal("friendly-1", viewModel.SupportPanel.SelectedTargetUnitId);
+
+        viewModel.BattleMap.SelectUnit("friendly-1"); // 重复点选取消。
+        Assert.Null(viewModel.SupportPanel.SelectedTargetUnitId);
+    }
+
+    [Fact]
+    public void UnitSelected_EnemyUnit_IsNotForwardedAsSupportTarget()
+    {
+        (FakeSimClient client, SimulationSnapshot snapshot) = SnapshotWithUnits();
+        var viewModel = new GameScreenViewModel(client, Scenario());
+        viewModel.ApplySnapshot(snapshot);
+
+        viewModel.BattleMap.SelectUnit("enemy-1");
+
+        Assert.Null(viewModel.SupportPanel.SelectedTargetUnitId);
+    }
+
+    [Fact]
+    public void SupportPanelSubmit_InjectsCommandViaClient()
+    {
+        var client = new FakeSimClient(SupportSnapshot());
+        var viewModel = new GameScreenViewModel(client, SupportScenario());
+        viewModel.ApplySnapshot(SupportSnapshot());
+        viewModel.SupportPanel.SetTarget("friendly-1");
+        viewModel.SupportPanel.SelectedRequestType = "reinforce";
+        viewModel.SupportPanel.ToggleKind("squad-mortar-team");
+
+        bool ok = viewModel.SupportPanel.TrySubmit(out _);
+
+        Assert.True(ok);
+        string commandJson = Assert.Single(client.InjectedCommands);
+        Assert.Contains("\"type\":\"SUPPORT_REQUEST\"", commandJson, StringComparison.Ordinal);
+        Assert.Contains("\"request_type\":\"reinforce\"", commandJson, StringComparison.Ordinal);
+        Assert.Contains("\"kinds\":[\"squad-mortar-team\"]", commandJson, StringComparison.Ordinal);
+        Assert.Contains("\"to_node\":\"node-battalion-1\"", commandJson, StringComparison.Ordinal);
     }
 
     [Fact]
