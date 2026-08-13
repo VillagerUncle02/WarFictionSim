@@ -1,0 +1,34 @@
+<!-- 文件总览：时间控制视图（T042）。
+     暂停按钮 + 1x/2x/4x/8x 档位（单选样式高亮当前档）；暂停是独立状态，
+     加速只改表现层节奏，不修改模拟 tick。 -->
+<UserControl x:Class="WarFictionSim.Ui.GameControls.GameControlsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:gc="clr-namespace:WarFictionSim.Ui.GameControls"
+             mc:Ignorable="d"
+             d:DesignHeight="48" d:DesignWidth="360"
+             KeyboardNavigation.TabNavigation="Cycle">
+    <StackPanel Orientation="Horizontal" Margin="6">
+        <Button Content="{Binding StatusText, StringFormat=暂停/继续（{0}）}"
+                Command="{Binding TogglePauseCommand}" Padding="8,4"
+                AutomationProperties.Name="暂停或继续模拟"/>
+        <RadioButton Content="1x" Margin="10,0,0,0" VerticalAlignment="Center"
+                     Command="{Binding SetSpeedCommand}" CommandParameter="1"
+                     IsChecked="{Binding SpeedMultiplier, Converter={x:Static gc:IntEqualsConverter.One}}"
+                     AutomationProperties.Name="速度 1 倍"/>
+        <RadioButton Content="2x" Margin="8,0,0,0" VerticalAlignment="Center"
+                     Command="{Binding SetSpeedCommand}" CommandParameter="2"
+                     IsChecked="{Binding SpeedMultiplier, Converter={x:Static gc:IntEqualsConverter.Two}}"
+                     AutomationProperties.Name="速度 2 倍"/>
+        <RadioButton Content="4x" Margin="8,0,0,0" VerticalAlignment="Center"
+                     Command="{Binding SetSpeedCommand}" CommandParameter="4"
+                     IsChecked="{Binding SpeedMultiplier, Converter={x:Static gc:IntEqualsConverter.Four}}"
+                     AutomationProperties.Name="速度 4 倍"/>
+        <RadioButton Content="8x" Margin="8,0,0,0" VerticalAlignment="Center"
+                     Command="{Binding SetSpeedCommand}" CommandParameter="8"
+                     IsChecked="{Binding SpeedMultiplier, Converter={x:Static gc:IntEqualsConverter.Eight}}"
+                     AutomationProperties.Name="速度 8 倍"/>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "id": "scn-support-battalion",
+  "name": "Support Chain: Battalion Attach Chain",
+  "player_node_id": "node-battalion-1",
+  "map": {
+    "width_km": 2.0,
+    "height_km": 2.0
+  },
+  "tick_hz": 20,
+  "seed": 20260813,
+  "time_limit_ticks": 18000,
+  "zones": [
+    {
+      "id": "zone-battalion-obj",
+      "name": "Battalion Objective"
+    }
+  ],
+  "units": [
+    {
+      "id": "sb-bn-cp",
+      "type": "squad-rifle-us",
+      "node_id": "node-battalion-1",
+      "x": 1.0,
+      "y": 1.0,
+      "ammo": [
+        "ammo-556"
+      ]
+    },
+    {
+      "id": "sb-plt-1-a",
+      "type": "squad-rifle-us",
+      "node_id": "node-platoon-1",
+      "x": 0.5,
+      "y": 0.5,
+      "ammo": [
+        "ammo-556"
+      ]
+    },
+    {
+      "id": "sb-plt-1-b",
+      "type": "squad-rifle-us",
+      "node_id": "node-platoon-1",
+      "x": 0.55,
+      "y": 0.5,
+      "ammo": [
+        "ammo-556"
+      ]
+    },
+    {
+      "id": "sb-plt-2-a",
+      "type": "squad-rifle-us",
+      "node_id": "node-platoon-2",
+      "x": 1.5,
+      "y": 1.5,
+      "ammo": [
+        "ammo-556"
+      ]
+    }
+  ],
+  "objectives": [],
+  "support": {
+    "scale": "battalion",
+    "faction_id": "faction-nato",
+    "player_node_id": "node-battalion-1",
+    "superior_node_id": "node-brigade-1",
+    "evaluation_delay_ticks": 10,
+    "return_delay_ticks": 20,
+    "scripted_requests": [
+      {
+        "id": "script-req-assign",
+        "submit_tick": 5,
+        "from_node": "node-platoon-1",
+        "to_node": "node-battalion-1",
+        "request_type": "reinforce",
+        "kinds": [
+          "squad-mortar-team"
+        ],
+        "quantity": 1,
+        "priority": 5,
+        "return_after_ticks": 60
+      },
+      {
+        "id": "script-req-reject",
+        "submit_tick": 8,
+        "from_node": "node-platoon-2",
+        "to_node": "node-battalion-1",
+        "request_type": "fire_support",
+        "kinds": [
+          "artillery-152"
+        ],
+        "quantity": 1,
+        "priority": 3
+      },
+      {
+        "id": "script-req-escalate",
+        "submit_tick": 10,
+        "from_node": "node-platoon-2",
+        "to_node": "node-battalion-1",
+        "request_type": "reinforce",
+        "kinds": [
+          "vehicle-ifv-test"
+        ],
+        "quantity": 2,
+        "priority": 4
+      }
+    ]
+  }
+}

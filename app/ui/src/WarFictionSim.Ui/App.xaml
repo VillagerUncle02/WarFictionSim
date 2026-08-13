@@ -1,6 +1,36 @@
 <Application x:Class="WarFictionSim.Ui.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml">
-    <Application.Resources/>
+             xmlns:menu="clr-namespace:WarFictionSim.Ui.MainMenu"
+             xmlns:map="clr-namespace:WarFictionSim.Ui.BattleMap"
+             xmlns:cmd="clr-namespace:WarFictionSim.Ui.CommandPanel"
+             xmlns:sup="clr-namespace:WarFictionSim.Ui.SupportPanel"
+             xmlns:gc="clr-namespace:WarFictionSim.Ui.GameControls"
+             xmlns:log="clr-namespace:WarFictionSim.Ui.EventLogPanel"
+             xmlns:vm="clr-namespace:WarFictionSim.Ui.ViewModels">
+    <!-- 视图模型 → 视图的隐式 DataTemplate：ContentControl 按数据类型自动选择视图，
+         避免在视图里硬编码各面板实例（保持轻量、可测试）。 -->
+    <Application.Resources>
+        <DataTemplate DataType="{x:Type menu:MainMenuViewModel}">
+            <menu:MainMenuView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type map:BattleMapViewModel}">
+            <map:BattleMapView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type cmd:CommandPanelViewModel}">
+            <cmd:CommandPanelView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type sup:SupportPanelViewModel}">
+            <sup:SupportPanelView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type gc:TimeControlsViewModel}">
+            <gc:GameControlsView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type log:EventLogViewModel}">
+            <log:EventLogPanelView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:GameScreenViewModel}">
+            <vm:GameScreenView/>
+        </DataTemplate>
+    </Application.Resources>
 </Application>

@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "kind": "ammo",
+  "entries": [
+    {
+      "id": "ammo-556",
+      "name": "5.56mm Ball",
+      "warhead_kind": "kinetic",
+      "anti_armor": {
+        "penetration_mm": 8,
+        "base_damage": 12
+      },
+      "anti_personnel": {
+        "blast_radius_m": 0,
+        "fragment_radius_m": 2,
+        "lethality": 0.5
+      },
+      "special_effect": false,
+      "weight_kg": 0.012
+    },
+    {
+      "id": "ammo-762",
+      "name": "7.62mm Ball",
+      "warhead_kind": "kinetic",
+      "anti_armor": {
+        "penetration_mm": 12,
+        "base_damage": 18
+      },
+      "anti_personnel": {
+        "blast_radius_m": 0,
+        "fragment_radius_m": 3,
+        "lethality": 0.7
+      },
+      "special_effect": false,
+      "weight_kg": 0.018
+    },
+    {
+      "id": "ammo-127",
+      "name": "12.7mm AP",
+      "warhead_kind": "kinetic",
+      "anti_armor": {
+        "penetration_mm": 30,
+        "base_damage": 50
+      },
+      "anti_personnel": {
+        "blast_radius_m": 0,
+        "fragment_radius_m": 4,
+        "lethality": 0.9
+      },
+      "special_effect": false,
+      "weight_kg": 0.12
+    },
+    {
+      "id": "ammo-he-60",
+      "name": "60mm HE",
+      "warhead_kind": "chemical",
+      "anti_armor": {
+        "penetration_mm": 40,
+        "base_damage": 80
+      },
+      "anti_personnel": {
+        "blast_radius_m": 12,
+        "fragment_radius_m": 25,
+        "lethality": 1.0
+      },
+      "special_effect": false,
+      "weight_kg": 1.7
+    },
+    {
+      "id": "ammo-rpg",
+      "name": "RPG HEAT",
+      "warhead_kind": "chemical",
+      "anti_armor": {
+        "penetration_mm": 300,
+        "base_damage": 250
+      },
+      "anti_personnel": {
+        "blast_radius_m": 6,
+        "fragment_radius_m": 12,
+        "lethality": 0.85
+      },
+      "special_effect": false,
+      "weight_kg": 2.1
+    },
+    {
+      "id": "ammo-atgm",
+      "name": "ATGM HEAT",
+      "warhead_kind": "chemical",
+      "anti_armor": {
+        "penetration_mm": 600,
+        "base_damage": 400
+      },
+      "anti_personnel": {
+        "blast_radius_m": 4,
+        "fragment_radius_m": 10,
+        "lethality": 0.8
+      },
+      "special_effect": false,
+      "weight_kg": 3.0
+    },
+    {
+      "id": "ammo-frag-grenade",
+      "name": "Fragmentation Grenade",
+      "warhead_kind": "chemical",
+      "anti_armor": {
+        "penetration_mm": 0,
+        "base_damage": 10
+      },
+      "anti_personnel": {
+        "blast_radius_m": 5,
+        "fragment_radius_m": 15,
+        "lethality": 0.6
+      },
+      "special_effect": false,
+      "weight_kg": 0.4
+    },
+    {
+      "id": "ammo-smoke",
+      "name": "Smoke Round",
+      "warhead_kind": "special",
+      "anti_armor": {
+        "penetration_mm": 0,
+        "base_damage": 0
+      },
+      "anti_personnel": {
+        "blast_radius_m": 0,
+        "fragment_radius_m": 0,
+        "lethality": 0
+      },
+      "special_effect": true,
+      "weight_kg": 0.5
+    }
+  ]
+}
