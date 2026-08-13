@@ -7,7 +7,7 @@
 #   超出剩余分数时拒绝（INSUFFICIENT_SCORE），任务结束触发归建事件序列；
 # - 营级配属链（确定性裁决桩，替代 US3 营级 AI，已登记待办）：配属/拒绝/
 #   转请与归建事件序列；
-# - 同输入两次运行状态哈希与事件序列一致（确定性回归）。
+# - 连排级与营级同输入两次运行状态哈希与事件序列一致（确定性回归）。
 #
 # 所有断言失败以非零退出码结束（宪法 17：不静默吞错）。
 
@@ -189,7 +189,25 @@ $rBn = Invoke-Cli @('inject', '--scenario', $ScenarioBattalion, '--seed', $Seed,
 if ($rBn.Code -ne 0) {
     Fail "营级 inject 退出码 $($rBn.Code): $($rBn.Output)"
 }
+$bnHashFirst = Last-Line $rBn.Output
 $bnEvents = Read-Events $bnJsonl
+
+$bnJsonl2 = Join-Path $tempDir 'battalion2.jsonl'
+$rBn2 = Invoke-Cli @('inject', '--scenario', $ScenarioBattalion, '--seed', $Seed, '--threads', '2', '--ticks', $Ticks,
+    '--script', $bnScript, '--out', $bnJsonl2, '--hash')
+if ($rBn2.Code -ne 0) {
+    Fail "营级 inject 第二次运行退出码 $($rBn2.Code): $($rBn2.Output)"
+}
+$bnHashSecond = Last-Line $rBn2.Output
+$bnEvents2 = Read-Events $bnJsonl2
+if ($bnHashFirst -ne $bnHashSecond) {
+    Fail "营级同输入两次运行状态哈希不一致"
+}
+$bnMessagesFirst = @($bnEvents | ForEach-Object { "$($_.Seq):$($_.Tick):$($_.Message)" })
+$bnMessagesSecond = @($bnEvents2 | ForEach-Object { "$($_.Seq):$($_.Tick):$($_.Message)" })
+if (($bnMessagesFirst -join "`n") -ne ($bnMessagesSecond -join "`n")) {
+    Fail "营级同输入两次运行事件序列不一致"
+}
 
 # script-req-assign：提交 → 评估 → 配属 → 归建 → 归还。
 Assert-Sequence $bnEvents @(
