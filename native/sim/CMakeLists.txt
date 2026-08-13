@@ -25,6 +25,8 @@ add_library(sim STATIC
     src/mission_exec.cpp
     src/recon_tasks.cpp
     src/outcome.cpp
+    src/support.cpp
+    src/tactical.cpp
     src/schema_validator.cpp
     src/c_api.cpp
     src/sim_runtime.cpp

@@ -36,6 +36,7 @@ add_executable(sim_tests
     outcome_test.cpp
     mission_command_test.cpp
     side_faction_test.cpp
+    support_test.cpp
 )
 
 target_link_libraries(sim_tests PRIVATE GTest::gtest_main sim core_c)
