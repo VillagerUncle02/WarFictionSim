@@ -285,6 +285,11 @@ void register_intel(SimState& state, const IntelRecord& record) {
         target.last_known_y = record.last_known_y;
         target.last_motion_dx = record.last_motion_dx;
         target.last_motion_dy = record.last_motion_dy;
+        // T033 F5 字段随更新写入：relay/sync 上卷的记录携带数量/类型/构成，
+        // 否则上级视角恒为 0/空（识别档位核心字段丢失）。
+        target.observed_count = record.observed_count;
+        target.type_name = record.type_name;
+        target.composition = record.composition;
     }
 }
 

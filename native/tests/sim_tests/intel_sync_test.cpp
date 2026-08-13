@@ -87,6 +87,10 @@ TEST(WfsIntelSyncTest, HierarchySyncIntervalsAndSourceAnnotation) {
     EXPECT_GT(platoon->observed_count, 0U);
     EXPECT_EQ(platoon->type_name, "squad-rifle-opposition");
     EXPECT_FALSE(platoon->composition.empty());
+    // S2：T033 F5 识别档位字段（数量/类型/构成）在 sync 一跳后必须保留。
+    EXPECT_GT(company->observed_count, 0U);
+    EXPECT_EQ(company->type_name, "squad-rifle-opposition");
+    EXPECT_FALSE(company->composition.empty());
 
     Step(state, 200U);  // tick=300：营级首次同步（15s）。
     EXPECT_TRUE(HasEventPrefix(state, "INTEL_SYNC node=node-bn-1 level=battalion tick=300 from=node-co-1 "));
@@ -96,6 +100,10 @@ TEST(WfsIntelSyncTest, HierarchySyncIntervalsAndSourceAnnotation) {
     EXPECT_EQ(battalion->source.level, "company");
     EXPECT_TRUE(battalion->source.unit_id.empty()) << "更上级转发不得标注具体单位";
     EXPECT_TRUE(battalion->source.node_id.empty()) << "更上级转发只标来源层级";
+    // S2：relay 一跳后 F5 字段仍随记录上卷（营级同样可见数量/类型/构成）。
+    EXPECT_GT(battalion->observed_count, 0U);
+    EXPECT_EQ(battalion->type_name, "squad-rifle-opposition");
+    EXPECT_FALSE(battalion->composition.empty());
 }
 
 TEST(WfsIntelSyncTest, DirectUnitsRealtimeSyncTicks) {

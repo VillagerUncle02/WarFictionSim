@@ -108,6 +108,11 @@ std::size_t MergeChildIntel(SimState& state, const std::string& child_node_id, c
         relayed.last_known_y = child_record.last_known_y;
         relayed.last_motion_dx = child_record.last_motion_dx;
         relayed.last_motion_dy = child_record.last_motion_dy;
+        // T033 F5 识别档位字段随 tier 一并上卷：数量/类型/构成在 sync/relay
+        // 每一跳都保留（data-model §18 登记口径），上级不得丢失识别核心字段。
+        relayed.observed_count = child_record.observed_count;
+        relayed.type_name = child_record.type_name;
+        relayed.composition = child_record.composition;
         if (child_record.source.kind == "direct") {
             // 子节点直属发现上报：标注具体发现单位与节点（FR-031）。
             relayed.source = IntelSource{"sync", child_record.source.unit_id, child_node_id, tick, ""};
