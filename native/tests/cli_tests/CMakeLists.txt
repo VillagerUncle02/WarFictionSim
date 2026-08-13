@@ -35,3 +35,18 @@ add_test(
         -Script "${CMAKE_CURRENT_SOURCE_DIR}/test_support_chain.jsonl"
 )
 set_tests_properties(support_chain_tests PROPERTIES TIMEOUT 180)
+
+# T054 派系差异观测集成测试：同一连排级请求脚本在三派系场景分别运行，
+# 断言审批层级 0/1/2、转发延迟 0/10/20、有限分数总额与池种类差异在事件中
+# 可观察且互不相同，同派系两次运行确定性一致（SC-004/FR-006）。
+add_test(
+    NAME faction_chain_tests
+    COMMAND pwsh -NoProfile -ExecutionPolicy Bypass -File
+        "${CMAKE_CURRENT_SOURCE_DIR}/run_faction_chain_tests.ps1"
+        -Exe "$<TARGET_FILE:sim_headless>"
+        -ScenarioChina "${PROJECT_SOURCE_DIR}/../data/scenarios/scn-support-faction-china.json"
+        -ScenarioNato "${PROJECT_SOURCE_DIR}/../data/scenarios/scn-support-faction-nato.json"
+        -ScenarioRussia "${PROJECT_SOURCE_DIR}/../data/scenarios/scn-support-faction-russia.json"
+        -Script "${CMAKE_CURRENT_SOURCE_DIR}/test_faction_chain.jsonl"
+)
+set_tests_properties(faction_chain_tests PROPERTIES TIMEOUT 180)
