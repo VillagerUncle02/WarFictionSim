@@ -133,6 +133,36 @@ TEST(WfsCommandValidationTest, DefaultTypeTableMatchesMissionRegistry) {
     }
 }
 
+TEST(WfsCommandValidationTest, SupportRequestTypeEnumRejectsUnknownAndAcceptsAllContractValues) {
+    // US2 R2：support.request_type 契约枚举（FR-050）：非法枚举在 Schema
+    // 第一层拒绝（SCHEMA_INVALID，不抛异常），5 种合法值全部通过。
+    const auto support_command = [](const char* request_type) {
+        nlohmann::json command = ValidCommandJson();
+        command["type"] = "SUPPORT_REQUEST";
+        command["completion"] = nlohmann::json{{"condition", "support"}, {"params", nlohmann::json::object()}};
+        command["support"] = nlohmann::json{
+            {"request_type", request_type},
+            {"kinds", nlohmann::json::array({"squad-mortar-team"})},
+            {"quantity", 1},
+            {"to_node", "node-battalion-1"},
+        };
+        return command;
+    };
+
+    // 负例：request_type="teleport" 不在 5 种契约枚举内，第一层 Schema 拒绝。
+    const CommandValidationResult invalid = Validate(support_command("teleport"));
+    EXPECT_FALSE(invalid.ok());
+    ASSERT_FALSE(invalid.errors.empty());
+    EXPECT_EQ(invalid.errors.front().code, "SCHEMA_INVALID");
+
+    // 正例：reinforce/fire_support/engineer/medical/logistics 各可通过
+    // 第一层（整体校验通过，含语义层）。
+    for (const char* request_type : {"reinforce", "fire_support", "engineer", "medical", "logistics"}) {
+        const CommandValidationResult valid = Validate(support_command(request_type));
+        EXPECT_TRUE(valid.ok()) << request_type;
+    }
+}
+
 TEST(WfsCommandValidationTest, TargetNotFoundRejected) {
     nlohmann::json command = ValidCommandJson();
     command["target"] = nlohmann::json{{"kind", "unit"}, {"ref", "ghost-unit"}};
