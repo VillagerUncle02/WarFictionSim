@@ -45,6 +45,12 @@ nlohmann::json ValidScenarioJson() {
     return nlohmann::json::parse(in);
 }
 
+// T054 派系支援场景（scn-support-faction-china.json）：support 契约负例基座。
+nlohmann::json SupportScenarioJson() {
+    std::ifstream in(RepoRoot() / "data" / "scenarios" / "scn-support-faction-china.json");
+    return nlohmann::json::parse(in);
+}
+
 std::vector<std::string> IssueCodes(const ScenarioLoadResult& result) {
     std::vector<std::string> codes;
     codes.reserve(result.issues.size());
@@ -99,6 +105,22 @@ TEST(WfsLoaderTest, MissingRequiredFieldReportsSchemaError) {
     const ScenarioLoadResult result = load_scenario(file, ScenarioSchema());
     ASSERT_FALSE(result.ok());
     EXPECT_EQ(result.issues.front().code, "SCHEMA_INVALID");
+}
+
+// T054 复审 F2：support.faction_id 非法值（未知 id/错误类型）在 Schema 层
+// 结构化拒绝（SCHEMA_INVALID），不再落入运行期 SUPPORT_CONFIG_INVALID 事件
+// 路径（宪法 12：数据契约先于运行期兜底）。
+TEST(WfsLoaderTest, InvalidSupportFactionIdRejectedBySchema) {
+    TempDir dir;
+    for (const nlohmann::json& bad_faction : {nlohmann::json("faction-mars"), nlohmann::json(42)}) {
+        nlohmann::json root = SupportScenarioJson();
+        root["support"]["faction_id"] = bad_faction;
+        const std::filesystem::path file = dir.Write("invalid-support-faction.json", root.dump());
+        const ScenarioLoadResult result = load_scenario(file, ScenarioSchema());
+        ASSERT_FALSE(result.ok());
+        EXPECT_EQ(result.issues.front().code, "SCHEMA_INVALID");
+        EXPECT_FALSE(result.issues.front().message.empty());
+    }
 }
 
 TEST(WfsLoaderTest, SchemaVersionMismatchRejected) {
