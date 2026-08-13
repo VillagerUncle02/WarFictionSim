@@ -193,6 +193,32 @@ TEST(WfsCommTest, NodeLinkOutageFreezesHierarchySync) {
     EXPECT_TRUE(frozen_sync) << "层级链路中断时不得合并新敌情（最后已知冻结）";
 }
 
+TEST(WfsCommTest, NodeLinkHealthBindsSupportUnitNotOrdinaryUnits) {
+    // S5：节点链路健康绑定节点通信保障部队；普通单位不承载节点链路。
+    SimState state = MakeState();
+    state.comm_units["plt-1-sq-2"] = wfs::sim::CommUnitProfile{1.0, "support"};
+    Step(state, 1U);
+    EXPECT_TRUE(node_link_effective(state, "node-plt-1", "node-co-1"));
+
+    // 摧毁列表首位的普通单位：不影响节点链路，也不影响其他单位的指挥链路。
+    wfs::sim::RuntimeUnitState* ordinary = FindUnit(state, "plt-1-sq-1");
+    ASSERT_NE(ordinary, nullptr);
+    ordinary->destroyed = true;
+    EXPECT_TRUE(node_link_effective(state, "node-plt-1", "node-co-1"));
+    EXPECT_TRUE(unit_link_effective(state, "plt-1-sq-2"));
+
+    // 摧毁保障单位才降级节点链路（ENDPOINT_DISABLED）。
+    wfs::sim::RuntimeUnitState* support = FindUnit(state, "plt-1-sq-2");
+    ASSERT_NE(support, nullptr);
+    support->destroyed = true;
+    EXPECT_FALSE(node_link_effective(state, "node-plt-1", "node-co-1"));
+    Step(state, 1U);
+    const wfs::sim::CommLinkStatus* link = state.comm_state.Find(CommLinkKind::kNode, "node-plt-1", "node-co-1");
+    ASSERT_NE(link, nullptr);
+    EXPECT_FALSE(link->connected);
+    EXPECT_EQ(link->reason, "ENDPOINT_DISABLED");
+}
+
 TEST(WfsCommTest, CommStateRoundTripsThroughJson) {
     SimState state = MakeState();
     Step(state, 1U);

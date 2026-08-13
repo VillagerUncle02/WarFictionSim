@@ -6,10 +6,13 @@
 // - 通信范围是纯确定性函数：base_range_km × 装备功率平均 × power_scale +
 //   保障部队增益 × 保障系数 − 地形罚值（两端点较严者）+ 民用通讯设施增益，
 //   下限保底 min_range_km；全部参数场景数据驱动（FR-077，宪法第 12 条）。
-// - 链路 = 单位↔所属节点 + 子节点↔父节点；每 tick 按固定顺序判定连通，
-//   中断时冻结最后已知位置并记录 COMM_OUTAGE，恢复独立记录 COMM_RESTORED。
-// - 中断与失联取更严：link_effective = 通信连通 && 两端单位未失联/未摧毁；
-//   失联恢复由 contact.cpp 独立处理，互不等待（CHK163/FR-077）。
+// - 链路 = 单位↔所属节点 + 子节点↔父节点；节点端点优先绑定该节点的通信
+//   保障部队（comm_role=support 首个单位），普通单位仅作位置代理、不承载
+//   节点链路健康（FR-077）；每 tick 按固定顺序判定连通，中断时冻结最后
+//   已知位置并记录 COMM_OUTAGE，恢复独立记录 COMM_RESTORED。
+// - 中断与失联取更严：link_effective = 通信连通 && 两端健康绑定单位
+//   （单位自身/节点保障载体）未失联/未摧毁；失联恢复由 contact.cpp 独立
+//   处理，互不等待（CHK163/FR-077）。
 // - 通信中断门控指令：到期命令的目标单位链路不生效时到达时间顺延到下一
 //   tick（指令延迟到达），恢复后按原队列顺序继续；中断事件本身已可观察。
 // - 遍历顺序固定（单位列表顺序/节点插入顺序），同一输入同一输出（宪法 7）。
@@ -48,8 +51,9 @@ void LogComm(SimState& state, const EventSeverity severity, std::string message)
     state.event_log.append(state.clock.tick(), EventCategory::kCommand, severity, std::move(message));
 }
 
-// 节点代表单位（列表内首个 node_id 命中者）；未找到返回 nullptr。
-const RuntimeUnitState* NodeUnit(const SimState& state, const std::string& node_id) {
+// 节点位置代理：无保障载体时仅提供范围判定的位置；普通单位的位置不绑定
+// 节点链路健康（摧毁普通单位不切断节点链路）。
+const RuntimeUnitState* NodePositionUnit(const SimState& state, const std::string& node_id) {
     for (const RuntimeUnitState& unit : state.units) {
         if (unit.node_id == node_id) {
             return &unit;
@@ -122,27 +126,61 @@ double SupportFactorForNode(const SimState& state, const CommConfig& config, con
     return operational_support ? 1.0 : config.support_disabled_factor;
 }
 
-// 链路端点代表位置（单位自身位置 / 节点代表单位位置）。
-bool LinkEndpoints(const SimState& state, const CommLinkStatus& link, double& from_x, double& from_y, double& to_x,
-                   double& to_y, const RuntimeUnitState*& from_unit, const RuntimeUnitState*& to_unit) {
+// 链路端点：位置来源 + 是否绑定单位健康（单位自身/节点保障载体绑定，
+// 普通位置代理不绑定）。
+struct CommEndpoint {
+    double x = 0.0;
+    double y = 0.0;
+    const RuntimeUnitState* unit = nullptr;
+    bool binds_health = false;
+};
+
+CommEndpoint UnitEndpoint(const RuntimeUnitState* unit) {
+    if (unit == nullptr) {
+        return CommEndpoint{};
+    }
+    return CommEndpoint{unit->x, unit->y, unit, true};
+}
+
+CommEndpoint NodeEndpoint(const SimState& state, const std::string& node_id) {
+    const RuntimeUnitState* carrier = node_carrier_unit(state, node_id);
+    if (carrier != nullptr) {
+        return CommEndpoint{carrier->x, carrier->y, carrier, true};
+    }
+    const RuntimeUnitState* proxy = NodePositionUnit(state, node_id);
+    if (proxy == nullptr) {
+        return CommEndpoint{};
+    }
+    return CommEndpoint{proxy->x, proxy->y, proxy, false};
+}
+
+bool ResolveEndpoints(const SimState& state, const CommLinkStatus& link, CommEndpoint& from, CommEndpoint& to) {
     if (link.kind == CommLinkKind::kUnit) {
-        from_unit = FindUnitById(state, link.from_id);
-        to_unit = NodeUnit(state, link.to_id);
+        from = UnitEndpoint(FindUnitById(state, link.from_id));
+        to = NodeEndpoint(state, link.to_id);
     } else {
-        from_unit = NodeUnit(state, link.from_id);
-        to_unit = NodeUnit(state, link.to_id);
+        from = NodeEndpoint(state, link.from_id);
+        to = NodeEndpoint(state, link.to_id);
     }
-    if (from_unit == nullptr || to_unit == nullptr) {
-        return false;
-    }
-    from_x = from_unit->x;
-    from_y = from_unit->y;
-    to_x = to_unit->x;
-    to_y = to_unit->y;
-    return true;
+    return from.unit != nullptr && to.unit != nullptr;
 }
 
 }  // namespace
+
+// 节点通信载体单位：该节点 comm_role=support 的首个单位（单位列表顺序）；
+// 无保障部队返回 nullptr（普通单位不承载节点链路，FR-077）。
+const RuntimeUnitState* node_carrier_unit(const SimState& state, const std::string& node_id) {
+    for (const RuntimeUnitState& unit : state.units) {
+        if (unit.node_id != node_id) {
+            continue;
+        }
+        const auto profile = state.comm_units.find(unit.id);
+        if (profile != state.comm_units.end() && profile->second.is_support()) {
+            return &unit;
+        }
+    }
+    return nullptr;
+}
 
 std::string_view to_string(const CommLinkKind kind) noexcept {
     switch (kind) {
@@ -306,22 +344,15 @@ bool link_effective(const SimState& state, const CommLinkStatus& link) {
     if (!link.connected) {
         return false;
     }
-    double from_x = 0.0;
-    double from_y = 0.0;
-    double to_x = 0.0;
-    double to_y = 0.0;
-    const RuntimeUnitState* from_unit = nullptr;
-    const RuntimeUnitState* to_unit = nullptr;
-    if (!LinkEndpoints(state, link, from_x, from_y, to_x, to_y, from_unit, to_unit)) {
+    CommEndpoint from;
+    CommEndpoint to;
+    if (!ResolveEndpoints(state, link, from, to)) {
         return false;
     }
-    (void)from_x;
-    (void)from_y;
-    (void)to_x;
-    (void)to_y;
-    const bool endpoint_disabled =
-        from_unit->destroyed || from_unit->out_of_contact || to_unit->destroyed || to_unit->out_of_contact;
-    return !endpoint_disabled;
+    const auto endpoint_disabled = [](const CommEndpoint& endpoint) {
+        return endpoint.binds_health && (endpoint.unit->destroyed || endpoint.unit->out_of_contact);
+    };
+    return !endpoint_disabled(from) && !endpoint_disabled(to);
 }
 
 bool unit_link_effective(const SimState& state, const std::string& unit_id) {
@@ -365,18 +396,14 @@ void step_comm(SimState& state) {
     const std::uint64_t tick = state.clock.tick();
     const CommConfig& config = state.comm_config;
     for (CommLinkStatus& link : state.comm_state.links) {
-        double from_x = 0.0;
-        double from_y = 0.0;
-        double to_x = 0.0;
-        double to_y = 0.0;
-        const RuntimeUnitState* from_unit = nullptr;
-        const RuntimeUnitState* to_unit = nullptr;
-        if (!LinkEndpoints(state, link, from_x, from_y, to_x, to_y, from_unit, to_unit)) {
+        CommEndpoint from;
+        CommEndpoint to;
+        if (!ResolveEndpoints(state, link, from, to)) {
             continue;
         }
         // 端点档案按代表单位 id 查表；缺失按基线（功率 1.0、standard）。
-        const auto from_profile_it = state.comm_units.find(from_unit->id);
-        const auto to_profile_it = state.comm_units.find(to_unit->id);
+        const auto from_profile_it = state.comm_units.find(from.unit->id);
+        const auto to_profile_it = state.comm_units.find(to.unit->id);
         const CommUnitProfile from_profile =
             from_profile_it == state.comm_units.end() ? CommUnitProfile{} : from_profile_it->second;
         const CommUnitProfile to_profile =
@@ -384,10 +411,11 @@ void step_comm(SimState& state) {
         const std::string support_node = link.kind == CommLinkKind::kUnit ? link.to_id : link.from_id;
         const double support_factor = SupportFactorForNode(state, config, support_node);
         const double range = effective_comm_range_km(config, from_profile.power, to_profile.power, support_factor,
-                                                     TerrainIdAt(state, from_x, from_y), TerrainIdAt(state, to_x, to_y),
-                                                     from_x, from_y, to_x, to_y);
-        const double distance = std::sqrt(((from_x - to_x) * (from_x - to_x)) + ((from_y - to_y) * (from_y - to_y)));
-        const bool endpoints_destroyed = from_unit->destroyed || to_unit->destroyed;
+                                                     TerrainIdAt(state, from.x, from.y), TerrainIdAt(state, to.x, to.y),
+                                                     from.x, from.y, to.x, to.y);
+        const double distance = std::sqrt(((from.x - to.x) * (from.x - to.x)) + ((from.y - to.y) * (from.y - to.y)));
+        const bool endpoints_destroyed =
+            (from.binds_health && from.unit->destroyed) || (to.binds_health && to.unit->destroyed);
         const bool out_of_range = distance > range;
         const bool support_lost = support_factor < 1.0 && out_of_range;
         const bool now_connected = !endpoints_destroyed && !out_of_range;
@@ -397,8 +425,8 @@ void step_comm(SimState& state) {
                                                        : "";
 
         if (now_connected) {
-            link.last_known_x = from_x;
-            link.last_known_y = from_y;
+            link.last_known_x = from.x;
+            link.last_known_y = from.y;
             link.last_known_tick = tick;
         }
         if (link.connected && !now_connected) {

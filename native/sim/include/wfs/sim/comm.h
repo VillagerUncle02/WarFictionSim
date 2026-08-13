@@ -10,7 +10,9 @@
 //   通信保障部队（comm_role=support，失能时范围按 support_disabled_factor
 //   缩小，长距离链路中断从而同步延迟）、地形修正（端点所在地形罚值取较严
 //   者）与民用通讯设施修正（端点位于设施半径内加增益）；全部数值场景
-//   raw["comm"] 数据驱动。
+//   raw["comm"] 数据驱动。节点链路端点优先绑定该节点的通信保障部队（首个
+//   comm_role=support 单位），普通单位仅作位置代理、不承载节点链路健康
+//   （摧毁普通单位不切断节点链路）。
 // - 中断与失联取更严（CHK163）：链路有效 = 通信连通 且 两端单位均未失联/
 //   未摧毁；两者独立恢复——通信按位置/保障状态恢复，失联按 contact.cpp
 //   规则恢复，互不等待。
@@ -30,7 +32,8 @@
 
 namespace wfs::sim {
 
-struct SimState;  // 内部运行时状态（sim_state.h）。
+struct SimState;          // 内部运行时状态（sim_state.h）。
+struct RuntimeUnitState;  // 内部运行期单位（sim_state.h）。
 
 // 单位通信档案（场景派生：unit.comm_power/comm_role，FR-077）。
 struct CommUnitProfile {
@@ -121,6 +124,9 @@ bool link_effective(const SimState& state, const CommLinkStatus& link);
 bool unit_link_effective(const SimState& state, const std::string& unit_id);
 // 子节点↔父节点链路是否生效；无此链路返回 true。
 bool node_link_effective(const SimState& state, const std::string& child_node_id, const std::string& parent_node_id);
+// 节点通信载体单位：该节点 comm_role=support 的首个单位（单位列表顺序）；
+// 无保障部队返回 nullptr（普通单位不承载节点链路，FR-077）。
+const RuntimeUnitState* node_carrier_unit(const SimState& state, const std::string& node_id);
 
 // 初始化链路表（单位列表顺序 + 节点插入顺序；场景派生，不进哈希）。
 void initialize_comm_state(SimState& state);

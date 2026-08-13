@@ -10,8 +10,9 @@
 //   情报记录并重标来源（direct → sync 标注具体发现单位；sync/relay →
 //   relay 只标来源层级，FR-031）；位置/状态/敌情三类信息在同一同步事件
 //   一次性携带（共用间隔，FR-028）。
-// - 子节点失联（CP 单位 out_of_contact/被摧毁）时不合并新情报，同步事件
-//   只携带 own/last_known 计数——冻结最后已知状态（FR-029/065）。
+// - 子节点失联（节点通信保障载体或全部直属单位 out_of_contact/被摧毁）时
+//   不合并新情报，同步事件只携带 own/last_known 计数——冻结最后已知状态
+//   （FR-029/065）。
 // - 遍历顺序固定（节点插入顺序 / 指挥树子节点顺序 / std::map 键序），
 //   同一输入同一输出（宪法第 7 条）。
 
@@ -54,18 +55,29 @@ std::string_view EchelonName(const model::Echelon echelon) {
     return model::to_string(echelon);
 }
 
-// 子节点是否失联：层级通信链路不生效（FR-077 取更严）或代表单位
-// （列表内首个 node_id 命中的单位）失联/被摧毁。
+// 子节点是否失联：层级通信链路不生效（FR-077 取更严）或节点通信保障载体
+// 失联/被摧毁；无保障部队时普通单位不承载节点链路，仅当全部直属单位
+// 失联/被摧毁才视为节点失联（摧毁单个普通单位不冻结整节点）。
 bool ChildNodeLost(const SimState& state, const std::string& child_node_id, const std::string& parent_node_id) {
     if (!node_link_effective(state, child_node_id, parent_node_id)) {
         return true;
     }
+    const RuntimeUnitState* carrier = node_carrier_unit(state, child_node_id);
+    if (carrier != nullptr) {
+        return carrier->out_of_contact || carrier->destroyed;
+    }
+    bool has_unit = false;
+    bool any_operational = false;
     for (const RuntimeUnitState& unit : state.units) {
-        if (unit.node_id == child_node_id) {
-            return unit.out_of_contact || unit.destroyed;
+        if (unit.node_id != child_node_id) {
+            continue;
+        }
+        has_unit = true;
+        if (!unit.out_of_contact && !unit.destroyed) {
+            any_operational = true;
         }
     }
-    return false;  // 无实体单位的节点视为未失联（无信息可冻结）。
+    return has_unit && !any_operational;  // 无实体单位的节点视为未失联（无信息可冻结）。
 }
 
 struct ChildAggregate {
