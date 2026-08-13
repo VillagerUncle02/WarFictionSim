@@ -29,6 +29,7 @@ add_library(sim STATIC
     src/tactical.cpp
     src/resource_pool.cpp
     src/attach.cpp
+    src/interaction.cpp
     src/schema_validator.cpp
     src/c_api.cpp
     src/sim_runtime.cpp
