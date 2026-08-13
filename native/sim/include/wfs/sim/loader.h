@@ -41,6 +41,8 @@ struct ScenarioUnit {
     double x = 0.0;
     double y = 0.0;
     std::vector<std::string> ammo;
+    double comm_power = 1.0;             // 通信装备功率（FR-077；缺省 1.0）。
+    std::string comm_role = "standard";  // "standard" | "support"（通信保障部队）。
 };
 
 struct ScenarioObjective {

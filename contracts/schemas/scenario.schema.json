@@ -158,6 +158,19 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          "comm_power": {
+            "type": "number",
+            "minimum": 0,
+            "description": "通信装备功率（FR-077；缺省 1.0）。"
+          },
+          "comm_role": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "support"
+            ],
+            "description": "standard = 常规通信装备；support = 通信保障部队（失能时缩小范围，FR-077）。"
           }
         }
       }
@@ -297,6 +310,292 @@
             },
             "additionalProperties": false
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "command_org": {
+      "type": "object",
+      "description": "营级指挥组织（T057，FR-001/013/016/048）：指挥节点与行政编制树；语义校验见 loader。",
+      "required": [
+        "nodes",
+        "organizations"
+      ],
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "echelon",
+              "owner",
+              "command_limit",
+              "coordination",
+              "experience"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "echelon": {
+                "type": "string",
+                "enum": [
+                  "platoon",
+                  "company",
+                  "battalion",
+                  "brigade"
+                ],
+                "description": "指挥层级（FR-001：玩家不扮演班一级，不含 squad）。"
+              },
+              "parent_id": {
+                "type": "string",
+                "description": "空 = 根节点。"
+              },
+              "org_unit_id": {
+                "type": "string",
+                "description": "节点编制锚点（直属班协调能力基数，FR-016）；缺省无编制锚点。"
+              },
+              "owner": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "ai_id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "player",
+                      "ai"
+                    ]
+                  },
+                  "ai_id": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "command_limit": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "coordination": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "experience": {
+                "type": "object",
+                "required": [
+                  "training",
+                  "service",
+                  "combat"
+                ],
+                "properties": {
+                  "training": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "service": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "combat": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "organizations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "echelon",
+              "kind",
+              "parent_id",
+              "soldier_capability",
+              "minimum_soldier_capability",
+              "coordination",
+              "subordinate_ids"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "echelon": {
+                "type": "string",
+                "enum": [
+                  "squad",
+                  "platoon",
+                  "company",
+                  "battalion",
+                  "brigade"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "infantry",
+                  "armored",
+                  "combined",
+                  "support"
+                ]
+              },
+              "parent_id": {
+                "type": "string"
+              },
+              "soldier_capability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "minimum_soldier_capability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "coordination": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "subordinate_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "intel_sync": {
+      "type": "object",
+      "description": "层级化情报同步间隔（T058，FR-028；20 Hz 下 100=5s、300=15s、1200=60s）。",
+      "properties": {
+        "platoon_sync_ticks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "company_sync_ticks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "battalion_sync_ticks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "brigade_sync_ticks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "realtime_direct_units": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "description": "摘要上报开关（T059，FR-051）。",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "comm": {
+      "type": "object",
+      "description": "通信状态模型配置（T060，FR-077）。",
+      "properties": {
+        "base_range_km": {
+          "type": "number",
+          "minimum": 0
+        },
+        "power_scale": {
+          "type": "number",
+          "minimum": 0
+        },
+        "support_force_bonus_km": {
+          "type": "number",
+          "minimum": 0
+        },
+        "support_disabled_factor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "terrain_penalty_km": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "civilian_facility_bonus_km": {
+          "type": "number",
+          "minimum": 0
+        },
+        "civilian_facilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "x",
+              "y",
+              "radius_km"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "radius_km": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "min_range_km": {
+          "type": "number",
+          "minimum": 0
         }
       },
       "additionalProperties": false

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <map>
@@ -238,6 +239,15 @@ bool ExtractScenarioData(const nlohmann::json& root, const detail::SchemaFileRes
         entry.side = unit.value("side", std::string());
         entry.x = unit["x"].get<double>();
         entry.y = unit["y"].get<double>();
+        entry.comm_power = unit.value("comm_power", 1.0);
+        entry.comm_role = unit.value("comm_role", std::string("standard"));
+        if (!std::isfinite(entry.comm_power) || entry.comm_power < 0.0) {
+            issues.push_back(Issue("COMM_POWER_INVALID", "场景单位 " + entry.id + " 的 comm_power 必须为非负有限数"));
+        }
+        if (entry.comm_role != "standard" && entry.comm_role != "support") {
+            issues.push_back(
+                Issue("COMM_ROLE_INVALID", "场景单位 " + entry.id + " 的 comm_role 必须为 standard/support"));
+        }
         for (const nlohmann::json& ammo : unit["ammo"]) {
             entry.ammo.push_back(ammo.get<std::string>());
         }

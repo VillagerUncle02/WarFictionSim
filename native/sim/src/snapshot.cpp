@@ -107,6 +107,13 @@ nlohmann::json build_snapshot_json(const SimState& state) {
              {"configured", state.command_org.configured},
              {"reports", state.summaries.RecordsInInsertionOrder()},
          }},
+        // T060：通信状态摘要（快照只读消费）。
+        {"comm",
+         nlohmann::json{
+             {"configured", state.command_org.configured},
+             {"links", state.comm_state.links},
+             {"outages", state.comm_state.outage_count()},
+         }},
         // T047–T050：支援/配属摘要（快照只读消费；完整状态随存档序列化）。
         {"support",
          nlohmann::json{
@@ -173,6 +180,7 @@ nlohmann::json serialize_state_json(const SimState& state) {
         root["intel_sync_state"] = state.intel_sync_state;
         root["summaries"] = state.summaries;
         root["mission_outcomes"] = state.mission_outcomes;
+        root["comm_state"] = state.comm_state;
     }
     // T047–T050：支援/配属/战术编成是确定性状态。未配置场景保持字段省略
     // （与决策日志省略先例一致）：旧存档/旧场景加载后再次序列化字节不变。

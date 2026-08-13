@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "wfs/sim/combat.h"
+#include "wfs/sim/comm.h"
 #include "wfs/sim/command_validation.h"
 #include "wfs/sim/contact.h"
 #include "wfs/sim/event_log.h"
@@ -225,6 +226,11 @@ void initialize_runtime_state(SimState& state) {
     state.summary_config = SummaryConfig::FromScenario(state.scenario.raw);
     state.summaries.Clear();
     state.mission_outcomes.clear();
+    state.comm_config = CommConfig::FromScenario(state.scenario.raw);
+    state.comm_units.clear();
+    for (const ScenarioUnit& unit : state.scenario.units) {
+        state.comm_units[unit.id] = CommUnitProfile{unit.comm_power, unit.comm_role};
+    }
     state.intel_records.clear();
     state.objective_states.clear();
     for (const ScenarioObjective& objective : state.scenario.objectives) {
@@ -250,6 +256,8 @@ void initialize_runtime_state(SimState& state) {
     for (RuntimeUnitState& unit : state.units) {
         unit.fire_cooldown_ticks = state.combat_config.fire_cooldown_ticks;  // F5：冷却数据驱动。
     }
+    // T060：通信链路表依赖运行期单位（单位顺序/节点顺序），须在单位构建后初始化。
+    initialize_comm_state(state);
     // T047–T050：支援/配属/战术状态按场景配置与派系模板初始化。
     initialize_support_state(state);
 }
@@ -263,6 +271,7 @@ void step_sim_state(SimState& state) {
             state.clock.tick(), EventCategory::kCommand, EventSeverity::kInfo,
             "COMMAND_PROCESSED seq=" + std::to_string(event.seq) + " tick=" + std::to_string(state.clock.tick()));
     }
+    step_comm(state);          // T060：通信状态判定与指令到达门控（FR-077）。
     state.command_chain.ProcessDue(state);
     step_support_pipeline(state);  // T047–T050：支援请求/配属/归建（FR-008/009）。
     step_movement(state);

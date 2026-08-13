@@ -21,6 +21,7 @@ add_library(sim STATIC
     src/movement.cpp
     src/combat.cpp
     src/contact.cpp
+    src/comm.cpp
     src/intel.cpp
     src/intel_sync.cpp
     src/command_org.cpp

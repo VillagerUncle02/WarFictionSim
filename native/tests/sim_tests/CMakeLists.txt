@@ -30,6 +30,7 @@ add_executable(sim_tests
     data_library_test.cpp
     tutorial_scenario_test.cpp
     contact_test.cpp
+    comm_test.cpp
     intel_test.cpp
     intel_sync_test.cpp
     command_org_test.cpp

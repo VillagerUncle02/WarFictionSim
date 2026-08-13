@@ -26,6 +26,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sim_state.h"
+#include "wfs/sim/comm.h"
 #include "wfs/sim/command_org.h"
 #include "wfs/sim/event_log.h"
 #include "wfs/sim/intel.h"
@@ -53,8 +54,12 @@ std::string_view EchelonName(const model::Echelon echelon) {
     return model::to_string(echelon);
 }
 
-// 子节点代表单位（列表内首个 node_id 命中的单位）是否失联/被摧毁。
-bool ChildNodeLost(const SimState& state, const std::string& child_node_id) {
+// 子节点是否失联：层级通信链路不生效（FR-077 取更严）或代表单位
+// （列表内首个 node_id 命中的单位）失联/被摧毁。
+bool ChildNodeLost(const SimState& state, const std::string& child_node_id, const std::string& parent_node_id) {
+    if (!node_link_effective(state, child_node_id, parent_node_id)) {
+        return true;
+    }
     for (const RuntimeUnitState& unit : state.units) {
         if (unit.node_id == child_node_id) {
             return unit.out_of_contact || unit.destroyed;
@@ -201,7 +206,7 @@ void step_intel_sync(SimState& state) {
         }
         state.intel_sync_state.last_hierarchy_sync_tick[node_id] = tick;
         for (const std::string& child_id : state.command_org.children_of(node_id)) {
-            const bool child_lost = ChildNodeLost(state, child_id);
+            const bool child_lost = ChildNodeLost(state, child_id, node_id);
             std::size_t merged = 0U;
             if (!child_lost) {
                 merged = MergeChildIntel(state, child_id, node_id, command_echelon(state.command_org, child_id));

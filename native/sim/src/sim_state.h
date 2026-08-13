@@ -20,6 +20,7 @@
 #include "wfs/sim/attach.h"
 #include "wfs/sim/clock.h"
 #include "wfs/sim/combat.h"
+#include "wfs/sim/comm.h"
 #include "wfs/sim/command_org.h"
 #include "wfs/sim/command_chain.h"
 #include "wfs/sim/contact.h"
@@ -168,6 +169,10 @@ struct SimState {
     SummaryConfig summary_config;
     SummaryRegistry summaries;
     std::map<std::string, MissionOutcomeCounts> mission_outcomes;
+    // T060：通信状态（确定性，随存档序列化）；配置与单位档案场景派生、不进哈希。
+    CommConfig comm_config;
+    CommState comm_state;
+    std::map<std::string, CommUnitProfile> comm_units;
 };
 
 // 玩家阵营：按 player_node_id 对应单位的 side 派生；缺省回退 node_id
