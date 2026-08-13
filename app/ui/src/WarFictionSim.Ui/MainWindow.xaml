@@ -1,6 +1,8 @@
 <Window x:Class="WarFictionSim.Ui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="战争幻想模拟器" Height="600" Width="900">
-    <Grid/>
+        Title="战争幻想模拟器" Height="800" Width="1280"
+        MinHeight="600" MinWidth="900">
+    <!-- 主窗口只承载当前视图（主菜单/战斗主屏），切换由 MainWindowViewModel.CurrentView 驱动。 -->
+    <ContentControl Content="{Binding CurrentView}" Focusable="False"/>
 </Window>

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "id": "faction-russia",
+  "name": "苏俄",
+  "approval_level": 2,
+  "command_style": {
+    "org_style": "whole_formation",
+    "dispatch_bias": {
+      "attack": 0.6,
+      "defend": 0.4
+    },
+    "support_approval_simplified": false,
+    "muster_time_scale": 1.0
+  },
+  "resource_pools": {
+    "squad": {
+      "support_score": 0,
+      "support_kinds": [],
+      "entries": []
+    },
+    "platoon": {
+      "support_score": 0,
+      "support_kinds": [],
+      "entries": []
+    },
+    "company": {
+      "support_score": 0,
+      "support_kinds": [],
+      "entries": [
+        {
+          "id": "squad-mortar-team",
+          "kind": "unit",
+          "quantity": 1,
+          "cost": 40
+        }
+      ]
+    },
+    "battalion": {
+      "support_score": 45,
+      "support_kinds": [],
+      "entries": [
+        {
+          "id": "squad-mortar-team",
+          "kind": "unit",
+          "quantity": 1,
+          "cost": 40
+        },
+        {
+          "id": "squad-atgm-team",
+          "kind": "unit",
+          "quantity": 1,
+          "cost": 35
+        }
+      ]
+    }
+  }
+}

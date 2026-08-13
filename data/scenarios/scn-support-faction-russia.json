@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "id": "scn-support-faction-russia",
+  "name": "Support Chain: Platoon Faction Russia",
+  "player_node_id": "node-platoon-1",
+  "map": {
+    "width_km": 1.5,
+    "height_km": 1.5
+  },
+  "tick_hz": 20,
+  "seed": 20260813,
+  "time_limit_ticks": 18000,
+  "zones": [
+    {
+      "id": "zone-support-obj",
+      "name": "Support Objective"
+    }
+  ],
+  "units": [
+    {
+      "id": "sp-squad-1",
+      "type": "squad-rifle-us",
+      "node_id": "node-platoon-1",
+      "x": 0.3,
+      "y": 0.3,
+      "ammo": [
+        "ammo-556"
+      ]
+    },
+    {
+      "id": "sp-squad-2",
+      "type": "squad-rifle-us",
+      "node_id": "node-platoon-1",
+      "x": 0.4,
+      "y": 0.35,
+      "ammo": [
+        "ammo-556"
+      ]
+    },
+    {
+      "id": "sp-bn-cp",
+      "type": "squad-rifle-us",
+      "node_id": "node-battalion-1",
+      "x": 1.2,
+      "y": 1.2,
+      "ammo": [
+        "ammo-556"
+      ]
+    }
+  ],
+  "objectives": [],
+  "support": {
+    "scale": "platoon",
+    "faction_id": "faction-russia",
+    "player_node_id": "node-platoon-1",
+    "superior_node_id": "node-battalion-1",
+    "evaluation_delay_ticks": 20,
+    "return_delay_ticks": 30
+  }
+}

@@ -109,6 +109,9 @@
 ## 17. 事件与日志
 
 - 事件日志：分类/严重级、环形保留（5000 条）、关键事件优先、过滤与搜索
+- 事件日志查询经 C ABI 通道暴露（`wfs_sim_query_events`，contracts/sim-c-api.md）：
+  过滤字段 = 分类 / 最低严重级 / 文本子串 / 数量上限；结果按 seq 升序返回，并携带
+  截断前总条数（count）与截断标志（truncated）
 - 决策日志（JSONL）：AI 决策点状态快照 + 输入 + 输出，供可复现性与复盘
 
 ## 18. 待实现阶段量化登记
@@ -118,3 +121,22 @@
 - FR-034：脱离已识别状态所需"完全脱离视野一段时间"的具体时长；
 - FR-015：指挥超限软性降级曲线（协调能力/命令执行质量/延迟随超出程度的变化）；
 - FR-006：指挥风格参数取值空间（除审批层级 0/1/2 外）。
+- US3 营级 AI 裁决接入前（FR-008/009）：配属/拒绝/转请由确定性规则桩裁决
+  （native/sim/src/attach.cpp adjudicate + support_runtime.cpp 场景
+  scripted_requests 驱动），无更上级时转请明确拒绝
+  （NO_SUPERIOR_ESCALATION）；任务结束归建以 return_after_ticks 桩触发，
+  接入下属任务上报后移除。登记位置：native/sim/src/support_runtime.cpp、
+  native/sim/src/attach.cpp（T045/T050）。
+
+## 19. 实现阶段判定机制登记（CHK064）
+
+侦察类任务判定机制为"由实现阶段决定"项（FR-042），按 CHK064 在此显式登记：
+
+- T035 已落地确定性判定基线（sim/src/recon_tasks.cpp）：HIDDEN_RECON
+  （目标点潜伏未发现 → 完成，被发现 → RECON_DETECTED 失败）、
+  INFILTRATE_RECON（接近 → 潜伏 → 返回撤离点三阶段）、OBSERVATION_POST
+  （观察周期循环 + 情报登记）、FIRE_RECON（射击轮数完成，被压制自动上报
+  并请求支援）；判定参数（发现概率/潜伏时长/观察周期/射击轮数）经场景
+  raw["recon"] 数据覆盖，全部随机性来自统一 RNG（宪法第 7 条）。
+- 新增任务类型若携带"实现阶段决定"的判定机制，须在此登记后再实现，
+  否则不阻塞 SC-009/SC-010 验收。

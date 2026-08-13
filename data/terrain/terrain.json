@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "kind": "terrain",
+  "entries": [
+    {
+      "id": "terrain-plain",
+      "name": "Plain",
+      "terrain_class": "base",
+      "type": "plain",
+      "passability": {
+        "speed_multiplier": 1.0,
+        "blocked": false,
+        "is_water": false,
+        "requires_bridge": false,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.0,
+      "cover": 0.0
+    },
+    {
+      "id": "terrain-grass",
+      "name": "Grass",
+      "terrain_class": "surface_cover",
+      "type": "grass",
+      "passability": {
+        "speed_multiplier": 0.9,
+        "blocked": false,
+        "is_water": false,
+        "requires_bridge": false,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.2,
+      "cover": 0.0
+    },
+    {
+      "id": "terrain-forest",
+      "name": "Forest",
+      "terrain_class": "surface_cover",
+      "type": "forest",
+      "passability": {
+        "speed_multiplier": 0.6,
+        "blocked": false,
+        "is_water": false,
+        "requires_bridge": false,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.6,
+      "cover": 0.4
+    },
+    {
+      "id": "terrain-swamp",
+      "name": "Swamp",
+      "terrain_class": "base",
+      "type": "swamp",
+      "passability": {
+        "speed_multiplier": 0.4,
+        "blocked": false,
+        "is_water": false,
+        "requires_bridge": false,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.1,
+      "cover": 0.1
+    },
+    {
+      "id": "terrain-river",
+      "name": "River",
+      "terrain_class": "base",
+      "type": "river",
+      "passability": {
+        "speed_multiplier": 0.3,
+        "blocked": false,
+        "is_water": true,
+        "requires_bridge": true,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.0,
+      "cover": 0.0
+    },
+    {
+      "id": "terrain-lake",
+      "name": "Lake",
+      "terrain_class": "base",
+      "type": "lake",
+      "passability": {
+        "speed_multiplier": 0.2,
+        "blocked": false,
+        "is_water": true,
+        "requires_bridge": true,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.0,
+      "cover": 0.0
+    },
+    {
+      "id": "terrain-road",
+      "name": "Road",
+      "terrain_class": "artificial",
+      "type": "road",
+      "passability": {
+        "speed_multiplier": 1.4,
+        "blocked": false,
+        "is_water": false,
+        "requires_bridge": false,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.0,
+      "cover": 0.0
+    },
+    {
+      "id": "terrain-bridge",
+      "name": "Bridge",
+      "terrain_class": "artificial",
+      "type": "bridge",
+      "passability": {
+        "speed_multiplier": 1.0,
+        "blocked": false,
+        "is_water": false,
+        "requires_bridge": false,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.0,
+      "cover": 0.1
+    },
+    {
+      "id": "terrain-building",
+      "name": "Building",
+      "terrain_class": "artificial",
+      "type": "building",
+      "passability": {
+        "speed_multiplier": 0.8,
+        "blocked": false,
+        "is_water": false,
+        "requires_bridge": false,
+        "amphibious_allowed": true
+      },
+      "concealment": 0.5,
+      "cover": 0.8
+    }
+  ]
+}

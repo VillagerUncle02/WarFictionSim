@@ -1,0 +1,334 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim scenario",
+  "description": "Runtime schema for scenario files under data/scenarios/ (T013). Mirrors specs/001-war-sim-command-battle/contracts and data-model.md; schema_version is the project-level schema version required by data/README.md.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "map",
+    "zones",
+    "units",
+    "objectives"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "player_node_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "map": {
+      "type": "object",
+      "required": [
+        "width_km",
+        "height_km"
+      ],
+      "properties": {
+        "width_km": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height_km": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "tick_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "time_limit_ticks": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tutorial": {
+      "type": "boolean"
+    },
+    "save_slot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "failure_conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "target_ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "unit",
+              "zone"
+            ]
+          },
+          "target_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "duration_ticks": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "zones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "node_id",
+          "x",
+          "y",
+          "ammo"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "node_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "side": {
+            "type": "string",
+            "minLength": 1,
+            "description": "阵营标识（M3）；缺省按 node_id 分组兼容旧场景"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "ammo": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "objectives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "target_ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "unit",
+              "zone"
+            ]
+          },
+          "target_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "duration_ticks": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "support": {
+      "type": "object",
+      "description": "支援/配属链配置（support_runtime.cpp 读取：faction_id、scale、节点、延迟、scripted_requests）。limited_score 由 scale=platoon 推导（FR-008），pool_echelon 运行时固定 battalion，均非场景输入字段。",
+      "required": [
+        "faction_id"
+      ],
+      "properties": {
+        "scale": {
+          "type": "string",
+          "enum": [
+            "platoon",
+            "battalion"
+          ],
+          "description": "作战规模：platoon = 连排级有限分数（FR-005/008），battalion = 营级完整配属链。"
+        },
+        "faction_id": {
+          "type": "string",
+          "enum": [
+            "faction-china",
+            "faction-nato",
+            "faction-russia"
+          ],
+          "description": "派系模板 data/factions/<id>.json（v1 内置三派系，FR-006；自定义派系接入时同步扩展枚举）。非法 id/类型在 Schema 层结构化拒绝。"
+        },
+        "player_node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "superior_node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evaluation_delay_ticks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "return_delay_ticks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "approval_step_ticks": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "每级审批转发延迟（approval_level × step，FR-006 基线；缺省 10）。"
+        },
+        "scripted_requests": {
+          "type": "array",
+          "description": "营级裁决桩请求（US3 AI 接入前以数据确定性替代，FR-008/SC-004）。",
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "submit_tick": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "from_node": {
+                "type": "string",
+                "minLength": 1
+              },
+              "to_node": {
+                "type": "string",
+                "minLength": 1
+              },
+              "request_type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kinds": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "quantity": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "priority": {
+                "type": "integer"
+              },
+              "target_unit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "for_command_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "return_after_ticks": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "if": {
+    "properties": {
+      "tutorial": {
+        "const": true
+      }
+    },
+    "required": [
+      "tutorial"
+    ]
+  },
+  "then": {
+    "required": [
+      "save_slot"
+    ],
+    "properties": {
+      "save_slot": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "else": {
+    "not": {
+      "required": [
+        "save_slot"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

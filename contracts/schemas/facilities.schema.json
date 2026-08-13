@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WarFictionSim facility catalog",
+  "description": "Runtime schema for data/terrain/facilities.json (T037). Mirrors FR-014 visibility rules: fixed facilities default visible, deployable facilities hidden until recon, coordinate-only placements never shown.",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "const": "facility"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "visibility"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "deployable",
+              "functional"
+            ]
+          },
+          "visibility": {
+            "enum": [
+              "fixed_visible",
+              "hidden_until_recon",
+              "coordinate_only"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

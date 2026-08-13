@@ -1,0 +1,6 @@
+# T045 支援请求链路集成测试（连排级有限分数路径）。
+# 序列：cmd-0 目标任务（MOVE，完成后触发支援归建）→ cmd-1 迫击炮加强（成功扣分）
+# → cmd-2 超出剩余分数的加强（拒绝，验证"用尽即止"）。
+{"schema_version":1,"type":"MOVE","target":{"kind":"unit","ref":"sp-squad-1"},"completion":{"condition":"reach_point","params":{"point":{"x":0.34,"y":0.31}}},"intent":"支援服务的目标任务（完成后归建）","behavior":{"engagement":"balanced"},"priority":2,"deadline":{"game_time":20000}}
+{"schema_version":1,"type":"SUPPORT_REQUEST","target":{"kind":"unit","ref":"sp-squad-1"},"completion":{"condition":"support"},"intent":"请求迫击炮加强（成功扣分）","behavior":{"engagement":"balanced"},"priority":1,"deadline":{"game_time":20000},"support":{"request_type":"reinforce","kinds":["squad-mortar-team"],"quantity":1,"to_node":"node-battalion-1","for_command_id":"cmd-0"}}
+{"schema_version":1,"type":"SUPPORT_REQUEST","target":{"kind":"unit","ref":"sp-squad-2"},"completion":{"condition":"support"},"intent":"请求超出剩余分数的加强（拒绝）","behavior":{"engagement":"balanced"},"priority":1,"deadline":{"game_time":20000},"support":{"request_type":"reinforce","kinds":["squad-atgm-team"],"quantity":2,"to_node":"node-battalion-1"}}
