@@ -185,6 +185,27 @@ public class GameScreenViewModelTests
     }
 
     [Fact]
+    public void SupportPanelSubmit_WhenCoreRejects_ShowsErrorOnSupportPanel()
+    {
+        var client = new FakeSimClient(SupportSnapshot());
+        client.NextInjectError = new SimNativeException(SimResultCode.InvalidData, "INSUFFICIENT_SCORE 测试拒绝");
+        var viewModel = new GameScreenViewModel(client, SupportScenario());
+        viewModel.ApplySnapshot(SupportSnapshot());
+        viewModel.SupportPanel.SetTarget("friendly-1");
+        viewModel.SupportPanel.SelectedRequestType = "reinforce";
+        viewModel.SupportPanel.ToggleKind("squad-mortar-team");
+
+        viewModel.SupportPanel.TrySubmit(out _);
+
+        // 复审 R1-1：拒绝必须回填到发起提交的支援面板，而不是命令面板。
+        Assert.Contains(
+            viewModel.SupportPanel.Issues,
+            issue => issue.Code == "NATIVE_REJECTED" && issue.Message.Contains("INSUFFICIENT_SCORE", StringComparison.Ordinal));
+        Assert.DoesNotContain(viewModel.CommandPanel.Issues, issue => issue.Code == "NATIVE_REJECTED");
+        Assert.False(viewModel.SupportPanel.CanSubmit);
+    }
+
+    [Fact]
     public void OnPresentationFrame_CatchesSnapshotParseException()
     {
         (FakeSimClient client, _) = SnapshotWithUnits();

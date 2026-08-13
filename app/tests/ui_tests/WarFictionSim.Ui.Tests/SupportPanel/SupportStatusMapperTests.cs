@@ -123,4 +123,60 @@ public class SupportStatusMapperTests
         Assert.Equal(SupportRequestStatus.RegisterFailed, info.Status);
         Assert.Contains("登记失败", info.StatusText, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void MapForRequest_InterleavedRequests_FiltersEachChainAndPrefixesRequestId()
+    {
+        var events = new List<SimEventDto>
+        {
+            Event(1, 1, "SUPPORT_REQUESTED request=req-cmd-1 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=reinforce priority=1 quantity=1"),
+            Event(2, 5, "SUPPORT_REQUESTED request=req-cmd-2 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=medical priority=2 quantity=1"),
+            Event(3, 41, "SUPPORT_EVALUATING request=req-cmd-1 interaction=SUPPORT_REQUEST evaluating_tick=41 resolve_tick=81"),
+            Event(4, 41, "SUPPORT_ASSIGNED request=req-cmd-1 interaction=SUPPORT_REQUEST score_cost=30 score_remaining=30 units=[squad-mortar-team]"),
+            Event(5, 100, "ATTACH_RETURNING request=req-cmd-1 unit=squad-mortar-team to=node-platoon-1 tick=100"),
+            Event(6, 130, "ATTACH_RETURNED request=req-cmd-1 unit=squad-mortar-team to=node-platoon-1 tick=130"),
+            Event(7, 140, "SUPPORT_EVALUATING request=req-cmd-2 interaction=SUPPORT_REQUEST evaluating_tick=140 resolve_tick=180"),
+        };
+
+        SupportStatusInfo newest = SupportStatusMapper.MapForRequest(events, "req-cmd-2");
+        SupportStatusInfo oldest = SupportStatusMapper.MapForRequest(events, "req-cmd-1");
+
+        // 复审 R1-4：两个请求交错事件时按请求过滤，各自状态正确且文案含 RequestId。
+        Assert.Equal(SupportRequestStatus.Evaluating, newest.Status);
+        Assert.Contains("req-cmd-2", newest.StatusText, StringComparison.Ordinal);
+        Assert.Equal("req-cmd-2", newest.RequestId);
+        Assert.Equal(SupportRequestStatus.Returned, oldest.Status);
+        Assert.Contains("req-cmd-1", oldest.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapForRequest_WithoutRequestId_FallsBackToGlobalLatest()
+    {
+        var events = new List<SimEventDto>
+        {
+            Event(1, 1, "SUPPORT_REQUESTED request=req-cmd-1 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=reinforce priority=1 quantity=1"),
+            Event(2, 130, "ATTACH_RETURNED request=req-cmd-1 unit=squad-mortar-team to=node-platoon-1 tick=130"),
+        };
+
+        SupportStatusInfo info = SupportStatusMapper.MapForRequest(events, requestId: null);
+
+        // 无请求 id（尚未提交/无法解析）时回退全局最新事件（与 Map 一致）。
+        Assert.Equal(SupportRequestStatus.Returned, info.Status);
+        Assert.Equal(info, SupportStatusMapper.Map(events));
+    }
+
+    [Fact]
+    public void FindLatestRequestId_ReturnsLastSubmittedRequest()
+    {
+        var events = new List<SimEventDto>
+        {
+            Event(1, 1, "SUPPORT_REQUESTED request=req-cmd-1 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=reinforce priority=1 quantity=1"),
+            Event(2, 5, "SUPPORT_REQUESTED request=req-cmd-2 interaction=SUPPORT_REQUEST from_node=node-platoon-1 to_node=node-battalion-1 request_type=medical priority=2 quantity=1"),
+            Event(3, 130, "ATTACH_RETURNED request=req-cmd-1 unit=squad-mortar-team to=node-platoon-1 tick=130"),
+        };
+
+        // 复审 R1-4：追踪目标取最近一次 SUPPORT_REQUESTED 的请求，而非全局最后事件。
+        Assert.Equal("req-cmd-2", SupportStatusMapper.FindLatestRequestId(events));
+        Assert.Null(SupportStatusMapper.FindLatestRequestId([]));
+    }
 }

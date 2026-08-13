@@ -20,7 +20,7 @@ public class SupportCommandValidationRulesTests
         new("artillery-152", 50, "fire_support"),
     ];
 
-    private static CommandContext Context(ulong scoreRemaining = 60) =>
+    private static CommandContext Context(ulong scoreRemaining = 60, string scale = "platoon") =>
         new()
         {
             CommanderNodeId = "node-platoon-1",
@@ -30,6 +30,7 @@ public class SupportCommandValidationRulesTests
             ZoneIds = [],
             SupportPool = Pool,
             SupportScoreRemaining = scoreRemaining,
+            SupportScale = scale,
         };
 
     private static CommandDraft ValidDraft()
@@ -163,6 +164,19 @@ public class SupportCommandValidationRulesTests
         Assert.Contains(
             result.Issues,
             issue => issue.Code == "SUPPORT_INSUFFICIENT_SCORE" && issue.Severity == CommandIssueSeverity.Warning);
+    }
+
+    [Fact]
+    public void Validate_SupportInsufficientScore_BattalionScale_NoScoreWarning()
+    {
+        CommandDraft draft = ValidDraft();
+        draft.SupportKinds.Add("artillery-152"); // 30 + 50 = 80 > 55。
+
+        CommandValidationResult result = CommandValidationRules.Validate(draft, Context(scoreRemaining: 55, scale: "battalion"));
+
+        // 复审 R1-2：营级走配属链（native 不扣分、不以 INSUFFICIENT_SCORE 拒绝），不提示分数余量。
+        Assert.False(result.HasErrors);
+        Assert.DoesNotContain(result.Issues, issue => issue.Code == "SUPPORT_INSUFFICIENT_SCORE");
     }
 
     [Fact]
