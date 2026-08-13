@@ -50,3 +50,15 @@ add_test(
         -Script "${CMAKE_CURRENT_SOURCE_DIR}/test_faction_chain.jsonl"
 )
 set_tests_properties(faction_chain_tests PROPERTIES TIMEOUT 180)
+
+# T055 情报权限验收测试：上级仅见摘要、下级完整状态、摘要快照语义、来源
+# 标注与层级同步间隔（FR-028/031/051，SC-005）。
+add_test(
+    NAME intel_roles_tests
+    COMMAND pwsh -NoProfile -ExecutionPolicy Bypass -File
+        "${CMAKE_CURRENT_SOURCE_DIR}/run_intel_roles_tests.ps1"
+        -Exe "$<TARGET_FILE:sim_headless>"
+        -Scenario "${PROJECT_SOURCE_DIR}/../data/scenarios/scn-intel-roles.json"
+        -Script "${CMAKE_CURRENT_SOURCE_DIR}/test_intel_roles.jsonl"
+)
+set_tests_properties(intel_roles_tests PROPERTIES TIMEOUT 180)
