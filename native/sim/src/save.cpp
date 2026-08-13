@@ -445,6 +445,14 @@ wfs_sim_result load_save_into(SimState& state, const std::filesystem::path& path
         if (parsed.contains("outcome")) {
             next.outcome = parsed.at("outcome").get<wfs::sim::OutcomeState>();
         }
+        // T057/T058：指挥组织与层级同步状态随存档恢复；旧存档缺失时保持
+        // 句柄初始化产生的场景派生状态（非破坏性演进，宪法第 13 条）。
+        if (parsed.contains("command_org")) {
+            next.command_org = parsed.at("command_org").get<wfs::sim::CommandOrgState>();
+        }
+        if (parsed.contains("intel_sync_state")) {
+            next.intel_sync_state = parsed.at("intel_sync_state").get<wfs::sim::IntelSyncState>();
+        }
         // T047–T050：支援/配属/战术编成随存档恢复；旧存档缺失字段时保持
         // 句柄初始化的场景派生状态（非破坏性演进，宪法第 13 条）。
         if (parsed.contains("support_chain")) {

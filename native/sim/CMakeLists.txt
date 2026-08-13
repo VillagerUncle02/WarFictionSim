@@ -22,6 +22,7 @@ add_library(sim STATIC
     src/combat.cpp
     src/contact.cpp
     src/intel.cpp
+    src/intel_sync.cpp
     src/command_org.cpp
     src/mission_exec.cpp
     src/recon_tasks.cpp

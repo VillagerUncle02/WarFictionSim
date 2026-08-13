@@ -26,6 +26,7 @@
 #include "wfs/sim/contact.h"
 #include "wfs/sim/event_log.h"
 #include "wfs/sim/intel.h"
+#include "wfs/sim/intel_sync.h"
 #include "wfs/sim/mission_exec.h"
 #include "wfs/sim/model/combat.h"
 #include "wfs/sim/movement.h"
@@ -211,6 +212,15 @@ void initialize_runtime_state(SimState& state) {
     state.mission_config = MissionExecConfig::FromScenario(state.scenario.raw);
     state.recon_config = ReconConfig::FromScenario(state.scenario.raw);
     state.outcome_config = OutcomeConfig::FromScenario(state.scenario.raw);
+    // T057/T058：指挥组织与层级同步配置/初始状态（loader 已校验非法编制）。
+    const CommandOrgLoadResult command_org = load_command_org(state.scenario.raw);
+    if (!command_org.ok()) {
+        throw std::invalid_argument("command_org 非法: " + command_org.issues.front().code + ": " +
+                                    command_org.issues.front().message);
+    }
+    state.command_org = command_org.state;
+    state.intel_sync_config = IntelSyncConfig::FromScenario(state.scenario.raw);
+    state.intel_sync_state = IntelSyncState{};
     state.intel_records.clear();
     state.objective_states.clear();
     for (const ScenarioObjective& objective : state.scenario.objectives) {
@@ -255,6 +265,7 @@ void step_sim_state(SimState& state) {
     step_combat(state);
     step_contact(state);      // T032：失联恢复（独立于战斗结算）。
     step_intel(state);        // T033：迷雾/情报观察与记忆过期。
+    step_intel_sync(state);   // T058：层级化情报同步（观察后合并上送）。
     step_recon_tasks(state);  // T035：侦察类任务判定。
     step_missions(state);     // T034：任务完成/失败/循环/上报。
     step_outcome(state);      // T036：胜负判定（最后执行，失败优先）。

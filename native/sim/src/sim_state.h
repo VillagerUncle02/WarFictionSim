@@ -20,11 +20,13 @@
 #include "wfs/sim/attach.h"
 #include "wfs/sim/clock.h"
 #include "wfs/sim/combat.h"
+#include "wfs/sim/command_org.h"
 #include "wfs/sim/command_chain.h"
 #include "wfs/sim/contact.h"
 #include "wfs/sim/event_log.h"
 #include "wfs/sim/faction.h"
 #include "wfs/sim/intel.h"
+#include "wfs/sim/intel_sync.h"
 #include "wfs/sim/loader.h"
 #include "wfs/sim/mission_exec.h"
 #include "wfs/sim/model/combat.h"
@@ -155,6 +157,12 @@ struct SimState {
     std::vector<model::TerrainElement> terrain_library;  // 运行期派生，不进哈希。
     std::vector<TerrainCell> terrain_cells;              // 运行期派生，不进哈希。
     std::vector<model::Ammo> ammo_library;               // 运行期派生，不进哈希。
+    // T057/T058：指挥组织与层级化情报同步状态（确定性，随存档序列化；
+    // 未配置 command_org 的场景保持省略字段，旧存档兼容）。配置派生自场景，
+    // 不进哈希；同步时刻表是确定性状态、进哈希。
+    CommandOrgState command_org;
+    IntelSyncConfig intel_sync_config;
+    IntelSyncState intel_sync_state;
 };
 
 // 玩家阵营：按 player_node_id 对应单位的 side 派生；缺省回退 node_id

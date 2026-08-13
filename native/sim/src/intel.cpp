@@ -67,6 +67,25 @@ void LogIntel(SimState& state, const EventSeverity severity, std::string message
     state.event_log.append(state.clock.tick(), EventCategory::kIntel, severity, std::move(message));
 }
 
+// 目标装备构成文本（T033 登记项 F5）：按装备声明顺序取名称（缺省回退 id），
+// 去重后逗号拼接；无装备返回空串。
+std::string CompositionOf(const RuntimeUnitState& target) {
+    std::string composition;
+    std::vector<std::string> seen;
+    for (const model::Weapon& weapon : target.weapons) {
+        const std::string label = weapon.name.empty() ? weapon.id : weapon.name;
+        if (std::find(seen.begin(), seen.end(), label) != seen.end()) {
+            continue;
+        }
+        seen.push_back(label);
+        if (!composition.empty()) {
+            composition += ",";
+        }
+        composition += label;
+    }
+    return composition;
+}
+
 double ObserverAbility(const RuntimeUnitState& observer) {
     if (observer.soldiers.empty()) {
         return kMinAbility;
@@ -179,6 +198,10 @@ void to_json(nlohmann::json& json, const IntelSource& source) {
                           {"unit_id", source.unit_id},
                           {"node_id", source.node_id},
                           {"reported_tick", source.reported_tick}};
+    // 旧存档无 level：空值省略，加载后再次序列化保持字节一致（宪法 13）。
+    if (!source.level.empty()) {
+        json["level"] = source.level;
+    }
 }
 
 void from_json(const nlohmann::json& json, IntelSource& source) {
@@ -186,6 +209,7 @@ void from_json(const nlohmann::json& json, IntelSource& source) {
     source.unit_id = json.at("unit_id").get<std::string>();
     source.node_id = json.at("node_id").get<std::string>();
     source.reported_tick = json.at("reported_tick").get<std::uint64_t>();
+    source.level = json.value("level", std::string());
 }
 
 void to_json(nlohmann::json& json, const IntelRecord& record) {
@@ -199,7 +223,10 @@ void to_json(nlohmann::json& json, const IntelRecord& record) {
                           {"last_known_x", record.last_known_x},
                           {"last_known_y", record.last_known_y},
                           {"last_motion_dx", record.last_motion_dx},
-                          {"last_motion_dy", record.last_motion_dy}};
+                          {"last_motion_dy", record.last_motion_dy},
+                          {"observed_count", record.observed_count},
+                          {"type_name", record.type_name},
+                          {"composition", record.composition}};
 }
 
 void from_json(const nlohmann::json& json, IntelRecord& record) {
@@ -214,6 +241,9 @@ void from_json(const nlohmann::json& json, IntelRecord& record) {
     record.last_known_y = json.at("last_known_y").get<double>();
     record.last_motion_dx = json.at("last_motion_dx").get<double>();
     record.last_motion_dy = json.at("last_motion_dy").get<double>();
+    record.observed_count = json.value("observed_count", 0U);
+    record.type_name = json.value("type_name", std::string());
+    record.composition = json.value("composition", std::string());
 }
 
 std::string intel_record_key(const std::string_view observer_node_id, const std::string_view target_unit_id) {
@@ -241,6 +271,10 @@ IntelRecord* find_intel_mutable(SimState& state, const std::string_view observer
 
 void register_intel(SimState& state, const IntelRecord& record) {
     IntelRecord& target = state.intel_records[intel_record_key(record.observer_node_id, record.target_unit_id)];
+    // 键内两字段必须同步写回：新建记录经 operator[] 默认构造时为空，缺失
+    // 会导致后续按 observer_node_id 过滤（如 T058 层级合并）静默漏项。
+    target.observer_node_id = record.observer_node_id;
+    target.target_unit_id = record.target_unit_id;
     target.tier = std::max(target.tier, record.tier);
     if (record.last_seen_tick >= target.last_seen_tick) {
         target.last_seen_tick = record.last_seen_tick;
@@ -288,10 +322,17 @@ bool ObservePairWithIndex(SimState& state, const RuntimeUnitState& observer, con
     record.observer_node_id = observer.node_id;
     record.target_unit_id = target.id;
     record.tier = std::max(previous, computed);  // 已识别不降档（记忆保留）。
+    // T033 登记项（F5）：识别档位核心字段随观察输出（数量/类型/构成）。
+    record.observed_count = target.soldiers.size();
+    record.type_name = target.type;
+    record.composition = CompositionOf(target);
     if (!existed) {
         LogIntel(state, EventSeverity::kInfo,
                  "INTEL_OBSERVED observer=" + observer.id + " target=" + target.id +
-                     " tier=" + std::string(to_string(record.tier)));
+                     " tier=" + std::string(to_string(record.tier)) + " source=direct source_unit=" + observer.id +
+                     " source_node=" + observer.node_id + " observed_count=" +
+                     std::to_string(record.observed_count) + " type_name=" + record.type_name + " composition=" +
+                     record.composition);
     }
     if (computed > previous) {
         LogIntel(state, EventSeverity::kInfo,

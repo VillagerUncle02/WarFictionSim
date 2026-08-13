@@ -99,6 +99,7 @@ struct IntelSource {
     std::string unit_id;
     std::string node_id;
     std::uint64_t reported_tick = 0U;
+    std::string level;  // relay 时只标来源层级（"platoon|company|battalion|brigade"，FR-031）。
 
     bool operator==(const IntelSource&) const = default;
 };
@@ -116,6 +117,12 @@ struct IntelRecord {
     double last_known_y = 0.0;
     double last_motion_dx = 0.0;  // 最后动向（归一化方向）。
     double last_motion_dy = 0.0;
+    // T033 登记项（US1 UI 第 2 轮审查 F5）：识别档位核心字段输出。
+    // observed_count = 目标人员/乘员规模（最低档数量）；type_name = 目标
+    // 类型/型号标识；composition = 目标装备构成（种类/构成档）。
+    std::uint64_t observed_count = 0U;
+    std::string type_name;
+    std::string composition;
 
     bool operator==(const IntelRecord&) const = default;
 };

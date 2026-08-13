@@ -88,6 +88,19 @@ nlohmann::json build_snapshot_json(const SimState& state) {
         {"intel_records", state.intel_records},
         {"objectives", state.objective_states},
         {"outcome", state.outcome},
+        // T057/T058：指挥组织与层级同步摘要（快照只读消费）。
+        {"command_org",
+         nlohmann::json{
+             {"configured", state.command_org.configured},
+             {"nodes", state.command_org.command_tree.size()},
+             {"organizations", state.command_org.organizations.size()},
+         }},
+        {"intel_sync",
+         nlohmann::json{
+             {"configured", state.command_org.configured},
+             {"last_hierarchy_sync_tick", state.intel_sync_state.last_hierarchy_sync_tick},
+             {"last_direct_sync_tick", state.intel_sync_state.last_direct_sync_tick},
+         }},
         // T047–T050：支援/配属摘要（快照只读消费；完整状态随存档序列化）。
         {"support",
          nlohmann::json{
@@ -147,6 +160,12 @@ nlohmann::json serialize_state_json(const SimState& state) {
     root["intel_records"] = state.intel_records;
     root["objectives"] = state.objective_states;
     root["outcome"] = state.outcome;
+    // T057/T058：指挥组织与层级同步状态是确定性状态。未配置场景保持字段
+    // 省略（与支援/决策日志省略先例一致）：旧存档加载后再次序列化字节不变。
+    if (state.command_org.configured) {
+        root["command_org"] = state.command_org;
+        root["intel_sync_state"] = state.intel_sync_state;
+    }
     // T047–T050：支援/配属/战术编成是确定性状态。未配置场景保持字段省略
     // （与决策日志省略先例一致）：旧存档/旧场景加载后再次序列化字节不变。
     if (state.support_configured) {
