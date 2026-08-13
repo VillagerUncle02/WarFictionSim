@@ -165,6 +165,44 @@ TEST(WfsIntelTest, SourceAnnotationExpiresWhileMemoryRemains) {
     EXPECT_TRUE(HasEvent(state.event_log, "INTEL_SOURCE_EXPIRED target=squad-c"));
 }
 
+TEST(WfsIntelTest, LegacyRecordSerializationOmitsDefaultF5Fields) {
+    // S3：T033 F5 三字段空值省略（与 IntelSource.level 同策略），旧存档
+    // 加载后再次序列化字节一致（宪法第 13 条）。
+    IntelRecord record;
+    record.observer_node_id = "node-a";
+    record.target_unit_id = "squad-b";
+    record.tier = RecognitionTier::kT1;
+    record.last_seen_tick = 5U;
+    record.memory_until_tick = 100U;
+    record.source_expires_tick = 50U;
+    record.source = wfs::sim::IntelSource{"direct", "unit-a", "node-a", 5U, ""};
+    record.last_known_x = 1.0;
+    record.last_known_y = 2.0;
+
+    const nlohmann::json json = record;
+    EXPECT_FALSE(json.contains("observed_count"));
+    EXPECT_FALSE(json.contains("type_name"));
+    EXPECT_FALSE(json.contains("composition"));
+    EXPECT_FALSE(json.at("source").contains("level"));
+
+    // 旧存档（无三键）加载后再次序列化：字节必须一致（两次序列化相同）。
+    const std::string first = json.dump();
+    const IntelRecord restored = json.get<IntelRecord>();
+    EXPECT_EQ(nlohmann::json(restored).dump(), first) << "旧存档加载后再次序列化必须逐字节一致";
+
+    // 非缺省字段仍然输出：识别档位核心字段随快照可见。
+    IntelRecord identified = record;
+    identified.observed_count = 12U;
+    identified.type_name = "squad-rifle-opposition";
+    identified.composition = "rifle,mg";
+    identified.source.level = "company";
+    const nlohmann::json identified_json = identified;
+    EXPECT_EQ(identified_json.at("observed_count").get<std::uint64_t>(), 12U);
+    EXPECT_EQ(identified_json.at("type_name").get<std::string>(), "squad-rifle-opposition");
+    EXPECT_EQ(identified_json.at("composition").get<std::string>(), "rifle,mg");
+    EXPECT_EQ(identified_json.at("source").at("level").get<std::string>(), "company");
+}
+
 TEST(WfsIntelTest, LastMotionRecordedFromConsecutiveObservations) {
     SimState state = MakeState();
     RuntimeUnitState* enemy = FindUnit(state, "squad-c");

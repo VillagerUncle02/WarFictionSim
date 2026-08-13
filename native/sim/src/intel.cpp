@@ -223,10 +223,18 @@ void to_json(nlohmann::json& json, const IntelRecord& record) {
                           {"last_known_x", record.last_known_x},
                           {"last_known_y", record.last_known_y},
                           {"last_motion_dx", record.last_motion_dx},
-                          {"last_motion_dy", record.last_motion_dy},
-                          {"observed_count", record.observed_count},
-                          {"type_name", record.type_name},
-                          {"composition", record.composition}};
+                          {"last_motion_dy", record.last_motion_dy}};
+    // T033 F5 三字段空值省略（与 IntelSource.level 同策略）：旧存档无这三键，
+    // 加载后再次序列化必须保持字节一致（宪法第 13 条）。
+    if (record.observed_count > 0U) {
+        json["observed_count"] = record.observed_count;
+    }
+    if (!record.type_name.empty()) {
+        json["type_name"] = record.type_name;
+    }
+    if (!record.composition.empty()) {
+        json["composition"] = record.composition;
+    }
 }
 
 void from_json(const nlohmann::json& json, IntelRecord& record) {
