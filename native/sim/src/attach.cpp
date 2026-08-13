@@ -15,11 +15,13 @@
 #include "wfs/sim/attach.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cstdint>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -45,6 +47,16 @@ void AddAllocations(std::vector<ResourceAllocation>& working, const std::vector<
             found->quantity += quantity;
         }
     }
+}
+
+bool ParseIdSequence(const std::string& text, std::uint64_t& value) {
+    if (text.empty()) {
+        return false;
+    }
+    const char* begin = text.data();
+    const char* end = begin + text.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, value);
+    return ec == std::errc{} && ptr == end;
 }
 
 }  // namespace
@@ -280,7 +292,7 @@ AttachRecord* AttachRegistry::Attach(const std::string& request_id, const std::s
         return nullptr;
     }
     AttachRecord record;
-    record.id = "att-" + std::to_string(records_.size());
+    record.id = "att-" + std::to_string(next_id_);
     record.request_id = request_id;
     record.kind_id = kind_id;
     record.assigned_to_node = assigned_to_node;
@@ -288,6 +300,7 @@ AttachRecord* AttachRegistry::Attach(const std::string& request_id, const std::s
     record.state = AttachUnitState::kAssigned;
     record.assigned_tick = tick;
     records_.push_back(std::move(record));
+    ++next_id_;
     return &records_.back();
 }
 
@@ -368,6 +381,24 @@ std::vector<ResourceAllocation> AttachRegistry::ActiveAllocations() const {
     return allocations;
 }
 
+std::vector<ResourceAllocation> reclaimable_allocations(const AttachRegistry& registry) {
+    std::vector<ResourceAllocation> reclaimable;
+    for (const AttachRecord& record : registry.RecordsInInsertionOrder()) {
+        if (record.state != AttachUnitState::kReturning || record.immobilized) {
+            continue;  // 仅归建途中且可机动单位可被新请求抢占（FR-009）。
+        }
+        const auto found =
+            std::find_if(reclaimable.begin(), reclaimable.end(),
+                         [&](const ResourceAllocation& allocation) { return allocation.kind_id == record.kind_id; });
+        if (found == reclaimable.end()) {
+            reclaimable.push_back(ResourceAllocation{record.kind_id, 1U});
+        } else {
+            ++found->quantity;
+        }
+    }
+    return reclaimable;
+}
+
 void to_json(nlohmann::json& json, const AttachRegistry& registry) {
     json = nlohmann::json{{"records", registry.RecordsInInsertionOrder()}};
 }
@@ -375,10 +406,29 @@ void to_json(nlohmann::json& json, const AttachRegistry& registry) {
 void from_json(const nlohmann::json& json, AttachRegistry& registry) {
     AttachRegistry candidate;
     std::set<std::string> seen_ids;
+    std::uint64_t previous = 0U;
+    bool has_previous = false;
     for (const nlohmann::json& record_json : json.at("records")) {
         AttachRecord record = record_json.get<AttachRecord>();
         if (!seen_ids.insert(record.id).second) {
             throw std::invalid_argument("配属登记表包含重复 id: " + record.id);
+        }
+        // id 单调契约：格式必须为 att-<n> 且序号严格递增（存档缺中间 id 时
+        // 恢复计数器按最大序号重建，避免新 Attach 产生重复 id）。
+        constexpr const char* kIdPrefix = "att-";
+        constexpr std::size_t kIdPrefixLength = 4U;
+        std::uint64_t sequence = 0U;
+        if (record.id.size() <= kIdPrefixLength || record.id.compare(0U, kIdPrefixLength, kIdPrefix) != 0U ||
+            !ParseIdSequence(record.id.substr(kIdPrefixLength), sequence)) {
+            throw std::invalid_argument("配属登记表包含非法 id（必须为 att-<n>）: " + record.id);
+        }
+        if (has_previous && sequence <= previous) {
+            throw std::invalid_argument("配属登记表 id 非严格单调递增: " + record.id);
+        }
+        previous = sequence;
+        has_previous = true;
+        if (sequence >= candidate.next_id_) {
+            candidate.next_id_ = sequence + 1U;
         }
         candidate.records_.push_back(std::move(record));
     }

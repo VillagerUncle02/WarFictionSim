@@ -136,16 +136,25 @@ class AttachRegistry {
     std::vector<ResourceAllocation> ActiveAllocations() const;
     std::size_t size() const noexcept { return records_.size(); }
     bool empty() const noexcept { return records_.empty(); }
-    void Clear() noexcept { records_.clear(); }
+    void Clear() noexcept {
+        records_.clear();
+        next_id_ = 0U;
+    }
 
    private:
     friend void from_json(const nlohmann::json& json, AttachRegistry& registry);
 
     std::vector<AttachRecord> records_;
+    std::uint64_t next_id_ = 0U;  // 下一个自动分配序号（恢复时按最大序号重建）。
 };
 
+// 归建途中可重新配属的占用（RETURNING 且未瘫痪）：新请求可抢占取消原归建
+// （FR-009）；瘫痪单位（需大修/拖运）不在候选内。
+std::vector<ResourceAllocation> reclaimable_allocations(const AttachRegistry& registry);
+
 void to_json(nlohmann::json& json, const AttachRegistry& registry);
-// 反序列化校验 id 唯一；损坏数据显式抛 std::invalid_argument（宪法 17）。
+// 反序列化校验 id 唯一且单调（att-<n> 严格递增）；损坏数据显式抛
+// std::invalid_argument（宪法 17）。
 void from_json(const nlohmann::json& json, AttachRegistry& registry);
 
 }  // namespace wfs::sim

@@ -37,6 +37,7 @@ add_executable(sim_tests
     mission_command_test.cpp
     side_faction_test.cpp
     support_test.cpp
+    support_runtime_test.cpp
     resource_pool_test.cpp
     attach_test.cpp
     interaction_test.cpp

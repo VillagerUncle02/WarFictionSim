@@ -30,6 +30,7 @@ using wfs::sim::available_force;
 using wfs::sim::EchelonResourcePool;
 using wfs::sim::PoolEntryKind;
 using wfs::sim::PoolSnapshot;
+using wfs::sim::reclaimable_allocations;
 using wfs::sim::resolve_transit_logistics;
 using wfs::sim::ResourceAllocation;
 using wfs::sim::ResourcePoolEntry;
@@ -61,6 +62,22 @@ SupportRequest MakeRequest(const std::string& id, std::uint64_t seq, std::int64_
     return request;
 }
 
+nlohmann::json RecordJson(const std::string& id, const std::string& request_id = "req-1",
+                          const std::string& kind_id = "squad-mortar-team", const std::string& state = "ASSIGNED") {
+    return nlohmann::json{{"id", id},
+                          {"request_id", request_id},
+                          {"kind_id", kind_id},
+                          {"assigned_to_node", "node-platoon-1"},
+                          {"parent_node", "node-battalion-1"},
+                          {"state", state},
+                          {"assigned_tick", 5U},
+                          {"return_start_tick", 0U},
+                          {"returned_tick", 0U},
+                          {"needs_supply", false},
+                          {"needs_repair", false},
+                          {"immobilized", false}};
+}
+
 }  // namespace
 
 TEST(WfsAttachTest, PlatoonLimitedScoreAdjudicatesAssignAndReject) {
@@ -77,14 +94,12 @@ TEST(WfsAttachTest, PlatoonLimitedScoreAdjudicatesAssignAndReject) {
     // 分数不足 → 明确拒绝（INSUFFICIENT_SCORE，用尽即止）。
     PoolSnapshot low = snapshot;
     low.remaining_score = 20U;
-    const AttachDecision insufficient =
-        adjudicate(MakeRequest("r2", 2U, 5, {"squad-mortar-team"}), low, true, false);
+    const AttachDecision insufficient = adjudicate(MakeRequest("r2", 2U, 5, {"squad-mortar-team"}), low, true, false);
     EXPECT_EQ(insufficient.kind, AttachDecisionKind::kReject);
     EXPECT_EQ(insufficient.reason, "INSUFFICIENT_SCORE");
 
     // 范围外 → SCOPE_VIOLATION 拒绝（连排级请求范围受营编制约束，FR-008）。
-    const AttachDecision out_of_scope =
-        adjudicate(MakeRequest("r3", 3U, 5, {"artillery-152"}), snapshot, true, false);
+    const AttachDecision out_of_scope = adjudicate(MakeRequest("r3", 3U, 5, {"artillery-152"}), snapshot, true, false);
     EXPECT_EQ(out_of_scope.kind, AttachDecisionKind::kReject);
     EXPECT_NE(out_of_scope.reason.find("SCOPE_VIOLATION"), std::string::npos);
 }
@@ -179,22 +194,18 @@ TEST(WfsAttachTest, TransitLogisticsHookIsDeterministic) {
 
     // 瘫痪：需要拖运/大修，阻塞配属。
     record.immobilized = true;
-    EXPECT_EQ(resolve_transit_logistics(record, true, true).action,
-              TransitLogisticsAction::kBlockedHeavyRepair);
+    EXPECT_EQ(resolve_transit_logistics(record, true, true).action, TransitLogisticsAction::kBlockedHeavyRepair);
 
     // 可机动带伤：可抢修则修复后转移，否则阻塞。
     record.immobilized = false;
     record.needs_repair = true;
-    EXPECT_EQ(resolve_transit_logistics(record, true, true).action,
-              TransitLogisticsAction::kRepairThenProceed);
-    EXPECT_EQ(resolve_transit_logistics(record, true, false).action,
-              TransitLogisticsAction::kBlockedHeavyRepair);
+    EXPECT_EQ(resolve_transit_logistics(record, true, true).action, TransitLogisticsAction::kRepairThenProceed);
+    EXPECT_EQ(resolve_transit_logistics(record, true, false).action, TransitLogisticsAction::kBlockedHeavyRepair);
 
     // 补给：可达最近补给点先补给；不可达走就地申请 hook（US3 送达后续行）。
     record.needs_repair = false;
     record.needs_supply = true;
-    EXPECT_EQ(resolve_transit_logistics(record, true, true).action,
-              TransitLogisticsAction::kSupplyThenProceed);
+    EXPECT_EQ(resolve_transit_logistics(record, true, true).action, TransitLogisticsAction::kSupplyThenProceed);
     EXPECT_EQ(resolve_transit_logistics(record, false, true).reason, "SUPPLY_REQUEST_ON_SITE_US3_HOOK");
 }
 
@@ -206,4 +217,45 @@ TEST(WfsAttachTest, AttachRegistrySerializeRoundTrip) {
     const nlohmann::json json = registry;
     const AttachRegistry restored = json.get<AttachRegistry>();
     EXPECT_EQ(restored.RecordsInInsertionOrder(), registry.RecordsInInsertionOrder());
+}
+
+TEST(WfsAttachTest, ReclaimableAllocationsExcludeAssignedAndImmobilized) {
+    AttachRegistry registry;
+    // att-0：归建途中且健康 → 可抢占。
+    ASSERT_NE(registry.Attach("req-1", "squad-mortar-team", "node-platoon-1", "node-battalion-1", 0U), nullptr);
+    ASSERT_TRUE(registry.StartReturn("att-0", 5U));
+    // att-1：归建途中但瘫痪 → 不可抢占（需大修/拖运，FR-009/078）。
+    ASSERT_NE(registry.Attach("req-2", "squad-atgm-team", "node-platoon-1", "node-battalion-1", 0U), nullptr);
+    ASSERT_TRUE(registry.StartReturn("att-1", 5U));
+    registry.FindMutable("att-1")->immobilized = true;
+    // att-2：正常配属（ASSIGNED）→ 不在归建途中，不可抢占。
+    ASSERT_NE(registry.Attach("req-3", "squad-mortar-team", "node-platoon-2", "node-battalion-1", 0U), nullptr);
+
+    const std::vector<ResourceAllocation> reclaimable = reclaimable_allocations(registry);
+    ASSERT_EQ(reclaimable.size(), 1U);
+    EXPECT_EQ(reclaimable[0].kind_id, "squad-mortar-team");
+    EXPECT_EQ(reclaimable[0].quantity, 1U);
+}
+
+TEST(WfsAttachTest, AttachRegistryRejectsNonMonotonicIdsOnLoad) {
+    // 存档缺中间 id 且序号回退：损坏数据显式拒绝（宪法 17）。
+    const nlohmann::json json =
+        nlohmann::json{{"records", nlohmann::json::array({RecordJson("att-2"), RecordJson("att-0")})}};
+    EXPECT_THROW(json.get<AttachRegistry>(), std::invalid_argument);
+}
+
+TEST(WfsAttachTest, AttachRegistryRejectsNonSequencedIdFormat) {
+    const nlohmann::json json = nlohmann::json{{"records", nlohmann::json::array({RecordJson("att-x")})}};
+    EXPECT_THROW(json.get<AttachRegistry>(), std::invalid_argument);
+}
+
+TEST(WfsAttachTest, AttachResumesCounterAfterArchiveGap) {
+    // 存档允许缺失中间记录（att-1..att-4 已归建清理），但恢复后新配属必须
+    // 从最大序号 + 1 继续，避免与已存在记录重复（id 单调契约）。
+    const nlohmann::json json = nlohmann::json{
+        {"records", nlohmann::json::array({RecordJson("att-0"), RecordJson("att-5", "req-2", "squad-atgm-team")})}};
+    AttachRegistry registry = json.get<AttachRegistry>();
+    ASSERT_NE(registry.Attach("req-3", "squad-mortar-team", "node-platoon-2", "node-battalion-1", 10U), nullptr);
+    EXPECT_NE(registry.Find("att-6"), nullptr);
+    EXPECT_EQ(registry.size(), 3U);
 }

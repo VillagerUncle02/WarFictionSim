@@ -10,8 +10,9 @@
 //   的配属/拒绝/转请（US3 营级 AI 决策接入前以规则替代，登记 TODO），
 //   转请后 v1 无旅级裁决器 → 明确拒绝（SC-004：始终得到明确响应）。
 // - 归建：连排级按关联任务命令完成触发，营级裁决桩按 return_after_ticks
-//   触发（下属任务上报接入后移除，登记 TODO）；归建途中可被重新配属
-//   （attach 注册表负责，新请求优先于归建，FR-009）。
+//   触发（下属任务上报接入后移除，登记 TODO）；归建途中可被重新配属：
+//   裁决前把健康 RETURNING 记录视为可抢占候选，配属时取消原归建并复用
+//   （新请求优先于归建，FR-009）。
 // - 派系加载失败/配置非法时记录结构化可见事件并保持未配置（宪法 17：
 //   不静默吞错；场景数据校验失败由加载器在更早层报告）。
 
@@ -55,6 +56,46 @@ std::string JoinIds(const std::vector<std::string>& ids) {
     }
     joined += "]";
     return joined;
+}
+
+// 可抢占的归建中单位不阻塞新请求：从活动占用中扣除后计算可用力量（FR-009）。
+std::vector<ResourceAllocation> WithoutReclaimable(std::vector<ResourceAllocation> active,
+                                                   const std::vector<ResourceAllocation>& reclaimable) {
+    for (const ResourceAllocation& reclaim : reclaimable) {
+        const auto found = std::find_if(active.begin(), active.end(), [&](const ResourceAllocation& allocation) {
+            return allocation.kind_id == reclaim.kind_id;
+        });
+        if (found == active.end()) {
+            continue;
+        }
+        found->quantity = found->quantity > reclaim.quantity ? found->quantity - reclaim.quantity : 0U;
+    }
+    return active;
+}
+
+// 取消原归建并重新配属：新请求优先于归建（FR-009）。按插入顺序确定性选取
+// 前 needed 条健康 RETURNING 记录，返回实际重新配属数量。
+std::uint64_t ReassignReturningUnits(SimState& state, const std::string& request_id, const std::string& to_node,
+                                     const std::string& kind, const std::uint64_t needed) {
+    std::uint64_t reassigned = 0U;
+    for (const AttachRecord& snapshot : state.attach_registry.RecordsInInsertionOrder()) {
+        if (reassigned >= needed) {
+            break;
+        }
+        const AttachRecord* record = state.attach_registry.Find(snapshot.id);
+        if (record == nullptr || record->kind_id != kind || record->state != AttachUnitState::kReturning ||
+            record->immobilized) {
+            continue;
+        }
+        const std::string previous_request_id = record->request_id;
+        if (state.attach_registry.Reassign(record->id, request_id, to_node, state.clock.tick())) {
+            LogSupport(state, "ATTACH_REASSIGNED request=" + request_id + " unit=" + kind +
+                                  " previous_request=" + previous_request_id + " to=" + to_node +
+                                  " tick=" + std::to_string(state.clock.tick()));
+            ++reassigned;
+        }
+    }
+    return reassigned;
 }
 
 // 由命令链路生效的 SUPPORT_REQUEST 命令构建请求（T047/046）。
@@ -109,7 +150,11 @@ void ResolveRequest(SimState& state, SupportRequest& request) {
         return;
     }
 
-    PoolSnapshot snapshot = available_force(*pool, state.attach_registry.ActiveAllocations());
+    // 归建途中且可重新配属的记录不阻塞新请求：裁决按抢占后可用力量计算，
+    // 配属时再取消原归建（新请求优先于归建，FR-009）。
+    const std::vector<ResourceAllocation> reclaimable = reclaimable_allocations(state.attach_registry);
+    PoolSnapshot snapshot =
+        available_force(*pool, WithoutReclaimable(state.attach_registry.ActiveAllocations(), reclaimable));
     snapshot.remaining_score = state.support_score_remaining;
     const bool limited_score = state.support_config.scale == "platoon";
     const bool has_superior = !state.support_config.superior_node_id.empty();
@@ -130,7 +175,10 @@ void ResolveRequest(SimState& state, SupportRequest& request) {
                                   " score_remaining=" + std::to_string(decision.score_remaining) +
                                   " units=" + JoinIds(decision.units));
             for (const std::string& kind : decision.units) {
-                for (std::uint64_t i = 0U; i < request.quantity; ++i) {
+                // 优先抢占归建中单位（取消原归建），不足部分再从池内新配属。
+                const std::uint64_t reclaimed =
+                    ReassignReturningUnits(state, request.id, request.from_node, kind, request.quantity);
+                for (std::uint64_t i = reclaimed; i < request.quantity; ++i) {
                     state.attach_registry.Attach(request.id, kind, request.from_node, request.to_node,
                                                  state.clock.tick());
                 }
