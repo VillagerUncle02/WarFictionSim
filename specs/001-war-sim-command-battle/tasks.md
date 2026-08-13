@@ -113,17 +113,17 @@ description: "Task list template for feature implementation"
 
 ### Tests for User Story 2（宪法第 2 条强制，先写后实现）⚠️
 
-- [ ] T045 [P] [US2] 支援请求链路集成测试（tests/cli_tests/test_support_chain.jsonl：连排级扣分明确生效、营级配属/拒绝/转请与归建事件序列，SC-004）
-- [ ] T046 [P] [US2] 战术分队归建测试（tests/sim_tests/support_test.cpp：任务结束归建无单位丢失、损失/失联成员处置、拆分命令作用域）
+- [x] T045 [P] [US2] 支援请求链路集成测试（tests/cli_tests/test_support_chain.jsonl：连排级扣分明确生效、营级配属/拒绝/转请与归建事件序列，SC-004）。待办登记：营级裁决与任务结束归建在 US3 接入前由确定性规则桩替代（data-model §18，FR-008/009）
+- [x] T046 [P] [US2] 战术分队归建测试（tests/sim_tests/support_test.cpp：任务结束归建无单位丢失、损失/失联成员处置、拆分命令作用域）
 
 ### Implementation for User Story 2
 
-- [ ] T047 [P] [US2] 创建支援请求/配属模型与状态机（sim/src/support.cpp：SupportRequest 实体、SUBMITTED→EVALUATING→EXECUTING/REJECTED、归建状态，见 data-model §14）
-- [ ] T048 [P] [US2] 创建战术分队模型（sim/src/tactical.cpp：TacticalElement、拆分/合并、火力组命令作用域、解除战术编成恢复行政编制）
-- [ ] T049 [US2] 实现资源池与有限分数计算（sim/src/resource_pool.cpp：编制资源池确定性读取、可用力量计算（AI 不可影响输入）、连排级分数扣减、请求范围约束）
-- [ ] T050 [US2] 实现配属链仲裁与归建（sim/src/attach.cpp：（优先级,到达序列号）仲裁、配属/拒绝/转请、归建/重新配属、途中补给/维修处理）
-- [ ] T051 [US2] 实现四种交互类型约束（sim/src/interaction.cpp：TASK_DISPATCH/EXECUTION/SUMMARY_REPORT/SUPPORT_REQUEST 强制枚举、同级经上级转发通道，见 command-schema §5）
-- [ ] T052 [P] [US2] 创建派系模板基础数据（data/factions/faction-china.json、faction-nato.json、faction-russia.json：各层级资源池 + 审批层级基线 0/1/2，schema 校验通过）
+- [x] T047 [P] [US2] 创建支援请求/配属模型与状态机（sim/src/support.cpp：SupportRequest 实体、SUBMITTED→EVALUATING→EXECUTING/REJECTED、归建状态，见 data-model §14）
+- [x] T048 [P] [US2] 创建战术分队模型（sim/src/tactical.cpp：TacticalElement、拆分/合并、火力组命令作用域、解除战术编成恢复行政编制）
+- [x] T049 [US2] 实现资源池与有限分数计算（sim/src/resource_pool.cpp：编制资源池确定性读取、可用力量计算（AI 不可影响输入）、连排级分数扣减、请求范围约束）
+- [x] T050 [US2] 实现配属链仲裁与归建（sim/src/attach.cpp：（优先级,到达序列号）仲裁、配属/拒绝/转请、归建/重新配属、途中补给/维修处理）
+- [x] T051 [US2] 实现四种交互类型约束（sim/src/interaction.cpp：TASK_DISPATCH/EXECUTION/SUMMARY_REPORT/SUPPORT_REQUEST 强制枚举、同级经上级转发通道，见 command-schema §5）
+- [x] T052 [P] [US2] 创建派系模板基础数据（data/factions/faction-china.json、faction-nato.json、faction-russia.json：各层级资源池 + 审批层级基线 0/1/2，schema 校验通过）
 - [ ] T053 [US2] 实现支援请求 UI（ui/src/SupportPanel/：目标/需求类型/支援种类选择、分数显示与扣减反馈、请求状态与结果提示）
 - [ ] T054 [US2] 集成指挥链闭环验证（quickstart §3.6/§3.10：连排级与营级请求用例、派系差异指标可观察、SC-004/SC-009）
 

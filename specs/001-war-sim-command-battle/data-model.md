@@ -121,6 +121,12 @@
 - FR-034：脱离已识别状态所需"完全脱离视野一段时间"的具体时长；
 - FR-015：指挥超限软性降级曲线（协调能力/命令执行质量/延迟随超出程度的变化）；
 - FR-006：指挥风格参数取值空间（除审批层级 0/1/2 外）。
+- US3 营级 AI 裁决接入前（FR-008/009）：配属/拒绝/转请由确定性规则桩裁决
+  （native/sim/src/attach.cpp adjudicate + support_runtime.cpp 场景
+  scripted_requests 驱动），无更上级时转请明确拒绝
+  （NO_SUPERIOR_ESCALATION）；任务结束归建以 return_after_ticks 桩触发，
+  接入下属任务上报后移除。登记位置：native/sim/src/support_runtime.cpp、
+  native/sim/src/attach.cpp（T045/T050）。
 
 ## 19. 实现阶段判定机制登记（CHK064）
 
