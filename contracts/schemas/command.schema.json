@@ -135,8 +135,14 @@
       "properties": {
         "request_type": {
           "type": "string",
-          "minLength": 1,
-          "description": "需求类型（reinforce/fire_support/engineer/medical/logistics）"
+          "enum": [
+            "reinforce",
+            "fire_support",
+            "engineer",
+            "medical",
+            "logistics"
+          ],
+          "description": "需求类型（FR-050 契约枚举：reinforce/fire_support/engineer/medical/logistics）"
         },
         "kinds": {
           "type": "array",
