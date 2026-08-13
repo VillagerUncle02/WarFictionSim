@@ -125,7 +125,7 @@ description: "Task list template for feature implementation"
 - [x] T051 [US2] 实现四种交互类型约束（sim/src/interaction.cpp：TASK_DISPATCH/EXECUTION/SUMMARY_REPORT/SUPPORT_REQUEST 强制枚举、同级经上级转发通道，见 command-schema §5）
 - [x] T052 [P] [US2] 创建派系模板基础数据（data/factions/faction-china.json、faction-nato.json、faction-russia.json：各层级资源池 + 审批层级基线 0/1/2，schema 校验通过）
 - [x] T053 [US2] 实现支援请求 UI（ui/src/SupportPanel/：目标/需求类型/支援种类选择、分数显示与扣减反馈、请求状态与结果提示；SUPPORT_REQUEST 三级校验与统一命令注入闭环）
-- [ ] T054 [US2] 集成指挥链闭环验证（quickstart §3.6/§3.10：连排级与营级请求用例、派系差异指标可观察、SC-004/SC-009）
+- [x] T054 [US2] 集成指挥链闭环验证（quickstart §3.6/§3.10：连排级与营级请求用例、派系差异指标可观察、SC-004/SC-009）
 
 **Checkpoint**: 至此 User Story 1 与 User Story 2 均可独立工作，支援/配属闭环完整
 
