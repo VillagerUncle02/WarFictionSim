@@ -54,8 +54,19 @@ sim_headless inject --scenario data/scenarios/scn-battalion-v1.json --seed 42 --
 ### 3.6 支援与配属链（FR-008–010，SC-004）
 
 ```bash
-sim_headless inject --scenario data/scenarios/scn-battalion-v1.json --seed 42 --script scripts/support_chain.txt
-# 连排级有限分数请求→扣分生效→归建；营级配属/拒绝/转请→归建
+sim_headless inject --scenario data/scenarios/scn-support-platoon.json --seed 7 --threads 1 --ticks 1200 \
+  --script native/tests/cli_tests/test_support_chain.jsonl --out support-platoon.jsonl --hash
+# 连排级有限分数：cmd-1 SUPPORT_ASSIGNED score_cost=30 score_remaining=30 units=[squad-mortar-team]；
+# cmd-2 超出剩余分数 → SUPPORT_REJECTED INSUFFICIENT_SCORE；目标任务完成 →
+# ATTACH_RETURNING/ATTACH_RETURNED 归建（SC-004）
+
+# 营级配属链：请求由场景 support.scripted_requests 确定性触发（US3 裁决桩），
+# 注入仅注释行的空脚本即可
+sim_headless inject --scenario data/scenarios/scn-support-battalion.json --seed 7 --threads 1 --ticks 1200 \
+  --script native/tests/cli_tests/empty_script.jsonl --out support-battalion.jsonl --hash
+# 营级：script-req-assign 配属→任务结束归建；script-req-reject 范围外明确拒绝
+# （SCOPE_VIOLATION）；script-req-escalate 向上转请 brigade → 无更上级明确拒绝
+# （NO_SUPERIOR_ESCALATION）；玩家始终得到明确响应（SC-004）
 ```
 
 ### 3.7 后勤闭环（FR-073–075/078，SC-012）
@@ -81,7 +92,33 @@ sim_headless inject --scenario data/scenarios/scn-battalion-v1.json --seed 42 --
 
 ### 3.10 派系差异（FR-006）
 
-由 `tests/cli_tests` 派系差异用例验证：中国合成营（内置坦克/炮兵）与苏俄营级（需向上申请）资源池差异在配属链测试中可观察（T045/T052）；各派系场景均确定性可复现。
+同一连排级请求脚本在三派系场景分别运行（场景 `support.faction_id` 选择模板，
+CTest `faction_chain_tests` 强制验证）：
+
+```bash
+sim_headless inject --scenario data/scenarios/scn-support-faction-china.json --seed 7 --threads 1 --ticks 1200 \
+  --script native/tests/cli_tests/test_faction_chain.jsonl --out faction-china.jsonl --hash
+sim_headless inject --scenario data/scenarios/scn-support-faction-nato.json --seed 7 --threads 1 --ticks 1200 \
+  --script native/tests/cli_tests/test_faction_chain.jsonl --out faction-nato.jsonl --hash
+sim_headless inject --scenario data/scenarios/scn-support-faction-russia.json --seed 7 --threads 1 --ticks 1200 \
+  --script native/tests/cli_tests/test_faction_chain.jsonl --out faction-russia.jsonl --hash
+```
+
+预期差异指标（事件中可观察且互不相同）：
+
+- 审批层级基线 0/1/2 → `SUPPORT_EVALUATING` 携带 `faction`/`approval_level`/
+  `approval_delay`（0/10/20），`resolve_tick − evaluating_tick` 分别为 20/30/40；
+- 有限分数总额与成本 60/55/45、30/30/40（中国另有专属 `squad-hmg-team`
+  成本 15）→ 同一脚本全部配属扣分合计 45/30/40，最终 `score_remaining`
+  15/25/5 互不相同（60−30−15、55−30、45−40；按扣分合计断言，
+  与请求裁决顺序无关）；
+- 可用支援种类/数量集合不同 → 中国专属 `squad-hmg-team`（cmd-3）配属成功，
+  北约/苏俄 `SCOPE_VIOLATION` 拒绝；苏俄 atgm 池数量 1 < 请求 2 →
+  `INSUFFICIENT_AVAILABLE`，中国/北约为 `INSUFFICIENT_SCORE`；
+- 同一派系同输入两次运行 `--hash` 一致、事件序列一致（确定性）；三派系
+  状态哈希互不相同。
+
+由 `native/tests/cli_tests/run_faction_chain_tests.ps1` 全部断言（T054/T052）。
 
 ### 3.11 信息权限（FR-051/053，SC-005）
 
